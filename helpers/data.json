@@ -1,0 +1,139 @@
+[
+  {
+    "city": "Hyderabad",
+    "areas": [
+      "Madhapur",
+      "Hitech City",
+      "Gachibowli",
+      "Kondapur",
+      "Kukatpally",
+      "KPHB Colony",
+      "Jubilee Hills",
+      "Banjara Hills",
+      "Lingampally",
+      "Manikonda",
+      "Miyapur",
+      "Serilingampally",
+      "Nanakramguda",
+      "Financial District",
+      "Begumpet",
+      "Secunderabad",
+      "Ameerpet",
+      "Somajiguda",
+      "Tolichowki",
+      "Mehdipatnam"
+    ]
+  },
+  {
+    "city": "Vijayawada",
+    "areas": [
+      "Benz Circle",
+      "Kanuru",
+      "Governorpet",
+      "Gollapudi",
+      "Patamata",
+      "Poranki",
+      "Vuyyuru",
+      "Gunadala",
+      "Mogalrajpuram"
+    ]
+  },
+  {
+    "city": "Visakhapatnam",
+    "areas": [
+      "MVP Colony",
+      "Gajuwaka",
+      "Dwaraka Nagar",
+      "Madhurawada",
+      "Yendada",
+      "NAD Junction",
+      "Seethammadhara",
+      "Rushikonda",
+      "Akkayyapalem"
+    ]
+  },
+  {
+    "city": "Bangalore",
+    "areas": [
+      "Whitefield",
+      "Koramangala",
+      "Indiranagar",
+      "Electronic City",
+      "HSR Layout",
+      "Malleshwaram",
+      "Jayanagar",
+      "Yelahanka",
+      "Hebbal"
+    ]
+  },
+  {
+    "city": "Chennai",
+    "areas": [
+      "T Nagar",
+      "Velachery",
+      "Adyar",
+      "Tambaram",
+      "Porur",
+      "Anna Nagar",
+      "Sholinganallur",
+      "Nungambakkam",
+      "Guindy"
+    ]
+  },
+  {
+    "city": "Mumbai",
+    "areas": [
+      "Andheri",
+      "Bandra",
+      "Dadar",
+      "Powai",
+      "Borivali",
+      "Juhu",
+      "Goregaon",
+      "Lower Parel",
+      "Thane"
+    ]
+  },
+  {
+    "city": "Pune",
+    "areas": [
+      "Hinjawadi",
+      "Wakad",
+      "Kothrud",
+      "Baner",
+      "Viman Nagar",
+      "Koregaon Park",
+      "Hadapsar",
+      "Aundh",
+      "Magarpatta"
+    ]
+  },
+  {
+    "city": "Delhi",
+    "areas": [
+      "Dwarka",
+      "Saket",
+      "Karol Bagh",
+      "Rohini",
+      "Lajpat Nagar",
+      "Janakpuri",
+      "Connaught Place",
+      "Pitampura",
+      "Vasant Kunj"
+    ]
+  },
+  {
+    "city": "Kolkata",
+    "areas": [
+      "Salt Lake",
+      "Park Street",
+      "New Town",
+      "Howrah",
+      "Dum Dum",
+      "Garia",
+      "Behala",
+      "Ballygunge",
+      "Tollygunge"
+    ]
+  }
+]

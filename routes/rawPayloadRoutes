@@ -1,0 +1,10 @@
+// src/routes/rawPayload.routes.js
+const express = require("express");
+const router = express.Router();
+
+const { storeAnything } = require("../controllers/rawPayloadControllers");
+
+// POST → accepts ANY JSON
+router.post("/order-info", storeAnything);
+
+module.exports = router;
