@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const Rider = require("../models/RiderModel");
+const prisma = require("../config/prisma");
 
 exports.riderAuthMiddleWare = async (req, res, next) => {
   try {
@@ -13,9 +13,9 @@ exports.riderAuthMiddleWare = async (req, res, next) => {
       });
     }
 
+
+
     const token = header.split(" ")[1];
-
-
 
     // Verify access token
     let decoded;
@@ -37,8 +37,24 @@ exports.riderAuthMiddleWare = async (req, res, next) => {
       });
     }
 
-    // Validate rider in DB
-    const rider = await Rider.findById(decoded.riderId).select("_id phone");
+
+    if (decoded.type !== "access") {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid token type",
+        error: "INVALID_TOKEN_TYPE",
+      });
+    }
+
+    // Find rider in DB (Prisma way)
+    const rider = await prisma.rider.findUnique({
+      where: { id: decoded.riderId },
+      select: {
+        id: true,
+        phoneNumber: true,
+      },
+    });
+
     if (!rider) {
       return res.status(404).json({
         success: false,
@@ -46,10 +62,10 @@ exports.riderAuthMiddleWare = async (req, res, next) => {
       });
     }
 
-    // Attach only essential rider data
-    req.rider = { _id: rider._id };
+    // Attach essential rider info
+    req.rider = { id: rider.id };
 
-    next(); // move to controller
+    next();
   } catch (error) {
     console.error("Auth Middleware Error:", error);
 
@@ -60,6 +76,3 @@ exports.riderAuthMiddleWare = async (req, res, next) => {
     });
   }
 };
-
-
-
