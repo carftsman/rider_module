@@ -1,0 +1,583 @@
+generator client {
+
+  provider = "prisma-client-js"
+
+}
+
+datasource db {
+
+  provider = "postgresql"
+
+  url      = env("DATABASE_URL")
+
+}
+ 
+/* =========================
+
+   ENUMS
+
+========================= */
+ 
+enum OnboardingStage {
+
+  PHONE_VERIFICATION
+
+  APP_PERMISSIONS
+
+  SELECT_LOCATION
+
+  SELECT_VEHICLE
+
+  PERSONAL_INFO
+
+  SELFIE
+
+  AADHAAR
+
+  PAN_UPLOAD
+
+  DL_UPLOAD
+
+  KYC_SUBMITTED
+
+  KYC_APPROVAL_PENDING
+
+  KYC_APPROVED
+
+  COMPLETED
+
+}
+ 
+enum Gender {
+
+  male
+
+  female
+
+  other
+
+}
+ 
+enum VehicleType {
+
+  ev
+
+  bike
+
+  scooty
+
+}
+ 
+enum VerificationStatus {
+
+  pending
+
+  approved
+
+  rejected
+
+}
+ 
+enum BankVerificationStatus {
+
+  PENDING
+
+  VERIFIED
+
+  FAILED
+
+}
+
+enum IfscVerificationStatus {
+
+  PENDING
+
+  VERIFIED
+
+  FAILED
+
+}
+ 
+enum AccountType {
+
+  CURRENT
+
+  SAVINGS
+
+}
+ 
+enum OrderState {
+
+  READY
+
+  BUSY
+
+}
+ 
+enum InactiveReason {
+
+  MANUAL_OFF
+
+  KYC_PENDING
+
+  ACCOUNT_SUSPENDED
+
+  OUT_OF_SERVICE_AREA
+
+  COD_LIMIT_EXCEEDED
+
+}
+ 
+/* =========================
+
+   CORE RIDER
+
+========================= */
+ 
+model Rider {
+
+  id                  String   @id @default(uuid())
+ 
+  countryCode         String   @default("+91")
+
+  phoneNumber         String   @unique
+
+  phoneIsVerified     Boolean  @default(false)
+ 
+  otpCode             String?
+
+  otpExpiresAt        DateTime?
+
+  lastOtpVerifiedAt   DateTime?
+ 
+  refreshToken        String?
+
+  deviceToken         String?
+
+  fcmToken            String?
+ 
+  onboardingStage     OnboardingStage @default(PHONE_VERIFICATION)
+
+  isFullyRegistered   Boolean         @default(false)
+ 
+  isOnline            Boolean  @default(false)
+
+  orderState          OrderState @default(READY)
+
+  currentOrderId      String?
+ 
+  partnerId           String?  @unique
+
+  isPartnerActive     Boolean  @default(false)
+ 
+  createdAt           DateTime @default(now())
+
+  updatedAt           DateTime @updatedAt
+ 
+  onboarding          RiderOnboarding?
+
+  permissions         RiderPermissions?
+
+  status              RiderStatus?
+
+  gps                 RiderGps?
+
+  profile             RiderProfile?
+
+  location            RiderLocation?
+
+  vehicle              RiderVehicle?
+
+  selfie              RiderSelfie?
+
+  kyc                 RiderKyc?
+
+  bankDetails         RiderBankDetails?
+
+  wallet              RiderWallet?
+
+  cashInHand          RiderCashInHand?
+
+  kitAddress          RiderKitAddress?
+
+  deliveryStatus      RiderDeliveryStatus?
+ 
+  @@index([phoneNumber])
+
+  @@index([isOnline])
+
+  @@index([orderState])
+
+}
+ 
+/* =========================
+
+   ONBOARDING
+
+========================= */
+ 
+model RiderOnboarding {
+
+  id                     String @id @default(uuid())
+
+  riderId                String @unique
+ 
+  phoneVerified           Boolean @default(false)
+
+  appPermissionDone       Boolean @default(false)
+
+  citySelected            Boolean @default(false)
+
+  vehicleSelected         Boolean @default(false)
+
+  personalInfoSubmitted   Boolean @default(false)
+
+  selfieUploaded          Boolean @default(false)
+
+  aadharVerified          Boolean @default(false)
+
+  panUploaded             Boolean @default(false)
+
+  dlUploaded              Boolean @default(false)
+
+  kycCompleted            Boolean @default(false)
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   PERMISSIONS
+
+========================= */
+ 
+model RiderPermissions {
+
+  id          String @id @default(uuid())
+
+  riderId     String @unique
+ 
+  camera      Boolean @default(false)
+
+  foregroundLocation Boolean @default(false)
+
+  backgroundLocation Boolean @default(false)
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   STATUS
+
+========================= */
+ 
+model RiderStatus {
+
+  id                        String @id @default(uuid())
+
+  riderId                   String @unique
+ 
+  lastLoginAt               DateTime?
+
+  lastLogoutAt              DateTime?
+
+  totalOnlineMinutesToday   Int     @default(0)
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   GPS
+
+========================= */
+ 
+model RiderGps {
+
+  id            String @id @default(uuid())
+
+  riderId       String @unique
+ 
+  isEnabled     Boolean
+
+  latitude      Float?
+
+  longitude     Float?
+
+  updatedAt     DateTime?
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   PROFILE
+
+========================= */
+ 
+model RiderProfile {
+
+  id              String @id @default(uuid())
+
+  riderId         String @unique
+ 
+  fullName        String?
+
+  dob             DateTime?
+
+  gender          Gender?
+
+  primaryPhone    String?
+
+  secondaryPhone  String?
+
+  email           String?
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   LOCATION
+
+========================= */
+ 
+model RiderLocation {
+
+  id              String @id @default(uuid())
+
+  riderId         String @unique
+ 
+  streetAddress   String?
+
+  area            String?
+
+  city            String?
+
+  state           String?
+
+  pincode         String?
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   VEHICLE
+
+========================= */
+ 
+model RiderVehicle {
+
+  id        String @id @default(uuid())
+
+  riderId   String @unique
+ 
+  type      VehicleType
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   SELFIE
+
+========================= */
+ 
+model RiderSelfie {
+
+  id          String @id @default(uuid())
+
+  riderId     String @unique
+ 
+  url         String
+
+  uploadedAt  DateTime
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   KYC
+
+========================= */
+ 
+model RiderKyc {
+
+  id                  String @id @default(uuid())
+
+  riderId             String @unique
+ 
+  aadharStatus        VerificationStatus @default(pending)
+
+  aadharRejectedReason String?
+ 
+  panNumber           String?
+
+  panImage            String?
+
+  panStatus           VerificationStatus @default(pending)
+
+  panRejectedReason   String?
+
+  panOcrAttempts      Int @default(0)
+
+  panAllowManual      Boolean @default(false)
+ 
+  dlNumber            String?
+
+  dlFrontImage        String?
+
+  dlBackImage         String?
+
+  dlStatus            VerificationStatus @default(pending)
+
+  dlRejectedReason    String?
+
+  dlOcrAttempts       Int @default(0)
+
+  dlAllowManual       Boolean @default(false)
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   BANK
+
+========================= */
+ 
+model RiderBankDetails {
+
+  id                      String @id @default(uuid())
+
+  riderId                 String @unique
+ 
+  bankName                String?
+
+  accountHolderName       String?
+
+  accountType             AccountType?
+
+  branch                  String?
+
+  accountNumber           String?
+
+  ifscCode                String?
+ 
+  ifscVerificationStatus  IfscVerificationStatus @default(PENDING)
+
+  bankVerificationStatus  BankVerificationStatus @default(PENDING)
+
+  verifiedAt              DateTime?
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   WALLET
+
+========================= */
+ 
+model RiderWallet {
+
+  id              String @id @default(uuid())
+
+  riderId         String @unique
+ 
+  balance         Float @default(0)
+
+  totalEarned     Float @default(0)
+
+  totalWithdrawn  Float @default(0)
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   CASH IN HAND
+
+========================= */
+ 
+model RiderCashInHand {
+
+  id            String @id @default(uuid())
+
+  riderId       String @unique
+ 
+  balance       Float @default(0)
+
+  limit         Float @default(2500)
+
+  lastUpdatedAt DateTime?
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   KIT ADDRESS
+
+========================= */
+ 
+model RiderKitAddress {
+
+  id                String @id @default(uuid())
+
+  riderId           String @unique
+ 
+  name              String?
+
+  mobileNumber      String?
+
+  completeAddress   String?
+
+  landmark          String?
+
+  pincode           String?
+
+  onboardingKitStatus Boolean @default(false)
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+ 
+/* =========================
+
+   DELIVERY STATUS
+
+========================= */
+ 
+model RiderDeliveryStatus {
+
+  id              String @id @default(uuid())
+
+  riderId         String @unique
+ 
+  isActive        Boolean @default(false)
+
+  inactiveReason  InactiveReason @default(MANUAL_OFF)
+
+  updatedAt       DateTime?
+ 
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+}
+
+ 
