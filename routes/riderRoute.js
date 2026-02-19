@@ -768,117 +768,62 @@ riderRouter.get("/rider/onboarding-status", riderAuthMiddleWare,onboardingStatus
  * @swagger
  * /api/rider/complete-kyc:
  *   post:
+ *     summary: Complete rider KYC after all onboarding steps
  *     tags:
- *       - KYC-Approve
- *     summary: Complete rider KYC
- *     description: >
- *       Marks the rider’s KYC as completed after validating all onboarding steps.
- *       This API sets the rider as fully registered, updates onboarding stage,
- *       and ensures a partnerId is assigned.
- *
+ *       - KYC
  *     security:
  *       - bearerAuth: []
- *
  *     responses:
  *       200:
  *         description: KYC completed successfully
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: KYC completed and rider fully registered
- *                 partnerId:
- *                   type: string
- *                   nullable: true
- *                   example: PARTNER12345
- *                 onboardingStage:
- *                   type: string
- *                   example: COMPLETED
- *                 onboardingProgress:
- *                   type: object
- *                   properties:
- *                     phoneVerified:
- *                       type: boolean
- *                       example: true
- *                     appPermissionDone:
- *                       type: boolean
- *                       example: true
- *                     citySelected:
- *                       type: boolean
- *                       example: true
- *                     vehicleSelected:
- *                       type: boolean
- *                       example: true
- *                     personalInfoSubmitted:
- *                       type: boolean
- *                       example: true
- *                     selfieUploaded:
- *                       type: boolean
- *                       example: true
- *                     aadharVerified:
- *                       type: boolean
- *                       example: true
- *                     panUploaded:
- *                       type: boolean
- *                       example: true
- *                     dlUploaded:
- *                       type: boolean
- *                       example: true
- *                     kycCompleted:
- *                       type: boolean
- *                       example: true
- *                 isFullyRegistered:
- *                   type: boolean
- *                   example: true
+ *             example:
+ *               success: true
+ *               message: "KYC completed and rider fully registered"
+ *               onboardingStage: "COMPLETED"
+ *               onboardingProgress:
+ *                 phoneVerified: true
+ *                 appPermissionDone: true
+ *                 citySelected: true
+ *                 vehicleSelected: true
+ *                 personalInfoSubmitted: true
+ *                 selfieUploaded: true
+ *                 aadharVerified: true
+ *                 panUploaded: true
+ *                 dlUploaded: true
+ *                 kycCompleted: true
+ *               isFullyRegistered: true
  *
  *       400:
- *         description: Onboarding steps not completed
+ *         description: Onboarding steps incomplete
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Onboarding steps not completed
+ *             example:
+ *               success: false
+ *               message: "Onboarding steps not completed"
+ *               missingSteps:
+ *                 - "appPermissionDone"
+ *                 - "citySelected"
+ *                 - "aadharVerified"
  *
  *       404:
- *         description: Rider not found
+ *         description: Onboarding record not found
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Rider not found
+ *             example:
+ *               success: false
+ *               message: "Onboarding record not found"
  *
  *       500:
- *         description: Server error while completing KYC
+ *         description: Server error
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Server error while completing KYC
+ *             example:
+ *               success: false
+ *               message: "Server error while completing KYC"
  */
+
 
 
 riderRouter.post("/rider/complete-kyc",riderAuthMiddleWare,completeKyc );
