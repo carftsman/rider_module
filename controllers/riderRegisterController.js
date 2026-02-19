@@ -207,41 +207,83 @@ exports.verifyOtp = async (req, res) => {
 // ===============================
 exports.updateLocation = async (req, res) => {
   try {
-    const riderId = req.rider._id; // JWT middleware will set this
+    const riderId = req.rider.id;
+
     const { city, area } = req.body;
 
-    if (!city || !area)
-      return res.status(400).json({ success: false, message: "City & area required" });
+    if (!city || !area) {
+      return res.status(400).json({
+        success: false,
+        message: "City & area required",
+      });
+    }
 
+    // Validate city
     const foundCity = citiesData.find(
       (item) => item.city.toLowerCase() === city.toLowerCase()
     );
 
-    if (!foundCity)
-      return res.status(404).json({ success: false, message: "Invalid city" });
+    if (!foundCity) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid city",
+      });
+    }
 
-    if (!foundCity.areas.includes(area))
-      return res.status(404).json({ success: false, message: "Invalid area" });
+    if (!foundCity.areas.includes(area)) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid area",
+      });
+    }
 
-    const rider = await Rider.findByIdAndUpdate(
-      riderId,
-      {
-        location: { city, area },
-        "onboardingProgress.citySelected": true,
+    // UPSERT location
+    const location = await prisma.riderLocation.upsert({
+      where: { riderId },
+      update: {
+        city,
+        area,
+      },
+      create: {
+        riderId,
+        city,
+        area,
+      },
+    });
+
+    // Update onboarding
+    await prisma.riderOnboarding.update({
+      where: { riderId },
+      data: {
+        citySelected: true,
+      },
+    });
+
+    // Update stage
+    const rider = await prisma.rider.update({
+      where: { id: riderId },
+      data: {
         onboardingStage: "SELECT_VEHICLE",
       },
-      { new: true }
-    );
+    });
 
-    res.json({
+    return res.json({
       success: true,
       message: "Location updated",
-      location: rider.location,
+      location: {
+        city: location.city,
+        area: location.area,
+      },
       nextStage: rider.onboardingStage,
     });
+
   } catch (err) {
     console.log(err);
-    res.status(500).json({ success: false, message: "Server error" });
+
+    res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 };
 
@@ -576,8 +618,9 @@ exports.uploadDL = async (req, res) => {
 
 exports.savePermissions = async (req, res) => {
   try {
-    console.log("heloo")
-    const riderId = req.rider._id;
+    const riderId = req.rider.id; // Prisma uses id (String UUID)
+
+
     if (!riderId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
@@ -586,57 +629,108 @@ exports.savePermissions = async (req, res) => {
 
     // Validate input
     const isBoolean = (v) => typeof v === "boolean";
+
     if (!isBoolean(camera) || !isBoolean(foregroundLocation) || !isBoolean(backgroundLocation)) {
       return res.status(400).json({
         message: "camera, foregroundLocation, backgroundLocation must be boolean values",
       });
     }
 
-    const rider = await Rider.findById(riderId);
-    if (!rider) return res.status(404).json({ message: "Rider not found" });
+    // Check rider exists with onboarding
+    const rider = await prisma.rider.findUnique({
+      where: { id: riderId },
+      include: {
+        onboarding: true,
+        permissions: true,
+      },
+    });
 
-    // Rider must verify phone first
-    if (!rider.onboardingProgress.phoneVerified) {
+    
+    if (!rider) {
+      return res.status(404).json({ message: "Rider not found" });
+    }
+
+    // Phone verification check
+    if (!rider.onboarding?.phoneVerified) {
       return res.status(400).json({
         message: "Phone verification required before permissions",
       });
     }
 
-    // Save permissions
-    rider.permissions = {
-      camera,
-      foregroundLocation,
-      backgroundLocation,
-    };
+    // Calculate all granted
+    const allGranted = camera && foregroundLocation && backgroundLocation;
 
-    // Calculate combined permission status
-    const allGranted =
-      camera === true &&
-      foregroundLocation === true &&
-      backgroundLocation === true;
+    // UPSERT permissions
+    const permissions = await prisma.riderPermissions.upsert({
+      where: { riderId },
+      update: {
+        camera,
+        foregroundLocation,
+        backgroundLocation,
+      },
+      create: {
+        riderId,
+        camera,
+        foregroundLocation,
+        backgroundLocation,
+      },
+    });
 
-    rider.onboardingProgress.appPermissionDone = allGranted;
+    // Update onboarding progress
+    const onboarding = await prisma.riderOnboarding.update({
+      where: { riderId },
+      data: {
+        appPermissionDone: allGranted,
+      },
+    });
 
-    // Stage update only if ALL permissions granted
+    // Update onboarding stage if all granted
+    let updatedStage = rider.onboardingStage;
+
     if (allGranted && rider.onboardingStage === "APP_PERMISSIONS") {
-      rider.onboardingStage = "SELECT_LOCATION";
+      const updatedRider = await prisma.rider.update({
+        where: { id: riderId },
+        data: {
+          onboardingStage: "SELECT_LOCATION",
+        },
+      });
+
+      updatedStage = updatedRider.onboardingStage;
     }
 
-    await rider.save();
-
+    // Response SAME as Swagger
     return res.json({
       success: true,
       message: "Permissions saved successfully",
       allPermissionsGranted: allGranted,
       data: {
-        permissions: rider.permissions,
-        onboardingProgress: rider.onboardingProgress,
-        onboardingStage: rider.onboardingStage,
+        permissions: {
+          camera: permissions.camera,
+          foregroundLocation: permissions.foregroundLocation,
+          backgroundLocation: permissions.backgroundLocation,
+        },
+        onboardingProgress: {
+          phoneVerified: onboarding.phoneVerified,
+          appPermissionDone: onboarding.appPermissionDone,
+          citySelected: onboarding.citySelected,
+          vehicleSelected: onboarding.vehicleSelected,
+          personalInfoSubmitted: onboarding.personalInfoSubmitted,
+          selfieUploaded: onboarding.selfieUploaded,
+          aadharVerified: onboarding.aadharVerified,
+          panUploaded: onboarding.panUploaded,
+          dlUploaded: onboarding.dlUploaded,
+          kycCompleted: onboarding.kycCompleted,
+        },
+        onboardingStage: updatedStage,
       },
     });
+
   } catch (error) {
     console.error("Permission API Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
 
