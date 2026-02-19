@@ -828,76 +828,24 @@ exports.logoutOrDelete = async (req, res) => {
   }
 };
 
-
-// exports.onboardingStatus = async (req, res) => {
-//   try {
-//     // Validate rider from auth middleware
-//     if (!req.rider._id) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "Unauthorized: Rider token invalid",
-//       });
-//     }
-
-//     // Fetch onboarding fields ONLY
-//     const rider = await Rider.findById(req.rider._id)
-//       .select("onboardingStage onboardingProgress");
-
-//     if (!rider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found",
-//       });
-//     }
-
-//     // Extract values safely
-//     const onboardingStage = rider.onboardingStage || "PHONE_VERIFICATION";
-
-//     const onboardingProgress = rider.onboardingProgress || {
-//       phoneVerified: false,
-//       appPermissionDone: false,
-//       citySelected: false,
-//       vehicleSelected: false,
-//       personalInfoSubmitted: false,
-//       selfieUploaded: false,
-//       aadharVerified: false,
-//       panUploaded: false,
-//       dlUploaded: false,
-//     };
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Onboarding status fetched successfully",
-//       onboardingStage,
-//       onboardingProgress,
-//     });
-
-//   } catch (error) {
-//     console.error("OnboardingStatus Error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error while fetching onboarding status",
-//     });
-//   }
-// };
-
-//2ndd
-
-
-
-
+//onboardingstatus
 exports.onboardingStatus = async (req, res) => {
   try {
-    if (!req.rider._id) {
+    if (!req.rider?.id) {
       return res.status(401).json({
         success: false,
         message: "Unauthorized: Rider token invalid",
       });
     }
 
-    const rider = await Rider.findById(req.rider._id)
-      .select("onboardingStage onboardingProgress isFullyRegistered");
+    const rider = await prisma.rider.findUnique({
+      where: { id: req.rider.id },
+      select: {
+        onboardingStage: true,
+        isFullyRegistered: true,
+        onboarding: true,
+      },
+    });
 
     if (!rider) {
       return res.status(404).json({
@@ -910,8 +858,8 @@ exports.onboardingStatus = async (req, res) => {
       success: true,
       message: "Onboarding status fetched successfully",
       onboardingStage: rider.onboardingStage,
-      onboardingProgress: rider.onboardingProgress,
-      isFullyRegistered: rider.isFullyRegistered
+      onboardingProgress: rider.onboarding,
+      isFullyRegistered: rider.isFullyRegistered,
     });
 
   } catch (error) {
