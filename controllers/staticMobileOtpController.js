@@ -3,29 +3,121 @@ const jwt = require("jsonwebtoken");
 
 const STATIC_OTP = "007007";
 
+// exports.sendStaticMobileOtp = async (req, res) => {
+//   try {
+//     let { phone } = req.body;
+
+//     if (!phone) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Phone number required",
+//       });
+//     }
+
+//     if (!phone.startsWith("+") && phone.length === 10) {
+//       phone = `+91${phone}`;
+//     }
+
+//     const phoneNumber = phone.replace("+91", "");
+
+//     // Check if rider exists
+//     let rider = await prisma.rider.findUnique({
+//       where: { phoneNumber },
+//     });
+
+//     // If not exists → create
+//     if (!rider) {
+//       rider = await prisma.rider.create({
+//         data: {
+//           phoneNumber,
+//           countryCode: "+91",
+//           onboardingStage: "PHONE_VERIFICATION",
+//         },
+//       });
+//     }
+
+//     // Update OTP
+//     await prisma.rider.update({
+//       where: { id: rider.id },
+//       data: {
+//         otpCode: STATIC_OTP,
+//         otpExpiresAt: new Date(Date.now() + 5 * 60000),
+//       },
+//     });
+
+//     res.json({
+//       success: true,
+//       message: "Static OTP generated",
+//       phone,
+//       otp: STATIC_OTP,
+//     });
+//   } catch (err) {
+//     console.error("Static OTP Send Error:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//     });
+//   }
+// };
+
+
+// =========================
+// VERIFY STATIC OTP (UPDATED)
+// =========================
+
 exports.sendStaticMobileOtp = async (req, res) => {
   try {
     let { phone } = req.body;
 
-    if (!phone) {
+    // -----------------------------
+    // Basic Presence Check
+    // -----------------------------
+    if (!phone || typeof phone !== "string") {
       return res.status(400).json({
         success: false,
-        message: "Phone number required",
+        message: "Valid phone number is required",
       });
     }
 
-    if (!phone.startsWith("+") && phone.length === 10) {
+    phone = phone.trim();
+
+    // -----------------------------
+    // Remove spaces & invalid chars
+    // -----------------------------
+    phone = phone.replace(/\s+/g, "");
+
+    // -----------------------------
+    // Validate Indian Number
+    // Accept:
+    // 9876543210
+    // +919876543210
+    // -----------------------------
+    const indianPhoneRegex = /^(?:\+91)?[6-9]\d{9}$/;
+
+    if (!indianPhoneRegex.test(phone)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Invalid phone number. Enter valid 10-digit Indian mobile number",
+      });
+    }
+
+    // -----------------------------
+    // Normalize number
+    // -----------------------------
+    if (!phone.startsWith("+91")) {
       phone = `+91${phone}`;
     }
 
     const phoneNumber = phone.replace("+91", "");
 
+    // -----------------------------
     // Check if rider exists
+    // -----------------------------
     let rider = await prisma.rider.findUnique({
       where: { phoneNumber },
     });
 
-    // If not exists → create
     if (!rider) {
       rider = await prisma.rider.create({
         data: {
@@ -36,7 +128,9 @@ exports.sendStaticMobileOtp = async (req, res) => {
       });
     }
 
+    // -----------------------------
     // Update OTP
+    // -----------------------------
     await prisma.rider.update({
       where: { id: rider.id },
       data: {
@@ -45,7 +139,7 @@ exports.sendStaticMobileOtp = async (req, res) => {
       },
     });
 
-    res.json({
+    return res.json({
       success: true,
       message: "Static OTP generated",
       phone,
@@ -53,7 +147,7 @@ exports.sendStaticMobileOtp = async (req, res) => {
     });
   } catch (err) {
     console.error("Static OTP Send Error:", err);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error",
     });
@@ -61,9 +155,7 @@ exports.sendStaticMobileOtp = async (req, res) => {
 };
 
 
-// =========================
-// VERIFY STATIC OTP (UPDATED)
-// =========================
+
 exports.verifyStaticMobileOtp = async (req, res) => {
   try {
     let { phone, otp } = req.body;
