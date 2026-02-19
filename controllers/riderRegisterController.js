@@ -6,7 +6,7 @@ const citiesData = require("../helpers/data.json");
 const { uploadToAzure } = require("../utils/azureUpload");
 const { generateTokens } = require("../utils/token");
 const { ensurePartnerId } = require("../services/partner.service");
-
+const prisma = require("../config/prisma");
 
 
 // ============================================================
@@ -406,13 +406,34 @@ exports.uploadSelfieController = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ message: "Selfie file required" });
     }
-
+    const riderId = req.rider.id;
     const url = await uploadToAzure(req.file, "selfies");
 
-    await Rider.findByIdAndUpdate(req.rider._id, {
-      selfie: { url, uploadedAt: new Date() },
-      "onboardingProgress.selfieUploaded": true,
-      onboardingStage: "AADHAAR"
+    await prisma.RiderSelfie.upsert({
+      where: { riderId },
+      update: {
+        url,
+        uploadedAt: new Date(),
+      },
+      create: {
+        riderId,
+        url,
+        uploadedAt: new Date(),
+      },
+    });
+    
+    await prisma.RiderOnboarding.update({
+      where: { riderId},
+      data: {
+        selfieUploaded: true,
+      },
+    });
+
+    await prisma.rider.update({
+      where: { id: riderId },
+      data: {
+        onboardingStage: "AADHAAR",
+      },
     });
 
     res.json({ success: true, selfieUrl: url });

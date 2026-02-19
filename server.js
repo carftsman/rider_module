@@ -64,9 +64,9 @@ initWebSocket(server);
 
 
 
-cron.schedule("*/2 * * * *", sendSlotStartReminder); // every 2 mins
-cron.schedule("*/1 * * * *", sendSlotStartedNotification);  // every 1 min
-cron.schedule("*/2 * * * *", sendMissedSlotNotification);
+// cron.schedule("*/2 * * * *", sendSlotStartReminder); // every 2 mins
+// cron.schedule("*/1 * * * *", sendSlotStartedNotification);  // every 1 min
+// cron.schedule("*/2 * * * *", sendMissedSlotNotification);
 
  
 const PORT = process.env.PORT || 4000;
