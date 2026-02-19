@@ -14,6 +14,8 @@ const {
 } = require("../utils/kycParser");
 const { uploadToAzure } = require("../utils/azureUpload"); // path adjust
 const SlotBooking = require("../models/SlotBookingModel");
+const prisma = require("../config/prisma");
+
 
 exports.getProfile = async (req, res) => {
   try {
@@ -98,31 +100,53 @@ Object.keys(data).forEach(key => {
     });
   }
 };
+
+
+
+
+
+
+
 exports.getAllDocuments = async (req, res) => {
   try {
-    const riderId = req.rider._id;
 
-    const rider = await Rider.findById(riderId).select("kyc");
+    const riderId = req.rider.id; // Prisma uses id, not _id
 
-    if (!rider) {
+    // Fetch KYC
+    const kyc = await prisma.riderKyc.findUnique({
+      where: {
+        riderId: riderId,
+      },
+    });
+
+    // Check rider exists (optional but recommended)
+    const riderExists = await prisma.rider.findUnique({
+      where: { id: riderId },
+      select: { id: true },
+    });
+
+    if (!riderExists) {
       return res.status(404).json({
         success: false,
-        message: "Rider not found"
+        message: "Rider not found",
       });
     }
 
     return res.status(200).json({
       success: true,
       message: "Documents fetched successfully",
-      data: rider.kyc || {}
+      data: kyc || {}, // SAME as MongoDB response
     });
 
   } catch (err) {
+
     console.error("Get Documents Error:", err);
+
     return res.status(500).json({
       success: false,
-      message: "Server error"
+      message: "Server error",
     });
+
   }
 };
 
