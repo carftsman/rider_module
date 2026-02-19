@@ -8,8 +8,10 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  * @swagger
  * /aadhar/send-otp:
  *   post:
- *     tags: [Rider]
- *     summary: Send OTP to the rider's Aadhaar number
+ *     tags:
+ *       - Aadhaar KYC
+ *     summary: Send Aadhaar OTP for verification
+ *     description: Generates OTP for Aadhaar verification (demo OTP).
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -30,13 +32,14 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *         content:
  *           application/json:
  *             example:
- *               message: "OTP sent successfully"
+ *               message: OTP sent successfully
  *               otp: "123456"
  *       400:
  *         description: Invalid Aadhaar number
  *       401:
- *         description: Unauthorized (missing or invalid token)
+ *         description: Unauthorized
  */
+
 
 aadharRoute.post("/send-otp", riderAuthMiddleWare, sendOtp);
 
@@ -44,8 +47,10 @@ aadharRoute.post("/send-otp", riderAuthMiddleWare, sendOtp);
  * @swagger
  * /aadhar/verify-otp:
  *   post:
- *     tags: [KYC]
- *     summary: Verify Aadhaar OTP and update rider KYC + onboarding stage
+ *     tags:
+ *       - Aadhaar KYC
+ *     summary: Verify Aadhaar OTP
+ *     description: Validates OTP and updates rider Aadhaar KYC status.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -71,12 +76,13 @@ aadharRoute.post("/send-otp", riderAuthMiddleWare, sendOtp);
  *           application/json:
  *             example:
  *               verified: true
- *               message: "OTP verified successfully"
+ *               message: OTP verified successfully
  *       400:
- *         description: Invalid OTP or Aadhaar mismatch
+ *         description: Invalid or expired OTP
  *       401:
- *         description: Unauthorized or OTP expired
+ *         description: Unauthorized
  */
+
 
 aadharRoute.post("/verify-otp", riderAuthMiddleWare, verifyOtp);
 

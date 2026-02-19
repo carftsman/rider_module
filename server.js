@@ -52,7 +52,7 @@ const {initWebSocket} = require("./webSocket");
 // const { initRiderSocket } = require("./sockets/rider.socket");
  
  
-connectDB();
+//connectDB();
  
 // ONE HTTP SERVER
 const server = http.createServer(app);
