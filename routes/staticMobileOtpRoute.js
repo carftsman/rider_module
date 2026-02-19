@@ -18,7 +18,7 @@ const staticRouter = express.Router();
 const {
   sendStaticMobileOtp,
   verifyStaticMobileOtp,
-  refreshAccessToken
+  // refreshAccessToken
 } = require("../controllers/staticMobileOtpController");
 
 /**
@@ -176,6 +176,6 @@ staticRouter.post("/verify-static-otp", verifyStaticMobileOtp);
  */
 
 
-staticRouter.post("/refresh-token", refreshAccessToken);
+// staticRouter.post("/refresh-token", refreshAccessToken);
 
 module.exports = staticRouter;
