@@ -492,9 +492,9 @@ exports.uploadSelfieController = async (req, res) => {
         uploadedAt: new Date(),
       },
     });
-    
+
     await prisma.RiderOnboarding.update({
-      where: { riderId},
+      where: { riderId },
       data: {
         selfieUploaded: true,
       },
@@ -538,27 +538,47 @@ exports.uploadSelfieController = async (req, res) => {
 
 exports.uploadPan = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
     const { panNumber } = req.body;
-
+ 
     if (!panNumber) {
       return res.status(400).json({ message: "PAN number required" });
     }
-
+ 
     if (!req.file) {
       return res.status(400).json({ message: "PAN image required" });
     }
-
+ 
     const imageUrl = await uploadToAzure(req.file, "pan");
-
-    await Rider.findByIdAndUpdate(riderId, {
-      "kyc.pan.number": panNumber.trim(),
-      "kyc.pan.image": imageUrl,
-      "kyc.pan.status": "pending",
-      onboardingStage: "DL_UPLOAD",
-      "onboardingProgress.panUploaded": true
+ 
+    await prisma.riderKyc.upsert({
+      where: { riderId },
+      update: {
+        panNumber: panNumber.trim(),
+        panImage: imageUrl,
+        panStatus: "pending",
+      },
+      create: {
+        riderId,
+        panNumber: panNumber.trim(),
+        panImage: imageUrl,
+        panStatus: "pending",
+      },
     });
-
+ 
+    await prisma.rider.update({
+      where: { id: riderId },
+      data: {
+        onboardingStage: "DL_UPLOAD",
+        onboarding: {
+          upsert: {
+            update: { panUploaded: true },
+            create: { panUploaded: true },
+          },
+        },
+      },
+    });
+ 
     res.json({
       success: true,
       message: "PAN submitted successfully",
@@ -570,66 +590,56 @@ exports.uploadPan = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-
-
-
-
-// exports.uploadDL = async (req, res) => {
-//   try {
-//     const { front, back } = req.files;
-
-//     if (!front || !back)
-//       return res.status(400).json({ message: "Front & back images required" });
-
-//     const frontUrl = await uploadToAzure(front[0], "dl");
-//     const backUrl = await uploadToAzure(back[0], "dl");
-
-//     await Rider.findByIdAndUpdate(req.rider._id, {
-//       "kyc.drivingLicense.frontImage": frontUrl,
-//       "kyc.drivingLicense.backImage": backUrl,
-//       "kyc.drivingLicense.status": "pending",
-//       "onboardingProgress.dlUploaded": true,
-//       onboardingStage: "KYC_SUBMITTED"
-//     });
-
-//     res.json({
-//       success: true,
-//       message: "DL uploaded",
-//       frontUrl,
-//       backUrl
-//     });
-//   } catch (err) {
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
-
+ 
 exports.uploadDL = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
     const { dlNumber } = req.body;
-
+ 
     if (!dlNumber) {
       return res.status(400).json({ message: "DL number required" });
     }
-
+ 
     if (!req.files.front || !req.files.back) {
       return res.status(400).json({
         message: "Front and back images are required",
       });
     }
-
+ 
     const frontUrl = await uploadToAzure(req.files.front[0], "dl-front");
     const backUrl = await uploadToAzure(req.files.back[0], "dl-back");
-
-    await Rider.findByIdAndUpdate(riderId, {
-      "kyc.drivingLicense.number": dlNumber.trim(),
-      "kyc.drivingLicense.frontImage": frontUrl,
-      "kyc.drivingLicense.backImage": backUrl,
-      "kyc.drivingLicense.status": "pending",
-      onboardingStage: "KYC_APPROVAL_PENDING",
-      "onboardingProgress.dlUploaded": true,
+ 
+    await prisma.riderKyc.upsert({
+      where: { riderId },
+      update: {
+        dlNumber: dlNumber.trim(),
+        dlFrontImage: frontUrl,
+        dlBackImage: backUrl,
+        dlStatus: "pending",
+      },
+      create: {
+        riderId,
+        dlNumber: dlNumber.trim(),
+        dlFrontImage: frontUrl,
+        dlBackImage: backUrl,
+        dlStatus: "pending",
+      },
     });
-
+ 
+    await prisma.rider.update({
+      where: { id: riderId },
+      data: {
+        onboardingStage: "KYC_APPROVAL_PENDING",
+        onboarding: {
+          upsert: {
+            update: { dlUploaded: true },
+            create: { dlUploaded: true },
+          },
+        },
+      },
+    });
+ 
+ 
     res.json({
       success: true,
       message: "Driving License submitted successfully",
@@ -885,17 +895,17 @@ exports.onboardingStatus = async (req, res) => {
         message: "Unauthorized: Rider token invalid",
       });
     }
- 
+
     const rider = await Rider.findById(req.rider._id)
       .select("onboardingStage onboardingProgress isFullyRegistered");
- 
+
     if (!rider) {
       return res.status(404).json({
         success: false,
         message: "Rider not found",
       });
     }
- 
+
     return res.status(200).json({
       success: true,
       message: "Onboarding status fetched successfully",
@@ -903,7 +913,7 @@ exports.onboardingStatus = async (req, res) => {
       onboardingProgress: rider.onboardingProgress,
       isFullyRegistered: rider.isFullyRegistered
     });
- 
+
   } catch (error) {
     console.error("OnboardingStatus Error:", error);
     return res.status(500).json({
@@ -960,14 +970,14 @@ exports.completeKyc = async (req, res) => {
     rider.onboardingStage = "COMPLETED";
 
     await rider.save();
-    
+
     const updatedRider = await ensurePartnerId(rider._id);
 
     return res.status(200).json({
       success: true,
       message: "KYC completed and rider fully registered",
       partnerId: updatedRider?.partnerId || null,
- 
+
       onboardingStage: rider.onboardingStage,
       onboardingProgress: rider.onboardingProgress,
       isFullyRegistered: rider.isFullyRegistered,
