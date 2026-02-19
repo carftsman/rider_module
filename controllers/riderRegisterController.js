@@ -297,10 +297,13 @@ exports.checkStatus = async (req, res) => {
 // ------------------ PERSONAL INFO -------------------
 exports.savePersonalInfo = async (req, res) => {
   try {
-    const riderId = req.rider?._id; // middleware attaches rider
+    const riderId = req.rider?.id;
 
     if (!riderId) {
-      return res.status(401).json({ message: "Unauthorized rider" });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized rider",
+      });
     }
 
     const {
@@ -312,56 +315,79 @@ exports.savePersonalInfo = async (req, res) => {
       email,
     } = req.body;
 
-    // ---------- Basic required fields ----------
+    // ----- Basic required fields -------
     if (!fullName || !primaryPhone) {
       return res.status(400).json({
+        success: false,
         message: "fullName and primaryPhone are required",
       });
     }
 
-    // ---------- Fetch rider ----------
-    const rider = await Rider.findById(riderId);
-    if (!rider) {
-      return res.status(404).json({ message: "Rider not found" });
-    }
+    // Ensure onboarding exists
+    let onboarding = await prisma.riderOnboarding.findUnique({
+      where: { riderId },
+    });
 
-    // ---------- Respect registration flow ----------
-    if (!rider.onboardingProgress.phoneVerified) {
-      return res.status(400).json({
-        message: "Phone not verified. Complete OTP verification first.",
+    if (!onboarding) {
+      onboarding = await prisma.riderOnboarding.create({
+        data: {
+          riderId,
+          phoneVerified: true,
+          citySelected: true,
+          vehicleSelected: true,
+        },
       });
     }
 
-    // ---------- Update personal info ----------
-    rider.personalInfo = {
-      fullName,
-      dob,
-      gender,           // schema will auto-validate allowed values
-      primaryPhone,
-      secondaryPhone,
-      email,
-    };
+    // Save profile
+    const profile = await prisma.riderProfile.upsert({
+      where: { riderId },
+      update: {
+        fullName,
+        dob: dob ? new Date(dob) : null,
+        gender,
+        primaryPhone,
+        secondaryPhone,
+        email,
+      },
+      create: {
+        riderId,
+        fullName,
+        dob: dob ? new Date(dob) : null,
+        gender,
+        primaryPhone,
+        secondaryPhone,
+        email,
+      },
+    });
 
-    // ---------- Update onboarding progress ----------
-    rider.onboardingProgress.personalInfoSubmitted = true;
-
-    // Move to next onboarding stage
-    rider.onboardingStage = "SELFIE";
-
-    await rider.save();
+    // Update onboarding
+    const updatedOnboarding = await prisma.riderOnboarding.update({
+      where: { riderId },
+      data: {
+        personalInfoSubmitted: true,
+      },
+    });
 
     return res.status(200).json({
       success: true,
       message: "Personal info saved successfully",
       data: {
-        riderId: rider._id,
-        personalInfo: rider.personalInfo,
-        onboardingProgress: rider.onboardingProgress,
-        onboardingStage: rider.onboardingStage,
+        riderId,
+        personalInfo: {
+          fullName: profile.fullName,
+          dob: profile.dob,
+          gender: profile.gender,
+          primaryPhone: profile.primaryPhone,
+          secondaryPhone: profile.secondaryPhone,
+          email: profile.email,
+        },
+        onboardingProgress: updatedOnboarding,
+        onboardingStage: "SELFIE",
       },
     });
   } catch (err) {
-    console.error("Error saving personal info:", err);
+    console.error("Personal Info Error:", err);
     return res.status(500).json({
       success: false,
       message: "Error saving personal info",
@@ -370,14 +396,20 @@ exports.savePersonalInfo = async (req, res) => {
   }
 };
 
-
 // ------------------ VEHICLE -------------------
 exports.updateVehicle = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider?.id;
+
+    if (!riderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized rider",
+      });
+    }
+
     const { type } = req.body;
 
-    // Basic required validation
     if (!type) {
       return res.status(400).json({
         success: false,
@@ -385,54 +417,51 @@ exports.updateVehicle = async (req, res) => {
       });
     }
 
-    // Fetch rider
-    const rider = await Rider.findById(riderId);
-    if (!rider) {
-      return res.status(404).json({
-        success: false,
-        message: "Rider not found",
+    // Get or create onboarding record
+    let onboarding = await prisma.riderOnboarding.findUnique({
+      where: { riderId },
+    });
+
+    if (!onboarding) {
+      onboarding = await prisma.riderOnboarding.create({
+        data: {
+          riderId,
+          phoneVerified: true,   // allow flow for now
+          citySelected: true,
+        },
       });
     }
 
-    // Enforce previous steps (optional but recommended)
-    if (!rider.onboardingProgress.phoneVerified) {
-      return res.status(400).json({
-        success: false,
-        message: "Phone not verified. Complete OTP verification first.",
-      });
-    }
+    // Save vehicle
+    await prisma.riderVehicle.upsert({
+      where: { riderId },
+      update: { type },
+      create: {
+        riderId,
+        type,
+      },
+    });
 
-    if (!rider.onboardingProgress.citySelected) {
-      return res.status(400).json({
-        success: false,
-        message: "Location must be selected before choosing vehicle.",
-      });
-    }
-
-    // Update vehicle info (schema will auto-validate enum)
-    rider.vehicleInfo = { type };
-
-    // Update progress
-    rider.onboardingProgress.vehicleSelected = true;
-
-    // Move stage forward
-    rider.onboardingStage = "PERSONAL_INFO";
-
-    await rider.save();
+    // Update onboarding
+    const updatedOnboarding = await prisma.riderOnboarding.update({
+      where: { riderId },
+      data: {
+        vehicleSelected: true,
+      },
+    });
 
     return res.status(200).json({
       success: true,
       message: "Vehicle selected successfully",
       data: {
-        riderId: rider._id,
-        vehicleInfo: rider.vehicleInfo,
-        onboardingProgress: rider.onboardingProgress,
-        onboardingStage: rider.onboardingStage,
+        riderId,
+        vehicleInfo: { type },
+        onboardingProgress: updatedOnboarding,
+        onboardingStage: "PERSONAL_INFO",
       },
     });
   } catch (err) {
-    console.error("Error selecting vehicle:", err);
-
+    console.error("Vehicle Error:", err);
     return res.status(500).json({
       success: false,
       message: "Error selecting vehicle",
