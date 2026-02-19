@@ -220,6 +220,17 @@ exports.verifyStaticMobileOtp = async (req, res) => {
       },
     });
 
+    await prisma.riderOnboarding.upsert({
+      where: { riderId: rider.id },
+      update: {
+        phoneVerified: true,
+      },
+      create: {
+        riderId: rider.id,
+        phoneVerified: true,
+      },
+    });
+
     res.json({
       success: true,
       message: "Static OTP verified",
