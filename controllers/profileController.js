@@ -3,7 +3,13 @@ const Rider = require("../models/RiderModel");
 const Order = require("../models/OrderSchema");
 const RiderAssets = require("../models/RiderAsset");
 
+<<<<<<< Updated upstream
 const mongoose = require('mongoose')
+=======
+const mongoose=require('mongoose')
+const prisma=require("../config/prisma");
+
+>>>>>>> Stashed changes
 const { extractTextFromImage } = require("../utils/ocr");
 const {
   extractPAN,
@@ -284,14 +290,21 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-exports.getBankDetails = async (req, res) => {
-  try {
-    const rider = await Rider.findById(req.rider._id).select("bankDetails");
 
+exports.getBankDetails_profile = async (req, res) => {
+
+  try {
+    const riderId = req.rider.id; // ✅ FIXED
+  
+
+    const bankDetails = await prisma.riderBankDetails.findUnique({
+      where: { riderId }
+    });
     return res.status(200).json({
       success: true,
-      data: rider?.bankDetails || {},
+      data: bankDetails || {},
     });
+
   } catch (error) {
     console.error("Get Bank Error:", error);
     return res.status(500).json({
@@ -300,11 +313,6 @@ exports.getBankDetails = async (req, res) => {
     });
   }
 };
-
-
-
-
-
 
 
 exports.getMyAssetsSummary = async (req, res) => {
@@ -1135,17 +1143,17 @@ exports.getRiderOrderHistory = async (req, res) => {
 * ============================================================
 
 */
-
 exports.addOrUpdateBankDetails = async (req, res) => {
   try {
-    if (!req.rider?._id) {
+    const riderId = req.rider.id;
+
+    if (!riderId) {
       return res.status(401).json({
         success: false,
         message: "Unauthorized rider",
       });
     }
 
-    // ✅ READ NESTED BODY
     const bankDetails = req.body?.bankDetails;
 
     if (!bankDetails) {
@@ -1164,7 +1172,6 @@ exports.addOrUpdateBankDetails = async (req, res) => {
       ifscCode,
     } = bankDetails;
 
-    // ✅ VALIDATION
     if (
       !bankName ||
       !accountHolderName ||
@@ -1179,31 +1186,35 @@ exports.addOrUpdateBankDetails = async (req, res) => {
       });
     }
 
-    await Rider.findByIdAndUpdate(
-      req.rider._id,
-      {
-        $set: {
-          bankDetails: {
-            bankName: bankName.trim(),
-            accountHolderName: accountHolderName.trim(),
-            accountType,
-            branch,
-            accountNumber,
-            ifscCode: ifscCode.toUpperCase(),
-            addedBankAccount: true,
-            ifscVerificationStatus: "PENDING",
-            bankVerificationStatus: "PENDING",
-            verifiedAt: null,
-          },
-        },
+    await prisma.riderBankDetails.upsert({
+      where: { riderId },
+      update: {
+        bankName: bankName.trim(),
+        accountHolderName: accountHolderName.trim(),
+        accountType,
+        branch,
+        accountNumber,
+        ifscCode: ifscCode.toUpperCase(),
+        ifscVerificationStatus: "PENDING",
+        bankVerificationStatus: "PENDING",
+        verifiedAt: null,
       },
-      { runValidators: true }
-    );
+      create: {
+        riderId,
+        bankName,
+        accountHolderName,
+        accountType,
+        branch,
+        accountNumber,
+        ifscCode,
+      }
+    });
 
     return res.status(200).json({
       success: true,
       message: "Bank details saved successfully",
     });
+
   } catch (error) {
     console.error("Add/Update Bank Error:", error);
     return res.status(500).json({
@@ -1212,6 +1223,7 @@ exports.addOrUpdateBankDetails = async (req, res) => {
     });
   }
 };
+
 
 exports.getMyAssets = async (req, res) => {
   try {
