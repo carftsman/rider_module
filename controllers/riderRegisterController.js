@@ -464,6 +464,7 @@ exports.updateVehicle = async (req, res) => {
     console.error("Vehicle Error:", err);
     return res.status(500).json({
       success: false,
+
       message: "Error selecting vehicle",
       error: err.message,
     });
@@ -874,72 +875,156 @@ exports.onboardingStatus = async (req, res) => {
 
 
 
+// exports.completeKyc = async (req, res) => {
+//   try {
+//     const riderId = req.rider._id;
+//     console.log(riderId)
+
+//     const rider = await Rider.findById(riderId);
+//     console.log(rider)
+
+
+
+//     if (!rider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Rider not found",
+//       });
+//     }
+
+//     const progress = rider.onboardingProgress;
+
+//     // ✅ STEP 1: Validate onboarding completion
+//     const allStepsCompleted =
+//       progress.phoneVerified &&
+//       progress.appPermissionDone &&
+//       progress.citySelected &&
+//       progress.vehicleSelected &&
+//       progress.personalInfoSubmitted &&
+//       progress.selfieUploaded &&
+//       progress.aadharVerified &&
+//       progress.panUploaded &&
+//       progress.dlUploaded;
+
+//     if (!allStepsCompleted) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Onboarding steps not completed",
+//       });
+//     }
+
+//     // ✅ STEP 2: Update flags
+//     rider.onboardingProgress.kycCompleted = true;
+//     rider.isFullyRegistered = true;
+//     rider.onboardingStage = "COMPLETED";
+
+//     await rider.save();
+    
+//     const updatedRider = await ensurePartnerId(rider._id);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "KYC completed and rider fully registered",
+//       partnerId: updatedRider?.partnerId || null,
+ 
+//       onboardingStage: rider.onboardingStage,
+//       onboardingProgress: rider.onboardingProgress,
+//       isFullyRegistered: rider.isFullyRegistered,
+//     });
+
+//   } catch (error) {
+//     console.error("CompleteKyc Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error while completing KYC",
+//     });
+//   }
+// };
+
 exports.completeKyc = async (req, res) => {
   try {
-    const riderId = req.rider._id;
-    console.log(riderId)
+    const riderId = req.rider.id;
 
-    const rider = await Rider.findById(riderId);
-    console.log(rider)
-
-
-
-    if (!rider) {
-      return res.status(404).json({
+    if (!riderId) {
+      return res.status(401).json({
         success: false,
-        message: "Rider not found",
+        message: "Unauthorized rider"
       });
     }
 
-    const progress = rider.onboardingProgress;
+   
+    const onboarding = await prisma.riderOnboarding.findUnique({
+      where: { riderId }
+    });
 
-    // ✅ STEP 1: Validate onboarding completion
-    const allStepsCompleted =
-      progress.phoneVerified &&
-      progress.appPermissionDone &&
-      progress.citySelected &&
-      progress.vehicleSelected &&
-      progress.personalInfoSubmitted &&
-      progress.selfieUploaded &&
-      progress.aadharVerified &&
-      progress.panUploaded &&
-      progress.dlUploaded;
+    console.log("Onboarding status:", onboarding);
 
-    if (!allStepsCompleted) {
+    if (!onboarding) {
+      return res.status(404).json({
+        success: false,
+        message: "Onboarding record not found"
+      });
+    }
+
+    const steps = {
+      phoneVerified: onboarding.phoneVerified,
+      appPermissionDone: onboarding.appPermissionDone,
+      citySelected: onboarding.citySelected,
+      vehicleSelected: onboarding.vehicleSelected,
+      personalInfoSubmitted: onboarding.personalInfoSubmitted,
+      selfieUploaded: onboarding.selfieUploaded,
+      aadharVerified: onboarding.aadharVerified,
+      panUploaded: onboarding.panUploaded,
+      dlUploaded: onboarding.dlUploaded
+    };
+
+    const missingSteps = Object.entries(steps)
+      .filter(([_, value]) => !value)
+      .map(([key]) => key);
+
+    if (missingSteps.length > 0) {
       return res.status(400).json({
         success: false,
         message: "Onboarding steps not completed",
+        missingSteps
       });
     }
 
-    // ✅ STEP 2: Update flags
-    rider.onboardingProgress.kycCompleted = true;
-    rider.isFullyRegistered = true;
-    rider.onboardingStage = "COMPLETED";
+    const [updatedOnboarding, updatedRider] =
+      await prisma.$transaction([
 
-    await rider.save();
+        prisma.riderOnboarding.update({
+          where: { riderId },
+          data: { kycCompleted: true }
+        }),
 
-    const updatedRider = await ensurePartnerId(rider._id);
+        prisma.rider.update({
+          where: { id: riderId },
+          data: {
+            isFullyRegistered: true,
+            onboardingStage: "COMPLETED"
+          }
+        })
+
+      ]);
 
     return res.status(200).json({
       success: true,
-      message: "KYC completed and rider fully registered",
-      partnerId: updatedRider?.partnerId || null,
-
-      onboardingStage: rider.onboardingStage,
-      onboardingProgress: rider.onboardingProgress,
-      isFullyRegistered: rider.isFullyRegistered,
+      message: "KYC completed successfully 🎉",
+      onboardingProgress: updatedOnboarding,
+      onboardingStage: updatedRider.onboardingStage,
+      isFullyRegistered: updatedRider.isFullyRegistered
     });
 
   } catch (error) {
     console.error("CompleteKyc Error:", error);
+
     return res.status(500).json({
       success: false,
-      message: "Server error while completing KYC",
+      message: "Server error while completing KYC"
     });
   }
 };
-
 
 
 

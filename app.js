@@ -4,6 +4,7 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 const cors = require('cors')
 
+
 const riderRouter = require("./routes/riderRoute");
 const locationRouter = require("./routes/locationRoute");
 const aadharRoute = require("./routes/aadharRoutes");
@@ -148,6 +149,7 @@ app.use("/api", riderCashRoutes);
 app.use('/api',orderStateReady)
 app.use("/api/rider-incentives", riderIncentiveProgressRoutes);
 app.use("/api/rider", require("./routes/availableRidersRoutes"));
+
 
 
 

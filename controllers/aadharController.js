@@ -140,11 +140,19 @@ exports.sendOtp = async (req, res) => {
       message: "OTP sent successfully",
       otp: FIXED_OTP 
     });
-
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
+  console.error("🔥 FULL ERROR:", err);
+  res.status(500).json({
+    error: err.message,
+    stack: err.stack
+  });
+}
+
+
+  //  } catch (err) {
+  //   console.error(err);
+  //   res.status(500).json({ message: "Server error" });
+  // }
 };
 
 
@@ -171,23 +179,44 @@ exports.verifyOtp = async (req, res) => {
 
     
 
-    await prisma.$transaction([
+  await prisma.$transaction([
 
-      prisma.riderKyc.update({
-        where: { riderId },
-        data: {
-          aadharStatus: "approved"
-        }
-      }),
+  // ✅ KYC update
+  prisma.riderKyc.upsert({
+  where: { riderId },
+  update: {
+    aadharStatus: "approved"
+  },
+  create: {
+    riderId,
+    aadharStatus: "approved"
+  }
+}),
 
-      prisma.rider.update({
-        where: { id: riderId },
-        data: {
-          onboardingStage: "PAN_UPLOAD"
-        }
-      })
 
-    ]);
+  // ✅ Onboarding update
+  prisma.riderOnboarding.upsert({
+    where: { riderId },
+    update: {
+      aadharVerified: true
+    },
+    create: {
+      riderId,
+      aadharVerified: true
+    }
+  }),
+
+  // ✅ Rider stage update
+  prisma.rider.update({
+    where: { id: riderId },
+    data: {
+      onboardingStage: "PAN_UPLOAD"
+    }
+  })
+
+]);
+
+
 
     
     delete otpStore[aadharNumber];
@@ -196,9 +225,16 @@ exports.verifyOtp = async (req, res) => {
       verified: true,
       message: "OTP verified successfully"
     });
-
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
-  }
+  console.error("🔥 FULL ERROR:", err);
+  res.status(500).json({
+    error: err.message,
+    stack: err.stack
+  });
+}
+
+  // } catch (err) {
+  //   console.error(err);
+  //   res.status(500).json({ message: "Server error" });
+  // }
 };
