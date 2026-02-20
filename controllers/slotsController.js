@@ -683,12 +683,24 @@ exports.cancelSlot = async (req, res) => {
 
 
 
+
+
+
 exports.getCurrentSlot = async (req, res) => {
   try {
-    const riderId = req.rider._id;
 
-    //Fetch rider details
-    const rider = await Rider.findById(riderId).select("location");
+    const riderId = req.rider.id;
+
+    //////////////////////////////////////////////////////
+    // 1. Fetch rider location
+    //////////////////////////////////////////////////////
+
+    const rider = await prisma.rider.findUnique({
+      where: { id: riderId },
+      include: {
+        location: true
+      }
+    });
 
     if (!rider || !rider.location?.city || !rider.location?.area) {
       return res.status(400).json({
@@ -698,22 +710,55 @@ exports.getCurrentSlot = async (req, res) => {
     }
 
     const { city, area } = rider.location;
-    let zone = area;
+    const zone = area;
 
-    //IST Time
+    //////////////////////////////////////////////////////
+    // 2. Get IST time
+    //////////////////////////////////////////////////////
+
     const now = new Date(
       new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
     );
 
     const today = now.toISOString().split("T")[0];
-    console.log(today)
+
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    //  Fetch day slots
-    const daySlot = await Slot.findOne({ date: today, city, zone });
+    //////////////////////////////////////////////////////
+    // 3. Get today's slots
+    //////////////////////////////////////////////////////
 
+    const startOfDay = new Date(today);
+    startOfDay.setUTCHours(0, 0, 0, 0);
 
-    if (!daySlot || !daySlot.slots.length) {
+    const endOfDay = new Date(today);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    const slots = await prisma.slot.findMany({
+      where: {
+        date: {
+          gte: startOfDay,
+          lte: endOfDay
+        },
+        status: "ACTIVE",
+        weeklySlot: {
+          city,
+          zone
+        }
+      },
+      include: {
+        weeklySlot: true
+      },
+      orderBy: {
+        slotStartAt: "asc"
+      }
+    });
+
+    //////////////////////////////////////////////////////
+    // 4. No slots
+    //////////////////////////////////////////////////////
+
+    if (!slots.length) {
       return res.json({
         success: true,
         message: "No slots created for today",
@@ -721,19 +766,21 @@ exports.getCurrentSlot = async (req, res) => {
       });
     }
 
-    const activeSlots = daySlot.slots.filter(s => s.status === "ACTIVE");
+    //////////////////////////////////////////////////////
+    // 5. Find current and next slot
+    //////////////////////////////////////////////////////
 
     let currentSlot = null;
     let nextSlot = null;
 
-    for (const slot of activeSlots) {
+    for (const slot of slots) {
+
       const [sh, sm] = slot.startTime.split(":").map(Number);
       const [eh, em] = slot.endTime.split(":").map(Number);
 
       const startMinutes = sh * 60 + sm;
       const endMinutes = eh * 60 + em;
 
-      // CURRENT SLOT
       if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
         if (slot.bookedRiders < slot.maxRiders) {
           currentSlot = slot;
@@ -741,7 +788,6 @@ exports.getCurrentSlot = async (req, res) => {
         }
       }
 
-      // NEXT SLOT
       if (!nextSlot && startMinutes > currentMinutes) {
         if (slot.bookedRiders < slot.maxRiders) {
           nextSlot = slot;
@@ -751,7 +797,9 @@ exports.getCurrentSlot = async (req, res) => {
 
     const selectedSlot = currentSlot || nextSlot;
 
-
+    //////////////////////////////////////////////////////
+    // 6. No available slot
+    //////////////////////////////////////////////////////
 
     if (!selectedSlot) {
       return res.json({
@@ -761,44 +809,80 @@ exports.getCurrentSlot = async (req, res) => {
       });
     }
 
+    //////////////////////////////////////////////////////
+    // 7. Calculate delay
+    //////////////////////////////////////////////////////
+
     let delayMinutes = 0;
-    if (selectedSlot) {
+
+    if (currentSlot) {
       const [sh, sm] = selectedSlot.startTime.split(":").map(Number);
       const slotStartMinutes = sh * 60 + sm;
       delayMinutes = Math.max(0, currentMinutes - slotStartMinutes);
     }
 
-    // Check booking
-    const isBooked = await SlotBooking.exists({
-      riderId,
-      slotId: selectedSlot.slotId,
-      date: today,
-      status: "BOOKED"
-    });
+    //////////////////////////////////////////////////////
+    // 8. Check booking
+    //////////////////////////////////////////////////////
 
-    return res.json({
-      success: true,
-      message: currentSlot
-        ? "Current slot available"
-        : "Current slot full, showing next slot",
-      date: today,
-      data: {
-        daySlotId: daySlot._id,
-        slot: selectedSlot,
-        isBooked: !!isBooked,
-        delayMinutes: currentSlot ? delayMinutes : 0
+    const booking = await prisma.slotBooking.findUnique({
+      where: {
+        riderId_date_slotId: {
+          riderId,
+          date: today,
+          slotId: selectedSlot.id
+        }
       }
     });
 
+    //////////////////////////////////////////////////////
+    // 9. Response (same Swagger format)
+    //////////////////////////////////////////////////////
+
+    return res.json({
+
+      success: true,
+
+      message: currentSlot
+        ? "Current slot available"
+        : "Current slot full, showing next slot",
+
+      date: today,
+
+      data: {
+
+        daySlotId: selectedSlot.weeklySlotId,
+
+        slot: {
+          slotId: selectedSlot.id,
+          startTime: selectedSlot.startTime,
+          endTime: selectedSlot.endTime,
+          durationInHours: selectedSlot.durationMinutes / 60,
+          bookedRiders: selectedSlot.bookedRiders,
+          maxRiders: selectedSlot.maxRiders,
+          isPeakSlot: selectedSlot.isPeakSlot,
+          status: selectedSlot.status
+        },
+
+        isBooked: booking?.status === "BOOKED",
+
+        delayMinutes: currentSlot ? delayMinutes : 0
+
+      }
+
+    });
+
   } catch (err) {
+
     console.error("Current Slot Error:", err);
+
     return res.status(500).json({
       success: false,
       message: "Server error"
     });
+
   }
 };
-
 
 exports.getSlotHistory = async (req, res) => {
   try {
