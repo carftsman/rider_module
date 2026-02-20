@@ -6,6 +6,7 @@ const Rider = require("../models/RiderModel");
     // FCM Notification
 const fcmService = require("../helpers/fcmService");
 
+const prisma = require("../config/prisma");
 
 // exports.getWeeklySlots = async (req, res) => {
 //   try {
@@ -1374,24 +1375,36 @@ exports.getSlotCapacity = async (req, res) => {
     );
     const date = req.query.date || now.toISOString().split("T")[0];
 
-    const daySlot = await Slot.findOne(
-      { date, "slots.slotId": slotId },
-      { "slots.$": 1, date: 1 }
-    );
+    // Convert date string to Date object range
+    const startOfDay = new Date(date + "T00:00:00.000Z");
+    const endOfDay = new Date(date + "T23:59:59.999Z");
 
-    if (!daySlot || !daySlot.slots.length) {
+    // 🔥 Find Slot
+    const slot = await prisma.slot.findFirst({
+      where: {
+        id: slotId,
+        date: {
+          gte: startOfDay,
+          lte: endOfDay
+        }
+      },
+      include: {
+        riderBookings: {
+          where: {
+            status: "BOOKED"
+          }
+        }
+      }
+    });
+
+    if (!slot) {
       return res.status(404).json({
         success: false,
         message: "Slot not found"
       });
     }
 
-    const slot = daySlot.slots[0];
-
-    // ONLY count BOOKED riders
-    const bookedRiders = slot.riders.filter(
-      r => r.status === "BOOKED"
-    );
+    const bookedRiders = slot.riderBookings.map(r => r.riderId);
 
     const bookedRidersCount = bookedRiders.length;
 
@@ -1404,13 +1417,12 @@ exports.getSlotCapacity = async (req, res) => {
       success: true,
       message: "Slot capacity fetched successfully",
       data: {
-        slotId: slot.slotId,
+        slotId: slot.id,
         date,
         startTime: slot.startTime,
         endTime: slot.endTime,
         maxRiders: slot.maxRiders,
 
-        // return only ACTIVE bookings (optional but recommended)
         riders: bookedRiders,
 
         bookedRidersCount,
@@ -1428,6 +1440,5 @@ exports.getSlotCapacity = async (req, res) => {
     });
   }
 };
-
 
 
