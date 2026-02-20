@@ -1,10 +1,9 @@
-
-
+const prisma = require("../config/prisma");
 const Rider = require("../models/RiderModel");
 const Order = require("../models/OrderSchema");
 const RiderAssets = require("../models/RiderAsset");
 
-const mongoose=require('mongoose')
+const mongoose = require('mongoose')
 const { extractTextFromImage } = require("../utils/ocr");
 const {
   extractPAN,
@@ -19,9 +18,16 @@ const prisma = require("../config/prisma");
 
 exports.getProfile = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
 
-    const rider = await Rider.findById(riderId).lean();
+    const rider = await prisma.rider.findUnique({
+      where: { id: riderId },
+      include: {
+        profile: true,
+        location: true,
+        selfie: true,
+      },
+    });
 
     if (!rider) {
       return res.status(404).json({
@@ -29,62 +35,60 @@ exports.getProfile = async (req, res) => {
         message: "Rider not found"
       });
     }
-    const dob = rider?.personalInfo?.dob;
+    const dob = rider?.profile?.dob;
 
-const formattedDob = dob
-  ? `${dob.getUTCFullYear()}-${dob.getUTCMonth() + 1}-${dob.getUTCDate()}`
-  : null;
+    const formattedDob = dob
+      ? `${dob.getUTCFullYear()}-${dob.getUTCMonth() + 1}-${dob.getUTCDate()}`
+      : null;
 
 
     const data = {
-      _id: rider._id,
-
-     partnerId: rider.partnerId,
-      email: rider.email,
-
+      _id: rider.id,
+      partnerId: rider.partnerId || null,
       phone: {
-        countryCode: rider.phone?.countryCode,
-        number: rider.phone?.number
+        countryCode: rider.countryCode,
+        number: rider.phoneNumber
       },
 
-      // emergencyContact: {
-      //   name: rider.emergencyContact?.name,
-      //   phoneNumber: rider.emergencyContact?.phoneNumber
-      // },
+      personalInfo: {
+        fullName: rider.profile?.fullName || null,
+        dob: formattedDob || null,
+        gender: rider.profile?.gender || null,
+        primaryPhone: rider.profile?.primaryPhone || null,
+        secondaryPhone: rider.profile?.secondaryPhone || null,
+        email: rider.profile?.email || null,
+      },
 
-personalInfo: {
-    ...rider.personalInfo,
-    dob: formattedDob
-  },
-            location: {
-        streetAddress: rider.location?.streetAddress,
-        area: rider.location?.area,
-        city: rider.location?.city,
-        state: rider.location?.state,
-        pincode: rider.location?.pincode
+      location: {
+        area: rider.location?.area || null,
+        city: rider.location?.city || null,
       },
 
       isPartnerActive: rider.isPartnerActive,
 
-      // vehicleInfo: rider.vehicleInfo,
-      selfie: rider.selfie,
+      selfie: rider.selfie
+        ? {
+          url: rider.selfie.url,
+          uploadedAt: rider.selfie.uploadedAt,
+        }
+        : null,
 
       onboardingStage: rider.onboardingStage,
-      lastOtpVerifiedAt: rider.lastOtpVerifiedAt
+      lastOtpVerifiedAt: rider.lastOtpVerifiedAt || null
     };
 
     // 🔥 Remove empty / undefined objects
-Object.keys(data).forEach(key => {
-  if (key === "partnerId") return; // 👈 keep it always
+    Object.keys(data).forEach(key => {
+      if (key === "partnerId") return; // 👈 keep it always
 
-  if (
-    data[key] == null ||
-    (typeof data[key] === "object" &&
-      Object.keys(data[key]).length === 0)
-  ) {
-    delete data[key];
-  }
-});
+      if (
+        data[key] == null ||
+        (typeof data[key] === "object" &&
+          Object.keys(data[key]).length === 0)
+      ) {
+        delete data[key];
+      }
+    });
 
     return res.status(200).json({
       success: true,
@@ -154,7 +158,7 @@ exports.getAllDocuments = async (req, res) => {
 
 exports.updateProfile = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider?.id;
     const updateData = {};
 
     /* ---------------- DEBUG (KEEP TEMPORARILY) ---------------- */
@@ -171,7 +175,19 @@ exports.updateProfile = async (req, res) => {
     /* ---------------- HANDLE SELFIE (AZURE) ---------------- */
     if (req.file) {
       const selfieUrl = await uploadToAzure(req.file, "selfies");
-      updateData.selfie = selfieUrl;
+      await prisma.riderSelfie.upsert({
+        where: { riderId },
+        update: {
+          url: selfieUrl,
+          uploadedAt: new Date(),
+        },
+        create: {
+          riderId,
+          url: selfieUrl,
+          uploadedAt: new Date(),
+        },
+      });
+
     }
 
     /* ---------------- VALIDATION ---------------- */
@@ -183,18 +199,74 @@ exports.updateProfile = async (req, res) => {
     }
 
     /* ---------------- UPDATE ---------------- */
-    const updatedRider = await Rider.findByIdAndUpdate(
-      riderId,
-      { $set: updateData },
-      { new: true }
-    );
+    const profileFields = {};
+    const locationFields = {};
+    const riderFields = {};
 
-    if (!updatedRider) {
-      return res.status(404).json({
-        success: false,
-        message: "Rider not found"
+    // map fields according to schema
+    Object.keys(updateData).forEach(key => {
+
+      // RiderProfile fields
+      if (["fullName", "dob", "gender", "primaryPhone", "secondaryPhone", "email"].includes(key)) {
+        profileFields[key] = updateData[key];
+      }
+
+      // RiderLocation fields
+      else if (["streetAddress", "area", "city", "state", "pincode"].includes(key)) {
+        locationFields[key] = updateData[key];
+      }
+
+      // Rider root fields
+      else if (["countryCode", "phoneNumber"].includes(key)) {
+        riderFields[key] = updateData[key];
+      }
+    });
+
+
+
+    // Save profile
+    if (Object.keys(profileFields).length) {
+      await prisma.riderProfile.upsert({
+        where: { riderId },
+        update: profileFields,
+        create: { riderId, ...profileFields }
       });
     }
+
+    // Save location
+    if (Object.keys(locationFields).length) {
+      await prisma.riderLocation.upsert({
+        where: { riderId },
+        update: locationFields,
+        create: { riderId, ...locationFields }
+      });
+    }
+
+    if (Object.keys(riderFields).length) {
+
+      if (riderFields.phoneNumber) {
+        const existing = await prisma.rider.findFirst({
+          where: {
+            phoneNumber: riderFields.phoneNumber,
+            NOT: { id: riderId }
+          }
+        });
+
+        if (existing) {
+          return res.status(400).json({
+            success: false,
+            message: "Phone number already used by another rider"
+          });
+        }
+      }
+
+      await prisma.rider.update({
+        where: { id: riderId },
+        data: riderFields
+      });
+    }
+
+
 
 
     return res.status(200).json({
@@ -329,7 +401,7 @@ exports.getMyAssetsSummary = async (req, res) => {
 //     //     assets: formattedAssets,
 
 
-        
+
 //     //   },
 //     // });
 
@@ -545,7 +617,7 @@ exports.updateDocuments = async (req, res) => {
       let text = null;
       try {
         text = await extractTextFromImage(panFile);
-      } catch {}
+      } catch { }
 
       const panNumber = text ? extractPAN(text) : null;
 
@@ -581,7 +653,7 @@ exports.updateDocuments = async (req, res) => {
         {
           $set: {
             "kyc.pan.number": panNumber,
-            "kyc.pan.image":panImageUrl,
+            "kyc.pan.image": panImageUrl,
             "kyc.pan.status": "pending",
             "kyc.pan.isVerified": false,
             "kyc.pan.ocrAttempts": 0,
@@ -643,7 +715,7 @@ exports.updateDocuments = async (req, res) => {
       let text = null;
       try {
         text = await extractTextFromImage(dlFile);
-      } catch {}
+      } catch { }
 
       const dlNumber = text ? extractDL(text) : null;
       const expiryDate = text ? extractDLExpiry(text) : null;
@@ -1031,8 +1103,8 @@ exports.getRiderOrderHistory = async (req, res) => {
 
       rating: order.rating || null,
 
-deliveredAddress: order.deliveryAddress?.addressLine || "",
-  deliveredAt: order.deliveredAt || order.updatedAt || null
+      deliveredAddress: order.deliveryAddress?.addressLine || "",
+      deliveredAt: order.deliveredAt || order.updatedAt || null
 
     }));
 
@@ -1144,9 +1216,9 @@ exports.addOrUpdateBankDetails = async (req, res) => {
 exports.getMyAssets = async (req, res) => {
   try {
     const riderId = req.rider._id;
- 
+
     const doc = await RiderAssets.findOne({ riderId }).lean();
- 
+
     if (!doc || !doc.assets || doc.assets.length === 0) {
       return res.status(200).json({
         success: true,
@@ -1158,19 +1230,19 @@ exports.getMyAssets = async (req, res) => {
         },
       });
     }
- 
+
     let totalAssets = 0;
     let badConditionCount = 0;
- 
+
     const formattedAssets = doc.assets.map(asset => {
       const qty = asset.quantity || 1;
- 
+
       totalAssets += qty;
- 
+
       if (asset.condition === "BAD") {
         badConditionCount += qty;
       }
- 
+
       return {
         assetId: asset._id,
         assetType: asset.assetType,
@@ -1181,7 +1253,7 @@ exports.getMyAssets = async (req, res) => {
         canRaiseRequest: asset.condition === "BAD",
       };
     });
- 
+
     // return res.status(200).json({
     //   success: true,
     //   data: {
@@ -1189,24 +1261,24 @@ exports.getMyAssets = async (req, res) => {
     //     badConditionCount,
     //     canRaiseRequest: badConditionCount > 0,
     //     assets: formattedAssets,
- 
- 
-       
+
+
+
     //   },
     // });
- 
- 
+
+
     return res.status(200).json({
-  success: true,
-  data: {
-    totalProducts: formattedAssets.length,
-    totalAssets,
-    badConditionCount,
-    canRaiseRequest: badConditionCount > 0,
-    assets: formattedAssets
-  }
-});
- 
+      success: true,
+      data: {
+        totalProducts: formattedAssets.length,
+        totalAssets,
+        badConditionCount,
+        canRaiseRequest: badConditionCount > 0,
+        assets: formattedAssets
+      }
+    });
+
   } catch (error) {
     console.error("Assets Summary Error:", error);
     return res.status(500).json({
@@ -1215,10 +1287,3 @@ exports.getMyAssets = async (req, res) => {
     });
   }
 };
- 
-
-
- 
-
-
- 
