@@ -7,78 +7,7 @@ const Rider = require("../models/RiderModel");
 const fcmService = require("../helpers/fcmService");
 const prisma = require("../config/prisma");
 
-const prisma = require("../config/prisma");
 
-// exports.getWeeklySlots = async (req, res) => {
-//   try {
-//     let { city, zone, weekNumber, year } = req.query;
-
-//     if (!city) {
-//       return res.status(400).json({ success: false, message: "City is required" });
-//     }
-//     if (!zone) {
-//       return res.status(400).json({ success: false, message: "Zone is required" });
-//     }
-
-//     const today = new Date();
-
-//     if (!weekNumber) {
-//       weekNumber = getWeekNumber(today);
-//     }
-
-//     if (!year) {
-//       year = today.getFullYear();
-//     }
-
-//     // Fetch all days of this week
-//     const weekDocs = await Slot.find({
-//       city,
-//       zone,
-//       weekNumber: Number(weekNumber),
-//       year: Number(year)
-//     }).sort({ date: 1 });
-
-//     if (!weekDocs.length) {
-//       return res.json({
-//         success: true,
-//         message: "No slots found for this week",
-//         weekNumber,
-//         year,
-//         count: 0,
-//         data: []
-//       });
-//     }
-
-//     // Combine all active slots day-wise
-//     const result = weekDocs.map(day => {
-//       const activeSlots = day.slots
-//         ?.filter(s => s.status === "ACTIVE")
-//         ?.sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-//       return {
-//         date: day.date,
-//         weekNumber: day.weekNumber,
-//         year: day.year,
-//         city: day.city,
-//         zone: day.zone,
-//         slots: activeSlots
-//       };
-//     });
-
-//     return res.json({
-//       success: true,
-//       message: "Weekly slots fetched",
-//       weekNumber: Number(weekNumber),
-//       year: Number(year),
-//       count: result.length,
-//       data: result
-//     });
-
-//   } catch (err) {
-//     console.error("Get Weekly Slots Error:", err);
-//     res.status(500).json({ success: false, message: "Server error" });
-//   }
-// };
 
 exports.getWeeklySlots = async (req, res) => {
   try {
@@ -102,12 +31,21 @@ exports.getWeeklySlots = async (req, res) => {
     }
 
     // Fetch all days of this week
-    const weekDocs = await Slot.find({
-      city,
-      zone,
-      weekNumber: Number(weekNumber),
-      year: Number(year)
-    }).sort({ date: 1 });
+        const weekDocs = await prisma.weeklySlot.findMany({
+      where: {
+        city,
+        zone,
+        weekNumber: Number(weekNumber),
+        year: Number(year),
+        isDeleted: false
+      },
+      include: {
+        slots: true
+      },
+      orderBy: {
+        createdAt: "asc"
+      }
+    });
 
     if (!weekDocs.length) {
       return res.json({
@@ -122,34 +60,22 @@ exports.getWeeklySlots = async (req, res) => {
 
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    // Add date + dayName
     const result = weekDocs.map(day => {
-      // DEBUG
-      //   console.log("DAY DOC:", day);
 
-      let currentDate = null;
+      const currentDate = day.slots.length
+        ? day.slots[0].date
+        : null;
 
-      if (day.date instanceof Date) {
-        currentDate = day.date;
-      }
-      else if (typeof day.date === "string" && day.date.length >= 8) {
-        // Handle string "2025-12-01"
-        currentDate = new Date(`${day.date}T00:00:00`);
-      }
-      else if (day._doc?.date) {
-        // Sometimes mongoose stores it in _doc
-        currentDate = new Date(`${day._doc.date}T00:00:00`);
-      }
-
-      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const dayName = currentDate ? dayNames[currentDate.getDay()] : "Invalid";
+      const dayName = currentDate
+        ? dayNames[new Date(currentDate).getDay()]
+        : "Invalid";
 
       const activeSlots = day.slots
         .filter(s => s.status === "ACTIVE")
         .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
       return {
-        date: day.date || day._doc?.date || null,
+        date: currentDate || null,
         dayName,
         weekNumber: day.weekNumber,
         year: day.year,
@@ -158,8 +84,6 @@ exports.getWeeklySlots = async (req, res) => {
         slots: activeSlots
       };
     });
-
-
 
     return res.json({
       success: true,
@@ -177,92 +101,6 @@ exports.getWeeklySlots = async (req, res) => {
 };
 
 
-
-
-// exports.getDailySlotsWithStatus = async (req, res) => {
-//   try {
-//     const riderId = req.rider?._id; // may be optional
-//     const { date, city, zone, status = "all" } = req.query;
-
-//     if (!date) {
-//       return res.status(400).json({ success: false, message: "Date is required (YYYY-MM-DD)" });
-//     }
-//     if (!city) {
-//       return res.status(400).json({ success: false, message: "City is required" });
-//     }
-//     if (!zone) {
-//       return res.status(400).json({ success: false, message: "Zone is required" });
-//     }
-
-//     const dailyDoc = await Slot.findOne({ date, city, zone });
-
-//     if (!dailyDoc) {
-//       return res.json({
-//         success: true,
-//         message: "No slots found for this date",
-//         date,
-//         count: 0,
-//         data: []
-//       });
-//     }
-
-//     /* --------------------------------------------------
-//        1) Fetch rider bookings for this day
-//     -------------------------------------------------- */
-//     let bookingMap = {};
-
-//     if (riderId) {
-//       const riderBookings = await SlotBooking.find({ riderId, date });
-
-//       for (const b of riderBookings) {
-//         bookingMap[b.slotId.toString()] = b;
-//       }
-//     }
-
-//     /* --------------------------------------------------
-//        2) Build enriched slot list
-//     -------------------------------------------------- */
-//     let resultSlots = dailyDoc.slots
-//       .filter(s => s.status === "ACTIVE")
-//       .sort((a, b) => a.startTime.localeCompare(b.startTime))
-//       .map(slot => {
-//         const booking = bookingMap[slot.slotId?.toString()];
-//     // console.log("result" , resultSlots);
-//         return {
-//           ...slot._doc,
-//           isBooked: !!booking,
-//           bookingId: booking ? booking._id : null,
-//           bookingStatus: booking ? booking.status : "NOT_BOOKED"
-//         };
-//       });
-
-//     /* --------------------------------------------------
-//        3) Apply FILTER based on ?status=
-//     -------------------------------------------------- */
-
-//     if (status === "booked") {
-//       resultSlots = resultSlots.filter(s => s.bookingStatus === "BOOKED");
-//     }
-
-//     if (status === "cancelled") {
-//       resultSlots = resultSlots.filter(s => s.bookingStatus.startsWith("CANCELLED_BY_RIDER"));
-//     }
-
-//     return res.json({
-//       success: true,
-//       message: "Daily slots fetched",
-//       date,
-//       weekNumber: dailyDoc.weekNumber,
-//       year: dailyDoc.year,
-//       count: resultSlots.length,
-//       data: resultSlots
-//     });
-
-//   } catch (err) {
-//     console.error("Get Daily Slots Error:", err);
-//     res.status(500).json({ success: false, message: "Server error" });
-//   }
-// };
 
 
 
@@ -370,10 +208,22 @@ exports.getDailySlots = async (req, res) => {
       return res.status(400).json({ success: false, message: "Zone is required" });
     }
 
-    const dailyDoc = await Slot.findOne({
-      date,
-      city,
-      zone
+    const selectedDate = new Date(`${date}T00:00:00`);
+
+    const dailyDoc = await prisma.weeklySlot.findFirst({
+      where: {
+        city,
+        zone,
+        isDeleted: false,
+        slots: {
+          some: {
+            date: selectedDate
+          }
+        }
+      },
+      include: {
+        slots: true
+      }
     });
 
     if (!dailyDoc) {
@@ -386,9 +236,11 @@ exports.getDailySlots = async (req, res) => {
       });
     }
 
-    // Filter ACTIVE slots only
     const activeSlots = dailyDoc.slots
-      .filter(s => s.status === "ACTIVE")
+      .filter(s =>
+        s.status === "ACTIVE" &&
+        new Date(s.date).toISOString().split("T")[0] === date
+      )
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
     return res.json({
@@ -407,197 +259,6 @@ exports.getDailySlots = async (req, res) => {
   }
 };
 
-
-
-
-
-// exports.bookSlot = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     const { date, slotId } = req.body;
-
-//     if (!date || !slotId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "date and slotId are required"
-//       });
-//     }
-
-//     // Fetch Rider
-//     const rider = await Rider.findById(riderId);
-//     if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
-
-//     if (!rider.isFullyRegistered) {
-//       return res.status(403).json({
-//         success: false,
-//         message: "Complete onboarding before booking slots"
-//       });
-//     }
-
-//     // Get day slot document
-//     const daySlot = await Slot.findOne({ date });
-
-//     if (!daySlot) {
-//       return res.status(404).json({ success: false, message: "No slots found for this date" });
-//     }
-
-//     // Find nested slot
-//     const slot = daySlot.slots.find(
-//       s => s.slotId.toString() === slotId.toString()
-//     );
-
-//     if (!slot) {
-//       return res.status(404).json({ success: false, message: "Slot not found" });
-//     }
-
-//     if (slot.status !== "ACTIVE") {
-//       return res.status(400).json({ success: false, message: "Slot is inactive" });
-//     }
-
-//     if (slot.bookedRiders >= slot.maxRiders) {
-//       return res.status(400).json({ success: false, message: "Slot is full" });
-//     }
-
-//     // Prevent duplicate booking
-//     const existing = await SlotBooking.findOne({
-//       riderId,
-//       date,
-//       slotId,
-//       status: { $in: ["BOOKED"] }
-//     });
-
-//     if (existing) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "You already booked this slot"
-//       });
-//     }
-
-//     // ------------------------
-//     // AUTO-GENERATE MISSING FIELDS
-//     // ------------------------
-
-//     const jsDate = new Date(date);
-
-//     const dayOfWeekArr = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-//     const dayOfWeek = dayOfWeekArr[jsDate.getUTCDay()];
-
-//     const dayNumber = jsDate.getUTCDay() === 0 ? 7 : jsDate.getUTCDay(); // SUN=7
-
-//     // slotKey = MON_06_08
-//     const slotKey = `${dayOfWeek}_${slot.startTime.replace(":", "")}_${slot.endTime.replace(":", "")}`;
-
-//     const durationMinutes = (slot.durationInHours || 0) * 60;
-
-//     // ------------------------
-
-//     const booking = await SlotBooking.create({
-//       riderId,
-//       daySlotId: daySlot._id,
-//       slotId,
-//       slotKey,
-//       date,
-//       dayOfWeek,
-//       dayNumber,
-//       weekNumber: daySlot.weekNumber,
-//       year: daySlot.year,
-//       city: daySlot.city,
-//       zone: daySlot.zone,
-//       startTime: slot.startTime,
-//       endTime: slot.endTime,
-//       slotStartAt: new Date(`${date}T${slot.startTime}:00`),
-//       slotEndAt: new Date(`${date}T${slot.endTime}:00`),
-//       totalMinutes: durationMinutes,
-//       isPeakSlot: slot.isPeakSlot,
-//       incentiveText: slot.incentiveText,
-//       status: "BOOKED",
-//       bookedFrom: "APP"
-//     });
-
-//     // Increase bookedRiders
-//     await Slot.updateOne(
-//       { _id: daySlot._id, "slots.slotId": slotId },
-//       { $inc: { "slots.$.bookedRiders": 1 } }
-//     );
-
-//     return res.json({
-//       success: true,
-//       message: "Slot booked successfully",
-//       data: booking
-//     });
-
-//   } catch (err) {
-//     console.error("Slot Booking Error:", err);
-//     res.status(500).json({ success: false, message: "Server error" });
-//   }
-// };
-
-
-// exports.cancelSlot = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     const { bookingId } = req.params;
-
-//     if (!bookingId) {
-//       return res.status(400).json({ success: false, message: "bookingId is required" });
-//     }
-
-//     // 1) Get Booking
-//     const booking = await SlotBooking.findById(bookingId);
-//     if (!booking) {
-//       return res.status(404).json({ success: false, message: "Booking not found" });
-//     }
-
-//     // 2) Ensure booking belongs to rider
-//     if (booking.riderId.toString() !== riderId.toString()) {
-//       return res.status(403).json({ success: false, message: "Unauthorized cancel attempt" });
-//     }
-
-//     // 3) Prevent cancelling past-time slots
-//     const slotDateTime = new Date(`${booking.date}T${booking.startTime}:00`);
-//     if (slotDateTime < new Date()) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Cannot cancel past or ongoing slot"
-//       });
-//     }
-
-//     // 4) Get the daily slot document
-//     const daySlot = await Slot.findById(booking.daySlotId);
-//     if (!daySlot) {
-//       return res.status(404).json({ success: false, message: "Day slot document missing" });
-//     }
-
-//     // 5) Find nested slot
-//     const slot = daySlot.slots.find(
-//       s => s._id.toString() === booking.slotId.toString()
-//     );
-
-//     if (!slot) {
-//       return res.status(404).json({ success: false, message: "Slot not found in daily collection" });
-//     }
-
-//     // 6) Update booking status
-//     booking.status = "CANCELLED_BY_RIDER";
-//     await booking.save();
-
-//     // 7) Decrease booked count in nested slot
-//     await Slot.updateOne(
-//       { _id: daySlot._id, "slots._id": booking.slotId },
-//       { $inc: { "slots.$.bookedRiders": -1 } }
-//     );
-
-//     return res.json({
-//       success: true,
-//       message: "Slot cancelled successfully",
-//       data: booking
-//     });
-
-//   } catch (err) {
-//     console.error("Cancel Slot Error:", err);
-//     res.status(500).json({ success: false, message: "Server error" });
-//   }
-// };
 
 exports.bookSlot = async (req, res) => {
   try {
