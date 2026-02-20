@@ -3,13 +3,9 @@ const Rider = require("../models/RiderModel");
 const Order = require("../models/OrderSchema");
 const RiderAssets = require("../models/RiderAsset");
 
-<<<<<<< Updated upstream
-const mongoose = require('mongoose')
-=======
 const mongoose=require('mongoose')
 const prisma=require("../config/prisma");
 
->>>>>>> Stashed changes
 const { extractTextFromImage } = require("../utils/ocr");
 const {
   extractPAN,
