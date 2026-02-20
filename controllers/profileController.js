@@ -1,4 +1,3 @@
-const prisma = require("../config/prisma");
 const Rider = require("../models/RiderModel");
 const Order = require("../models/OrderSchema");
 const RiderAssets = require("../models/RiderAsset");
@@ -15,7 +14,7 @@ const {
 } = require("../utils/kycParser");
 const { uploadToAzure } = require("../utils/azureUpload"); // path adjust
 const SlotBooking = require("../models/SlotBookingModel");
-const prisma = require("../config/prisma");
+
 
 
 exports.getProfile = async (req, res) => {
