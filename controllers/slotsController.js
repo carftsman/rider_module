@@ -1,10 +1,11 @@
 const Slot = require("../models/SlotModel");
-const {getWeekNumber} = require("../helpers/getWeekNumber");
+const { getWeekNumber } = require("../helpers/getWeekNumber");
 
 const SlotBooking = require("../models/SlotBookingModel");
 const Rider = require("../models/RiderModel");
-    // FCM Notification
+// FCM Notification
 const fcmService = require("../helpers/fcmService");
+const prisma = require("../config/prisma");
 
 const prisma = require("../config/prisma");
 
@@ -122,41 +123,41 @@ exports.getWeeklySlots = async (req, res) => {
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     // Add date + dayName
-const result = weekDocs.map(day => {
-  // DEBUG
-//   console.log("DAY DOC:", day);
+    const result = weekDocs.map(day => {
+      // DEBUG
+      //   console.log("DAY DOC:", day);
 
-  let currentDate = null;
+      let currentDate = null;
 
-  if (day.date instanceof Date) {
-    currentDate = day.date;
-  } 
-  else if (typeof day.date === "string" && day.date.length >= 8) {
-    // Handle string "2025-12-01"
-    currentDate = new Date(`${day.date}T00:00:00`);
-  } 
-  else if (day._doc?.date) {
-    // Sometimes mongoose stores it in _doc
-    currentDate = new Date(`${day._doc.date}T00:00:00`);
-  }
+      if (day.date instanceof Date) {
+        currentDate = day.date;
+      }
+      else if (typeof day.date === "string" && day.date.length >= 8) {
+        // Handle string "2025-12-01"
+        currentDate = new Date(`${day.date}T00:00:00`);
+      }
+      else if (day._doc?.date) {
+        // Sometimes mongoose stores it in _doc
+        currentDate = new Date(`${day._doc.date}T00:00:00`);
+      }
 
-  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const dayName = currentDate ? dayNames[currentDate.getDay()] : "Invalid";
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const dayName = currentDate ? dayNames[currentDate.getDay()] : "Invalid";
 
-  const activeSlots = day.slots
-    .filter(s => s.status === "ACTIVE")
-    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+      const activeSlots = day.slots
+        .filter(s => s.status === "ACTIVE")
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-  return {
-    date: day.date || day._doc?.date || null,
-    dayName,
-    weekNumber: day.weekNumber,
-    year: day.year,
-    city: day.city,
-    zone: day.zone,
-    slots: activeSlots
-  };
-});
+      return {
+        date: day.date || day._doc?.date || null,
+        dayName,
+        weekNumber: day.weekNumber,
+        year: day.year,
+        city: day.city,
+        zone: day.zone,
+        slots: activeSlots
+      };
+    });
 
 
 
@@ -333,7 +334,7 @@ exports.getDailySlotsWithStatus = async (req, res) => {
       enrichedSlots = enrichedSlots.filter(s => s.bookingStatus === "CANCELLED_BY_RIDER");
     }
 
-    if (status === "available" ) {
+    if (status === "available") {
       enrichedSlots = enrichedSlots.filter(s =>
         s.bookingStatus === "NOT_BOOKED" || s.bookingStatus === "CANCELLED_BY_RIDER"
       );
@@ -715,35 +716,35 @@ exports.bookSlot = async (req, res) => {
       // });
 
       const booking = await SlotBooking.findOneAndUpdate(
-      { riderId, date, slotId },          // SAME UNIQUE KEY
-      {
-        $set: {
-          daySlotId: daySlot._id,
-          slotKey,
-          dayOfWeek,
-          dayNumber,
-          weekNumber: daySlot.weekNumber,
-          year: daySlot.year,
-          city: daySlot.city,
-          zone: daySlot.zone,
-          startTime: slot.startTime,
-          endTime: slot.endTime,
-          slotStartAt: new Date(`${date}T${slot.startTime}:00`),
-          slotEndAt: new Date(`${date}T${slot.endTime}:00`),
-          totalMinutes: durationMinutes,
-          isPeakSlot: slot.isPeakSlot,
-          incentiveText: slot.incentiveText,
-          status: "BOOKED",
-          bookedFrom: "APP",
-          cancellationReason: null,
-          bookedAt: new Date()
+        { riderId, date, slotId },          // SAME UNIQUE KEY
+        {
+          $set: {
+            daySlotId: daySlot._id,
+            slotKey,
+            dayOfWeek,
+            dayNumber,
+            weekNumber: daySlot.weekNumber,
+            year: daySlot.year,
+            city: daySlot.city,
+            zone: daySlot.zone,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            slotStartAt: new Date(`${date}T${slot.startTime}:00`),
+            slotEndAt: new Date(`${date}T${slot.endTime}:00`),
+            totalMinutes: durationMinutes,
+            isPeakSlot: slot.isPeakSlot,
+            incentiveText: slot.incentiveText,
+            status: "BOOKED",
+            bookedFrom: "APP",
+            cancellationReason: null,
+            bookedAt: new Date()
+          }
+        },
+        {
+          upsert: true,   //CREATE if first time, UPDATE if cancelled earlier
+          new: true
         }
-      },
-      {
-        upsert: true,   //CREATE if first time, UPDATE if cancelled earlier
-        new: true
-      }
-    );
+      );
 
 
 
@@ -752,7 +753,8 @@ exports.bookSlot = async (req, res) => {
       // Increase booked count in DB
       await Slot.updateOne(
         { _id: daySlot._id, "slots.slotId": slotId },
-        { $inc: { "slots.$.bookedRiders": 1 },
+        {
+          $inc: { "slots.$.bookedRiders": 1 },
           $push: {
             "slots.$.riders": {
               riderId,
@@ -858,7 +860,7 @@ exports.cancelSlot = async (req, res) => {
         success: false,
         message: "Slot already cancelled or completed"
       });
-   }
+    }
 
     // 6️⃣ Update booking status
     booking.status = "CANCELLED_BY_RIDER";
@@ -917,20 +919,20 @@ exports.cancelSlot = async (req, res) => {
     console.log("Rider FCM Token:", rider?.fcmToken);
 
     if (rider?.fcmToken) {
-        await fcmService.sendToDevice({
-          token: rider.fcmToken,
-          title: "Slot Cancelled",
-          body: `Your slot ${booking.startTime}-${booking.endTime} on ${booking.date} was cancelled`,
-          data: {
-            type: "SLOT_CANCELLED",
-            bookingId: booking._id.toString(),
-            slotId: booking.slotId.toString(),
-            date: booking.date,
-            startTime: booking.startTime,
-            endTime: booking.endTime,
-          },
-        });
-      }
+      await fcmService.sendToDevice({
+        token: rider.fcmToken,
+        title: "Slot Cancelled",
+        body: `Your slot ${booking.startTime}-${booking.endTime} on ${booking.date} was cancelled`,
+        data: {
+          type: "SLOT_CANCELLED",
+          bookingId: booking._id.toString(),
+          slotId: booking.slotId.toString(),
+          date: booking.date,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+        },
+      });
+    }
 
     return res.json({
       success: true,
@@ -977,7 +979,7 @@ exports.getCurrentSlot = async (req, res) => {
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
     //  Fetch day slots
-    const daySlot = await Slot.findOne({ date: today ,city , zone});
+    const daySlot = await Slot.findOne({ date: today, city, zone });
 
 
     if (!daySlot || !daySlot.slots.length) {
@@ -1203,18 +1205,18 @@ exports.getSlotHistory = async (req, res) => {
     /* ----------------------------------------------------
        3. Generate all 7 dates of selected week
     -----------------------------------------------------*/
-function getISOWeekStart(week, year) {
-  const jan4 = new Date(year, 0, 4); // Jan 4 is always in ISO week 1
-  const day = jan4.getDay() || 7;    // Sunday = 7
-  const monday = new Date(jan4);
-  monday.setDate(jan4.getDate() - (day - 1)); // Monday of week 1
-  monday.setHours(0, 0, 0, 0);
+    function getISOWeekStart(week, year) {
+      const jan4 = new Date(year, 0, 4); // Jan 4 is always in ISO week 1
+      const day = jan4.getDay() || 7;    // Sunday = 7
+      const monday = new Date(jan4);
+      monday.setDate(jan4.getDate() - (day - 1)); // Monday of week 1
+      monday.setHours(0, 0, 0, 0);
 
-  const targetWeekStart = new Date(monday);
-  targetWeekStart.setDate(monday.getDate() + (week - 1) * 7);
+      const targetWeekStart = new Date(monday);
+      targetWeekStart.setDate(monday.getDate() + (week - 1) * 7);
 
-  return targetWeekStart;
-}
+      return targetWeekStart;
+    }
 
 
     const weekStart = getISOWeekStart(weekNumber, year);
@@ -1246,7 +1248,7 @@ function getISOWeekStart(week, year) {
       const dateKey = b.date;
 
       if (!daysMap[dateKey]) {
-  // booking date is outside expected week range
+        // booking date is outside expected week range
         return;
       }
 
@@ -1284,33 +1286,23 @@ function getISOWeekStart(week, year) {
 
 exports.getCurrentAndNextSlot = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
 
     const now = new Date();
-    const todayDate = now.toISOString().split("T")[0];
 
     // Fetch today's booked slots
-    let todaySlots = await SlotBooking.find({
-      riderId,
-      date: todayDate,
-      status: "BOOKED"
-    }).sort({ startTime: 1 });
-
-    // If no slots today, check tomorrow
-    const tomorrowDate = new Date(now);
-    tomorrowDate.setDate(now.getDate() + 1);
-    const tomorrow = tomorrowDate.toISOString().split("T")[0];
-
-    let tomorrowSlots = [];
-    if (todaySlots.length === 0) {
-      tomorrowSlots = await SlotBooking.find({
+    let todaySlots = await prisma.slotBooking.findMany({
+      where: {
         riderId,
-        date: tomorrow,
-        status: "BOOKED"
-      }).sort({ startTime: 1 });
-    }
+        status: "BOOKED",
+        slotEndAt: { gte: now }
+      },
+      include: { slot: true },
+      orderBy: { slotStartAt: "asc" }
+    });
 
-    const allSlots = [...todaySlots, ...tomorrowSlots];
+    
+    const allSlots = todaySlots;
 
     if (allSlots.length === 0) {
       return res.json({
@@ -1325,8 +1317,8 @@ exports.getCurrentAndNextSlot = async (req, res) => {
     let nextSlot = null;
 
     for (let slot of allSlots) {
-      const slotStart = new Date(`${slot.date}T${slot.startTime}:00`);
-      const slotEnd = new Date(`${slot.date}T${slot.endTime}:00`);
+      const slotStart = slot.slotStartAt;
+      const slotEnd = slot.slotEndAt;
 
       if (now >= slotStart && now <= slotEnd) {
         currentSlot = slot;
