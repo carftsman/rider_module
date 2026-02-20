@@ -15,6 +15,7 @@ const { updateProfile,
   getSlotHistory,
   addOrUpdateBankDetails,
   getMyAssetsSummary,
+  getBankDetails_profile,
 getMyAssets } = require("../controllers/profileController");
 
 /**
@@ -277,7 +278,7 @@ router.get("/rider/profile", riderAuthMiddleWare, getProfile);
  *         description: Server error
  */
 
-router.get("/bank-details", riderAuthMiddleWare, getBankDetails);
+router.get("/bank-details", riderAuthMiddleWare, getBankDetails_profile);
 // Get kit address
  
 /**

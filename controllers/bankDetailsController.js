@@ -120,14 +120,17 @@
 
 const Rider = require("../models/RiderModel");
 
+const prisma=require("../config/prisma");
+
 /**
  * ============================================================
  * ADD OR UPDATE BANK DETAILS
  * ============================================================
  */
+
 exports.addOrUpdateBankDetails = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id; // ✅ Prisma uses id
 
     const {
       bankName,
@@ -138,7 +141,6 @@ exports.addOrUpdateBankDetails = async (req, res) => {
       ifscCode
     } = req.body;
 
-    // Basic validation
     if (
       !bankName ||
       !accountHolderName ||
@@ -153,20 +155,28 @@ exports.addOrUpdateBankDetails = async (req, res) => {
       });
     }
 
-    await Rider.findByIdAndUpdate(riderId, {
-      $set: {
-        bankDetails: {
-          bankName,
-          accountHolderName,
-          accountType,
-          branch,
-          accountNumber,
-          ifscCode,
-          addedBankAccount: true,
-          ifscVerificationStatus: "PENDING",
-          bankVerificationStatus: "PENDING",
-          verifiedAt: null
-        }
+    // ✅ UPSERT (create if not exist, update if exist)
+    await prisma.riderBankDetails.upsert({
+      where: { riderId },
+      update: {
+        bankName,
+        accountHolderName,
+        accountType,
+        branch,
+        accountNumber,
+        ifscCode,
+        ifscVerificationStatus: "PENDING",
+        bankVerificationStatus: "PENDING",
+        verifiedAt: null
+      },
+      create: {
+        riderId,
+        bankName,
+        accountHolderName,
+        accountType,
+        branch,
+        accountNumber,
+        ifscCode
       }
     });
 
@@ -238,16 +248,13 @@ exports.getBankDetailsStatus = async (req, res) => {
  * DELETE BANK DETAILS
  * ============================================================
  */
+
 exports.deleteBankDetails = async (req, res) => {
   try {
-    await Rider.findByIdAndUpdate(req.rider._id, {
-      $set: {
-        bankDetails: {
-          addedBankAccount: false,
-          ifscVerificationStatus: "PENDING",
-          bankVerificationStatus: "PENDING"
-        }
-      }
+    const riderId = req.rider.id;
+
+    await prisma.riderBankDetails.deleteMany({
+      where: { riderId }
     });
 
     return res.status(200).json({
