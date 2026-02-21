@@ -8,6 +8,7 @@ const mongoose=require('mongoose')
 const { getLatLng } = require("../services/geocodeService");
 const Incentive = require("../models/IncentiveSchema");
 const RiderIncentiveProgress = require("../models/RiderIncentiveProgressSchema");
+const prisma=require("../config/prisma");
       
 
 
@@ -1379,11 +1380,21 @@ async function rejectOrder(req, res) {
 async function getOrderDetails(req, res) {
   try {
     const { orderId } = req.params;
-
-    // 1️⃣ Find order
-    const order = await Order.findOne({ orderId })
-      .populate("riderId", "name phone") // optional, if rider assigned
-      .lean();
+    const order = await prisma.Order.findFirst({
+      where: { orderId },
+      include: {
+        Rider: {
+          select: {
+              id: true,
+              phoneNumber: true
+            }
+          },
+          OrderItem: true,
+          OrderPickupAddress: true,
+          OrderDeliveryAddress: true,
+          OrderPricing: true
+        }
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -1391,16 +1402,14 @@ async function getOrderDetails(req, res) {
         message: "Order not found"
       });
     }
-
-
      const filteredOrder = {
-      _id: order._id,
+      id: order.id,
       orderId: order.orderId,
       vendorShopName: order.vendorShopName,
-      items: order.items,
-      pickupAddress: order.pickupAddress,
-      deliveryAddress: order.deliveryAddress,
-      pricing: order.pricing
+      items: order.OrderItem,
+      pickupAddress: order.OrderPickupAddress,
+      deliveryAddress: order.OrderDeliveryAddress,
+      pricing: order.OrderPricing
     };
 
 
@@ -1425,12 +1434,11 @@ async function getOrderDetails(req, res) {
 async function pickupOrder(req, res) {
   try {
     const { orderId } = req.params;
-    const riderId  = req.rider._id;
+    const riderId  = req.rider.id;
 
-    /* ===============================
-       1️⃣ FETCH ORDER
-    =============================== */
-    const order = await Order.findOne({ orderId });
+    const order = await prisma.Order.findFirst({
+      where: { orderId }
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -1439,9 +1447,7 @@ async function pickupOrder(req, res) {
       });
     }
 
-    /* ===============================
-       2️⃣ VALIDATE ORDER STATE
-    =============================== */
+ 
     if (order.orderStatus !== "ASSIGNED") {
       return res.status(400).json({
         success: false,
@@ -1449,59 +1455,39 @@ async function pickupOrder(req, res) {
       });
     }
 
-    /* ===============================
-       3️⃣ VALIDATE RIDER
-    =============================== */
-    if (!order.riderId || order.riderId.toString() !== riderId.toString()) {
+
+    if (!order.riderId || order.riderId !== riderId) {
       return res.status(403).json({
         success: false,
         message: "You are not assigned to this order"
       });
     }
 
-    /* ===============================
-       4️⃣ UPDATE ORDER STATUS
-    =============================== */
-    order.orderStatus = "PICKED_UP";
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          orderStatus: "PICKED_UP"
+        }
+      });
 
-    // Snapshot assigned rider info
-    order.assignedRider = {
-      riderId,
-      acceptedAt: order.assignedRider?.acceptedAt || new Date()
-    };
+      await tx.orderTracking.updateMany({
+        where: { orderId: order.id },
+        data: {
+          durationInMin: null
+        }
+      });
+    });
 
-    // Tracking update (optional but recommended)
-    order.tracking = {
-      ...order.tracking,
-      pickedUpAt: new Date()
-    };
-
-    await order.save();
-
-    /* ===============================
-       5️⃣ REAL-TIME NOTIFICATIONS
-    =============================== */
-
-    // Notify rider dashboard
     notifyRider(riderId.toString(), {
       type: "ORDER_PICKED_UP",
       orderId: order.orderId
     });
 
-    // Notify customer (if you have WS)
-
-    // notifyCustomer?.(order.customerId?.toString(), {
-    //   type: "ORDER_PICKED_UP",
-    //   orderId: order.orderId
-    // });
-
-    /* ===============================
-       6️⃣ RESPONSE
-    =============================== */
     return res.status(200).json({
       success: true,
       message: "Order picked up successfully",
-      orderStatus: order.orderStatus
+      orderStatus: "PICKED_UP"
     });
 
   } catch (err) {
