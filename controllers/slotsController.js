@@ -1,14 +1,12 @@
 const Slot = require("../models/SlotModel");
 const { getWeekNumber } = require("../helpers/getWeekNumber");
 
-
 const SlotBooking = require("../models/SlotBookingModel");
 const Rider = require("../models/RiderModel");
 // FCM Notification
 const fcmService = require("../helpers/fcmService");
 
-const prisma = require("../config/prisma");
-
+const prisma=require("../config/prisma");
 
 
 
@@ -109,150 +107,99 @@ exports.getWeeklySlots = async (req, res) => {
 
 
 
-// exports.getDailySlotsWithStatus = async (req, res) => {
-//   try {
-//     const riderId = req.rider?._id;
-//     const { date, city, zone, status = "all" } = req.query;
+exports.getDailySlotsWithStatus = async (req, res) => {
+  try {
+    const riderId = req.rider?._id;
+    const { date, city, zone, status = "all" } = req.query;
 
-//     if (!date || !city || !zone) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "date, city and zone are required"
-//       });
-//     }
+    if (!date || !city || !zone) {
+      return res.status(400).json({
+        success: false,
+        message: "date, city and zone are required"
+      });
+    }
 
-//     // Get daily slot doc
-//     const dailyDoc = await Slot.findOne({ date, city, zone });
+    // Get daily slot doc
+    const dailyDoc = await Slot.findOne({ date, city, zone });
 
-//     if (!dailyDoc) {
-//       return res.json({
-//         success: true,
-//         message: "No slots found for this date",
-//         data: []
-//       });
-//     }
+    if (!dailyDoc) {
+      return res.json({
+        success: true,
+        message: "No slots found for this date",
+        data: []
+      });
+    }
 
-//     /* -----------------------------
-//        Fetch rider bookings for date
-//     ------------------------------*/
-//     let bookingMap = {};
+    /* -----------------------------
+       Fetch rider bookings for date
+    ------------------------------*/
+    let bookingMap = {};
 
-//     if (riderId) {
-//       const riderBookings = await SlotBooking.find({ riderId, date });
+    if (riderId) {
+      const riderBookings = await SlotBooking.find({ riderId, date });
 
-//       for (const b of riderBookings) {
-//         bookingMap[b.slotId.toString()] = b;
-//       }
-//     }
+      for (const b of riderBookings) {
+        bookingMap[b.slotId.toString()] = b;
+      }
+    }
 
-//     /* -----------------------------
-//        Build enriched slot data
-//     ------------------------------*/
-//     let enrichedSlots = dailyDoc.slots
-//       .sort((a, b) => a.startTime.localeCompare(b.startTime))
-//       .map(slot => {
-//         const booking = bookingMap[slot.slotId.toString()];
+    /* -----------------------------
+       Build enriched slot data
+    ------------------------------*/
+    let enrichedSlots = dailyDoc.slots
+      .sort((a, b) => a.startTime.localeCompare(b.startTime))
+      .map(slot => {
+        const booking = bookingMap[slot.slotId.toString()];
 
-//         return {
-//           ...slot._doc,
-//           isBooked: !!booking && booking.status === "BOOKED",
-//           isCancelled: !!booking && booking.status === "CANCELLED_BY_RIDER",
-//           bookingId: booking ? booking._id : null,
-//           bookingStatus: booking ? booking.status : "NOT_BOOKED"
-//         };
-//       });
+        return {
+          ...slot._doc,
+          isBooked: !!booking && booking.status === "BOOKED",
+          isCancelled: !!booking && booking.status === "CANCELLED_BY_RIDER",
+          bookingId: booking ? booking._id : null,
+          bookingStatus: booking ? booking.status : "NOT_BOOKED"
+        };
+      });
 
-//     /* -----------------------------
-//        FILTER BASED ON STATUS
-//     ------------------------------*/
+    /* -----------------------------
+       FILTER BASED ON STATUS
+    ------------------------------*/
 
-//     // Show only booked slots
-//     if (status === "booked") {
-//       enrichedSlots = enrichedSlots.filter(s => s.bookingStatus === "BOOKED");
-//     }
+    // Show only booked slots
+    if (status === "booked") {
+      enrichedSlots = enrichedSlots.filter(s => s.bookingStatus === "BOOKED");
+    }
 
-//     // Show only cancelled slots
-//     if (status === "cancelled") {
-//       enrichedSlots = enrichedSlots.filter(s => s.bookingStatus === "CANCELLED_BY_RIDER");
-//     }
+    // Show only cancelled slots
+    if (status === "cancelled") {
+      enrichedSlots = enrichedSlots.filter(s => s.bookingStatus === "CANCELLED_BY_RIDER");
+    }
 
-//     if (status === "available" ) {
-//       enrichedSlots = enrichedSlots.filter(s =>
-//         s.bookingStatus === "NOT_BOOKED" || s.bookingStatus === "CANCELLED_BY_RIDER"
-//       );
-//     }
+    if (status === "available") {
+      enrichedSlots = enrichedSlots.filter(s =>
+        s.bookingStatus === "NOT_BOOKED" || s.bookingStatus === "CANCELLED_BY_RIDER"
+      );
+    }
 
-//     return res.json({
-//       success: true,
-//       message: "Daily slots fetched",
-//       date,
-//       count: enrichedSlots.length,
-//       data: enrichedSlots
-//     });
+    return res.json({
+      success: true,
+      message: "Daily slots fetched",
+      date,
+      count: enrichedSlots.length,
+      data: enrichedSlots
+    });
 
-//   } catch (err) {
-//     console.error("Get Daily Slots Error:", err);
-//     res.status(500).json({ success: false, message: "Server error" });
-//   }
-// };
+  } catch (err) {
+    console.error("Get Daily Slots Error:", err);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
 
 
-
-// exports.getDailySlots = async (req, res) => {  
-//   try {
-//     const { date, city, zone } = req.query;
-
-//     if (!date) {
-//       return res.status(400).json({ success: false, message: "Date is required (YYYY-MM-DD)" });
-//     }
-//     if (!city) {
-//       return res.status(400).json({ success: false, message: "City is required" });
-//     }
-//     if (!zone) {
-//       return res.status(400).json({ success: false, message: "Zone is required" });
-//     }
-
-//     const dailyDoc = await Slot.findOne({
-//       date,
-//       city,
-//       zone
-//     });
-
-//     if (!dailyDoc) {
-//       return res.json({
-//         success: true,
-//         message: "No slots found for this date",
-//         date,
-//         count: 0,
-//         data: []
-//       });
-//     }
-
-//     // Filter ACTIVE slots only
-//     const activeSlots = dailyDoc.slots
-//       .filter(s => s.status === "ACTIVE")
-//       .sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-//     return res.json({
-//       success: true,
-//       message: "Daily slots fetched",
-//       date,
-//       weekNumber: dailyDoc.weekNumber,
-//       year: dailyDoc.year,
-//       count: activeSlots.length,
-//       data: activeSlots
-//     });
-
-//   } catch (err) {
-//     console.error("Get Daily Slots Error:", err);
-//     res.status(500).json({ success: false, message: "Server error" });
-//   }
-// };
 
 exports.getDailySlots = async (req, res) => {
   try {
     const { date, city, zone } = req.query;
- 
+
     if (!date) {
       return res.status(400).json({ success: false, message: "Date is required (YYYY-MM-DD)" });
     }
@@ -262,13 +209,25 @@ exports.getDailySlots = async (req, res) => {
     if (!zone) {
       return res.status(400).json({ success: false, message: "Zone is required" });
     }
- 
-    const dailyDoc = await Slot.findOne({
-      date,
-      city,
-      zone
+
+    const selectedDate = new Date(`${date}T00:00:00`);
+
+    const dailyDoc = await prisma.weeklySlot.findFirst({
+      where: {
+        city,
+        zone,
+        isDeleted: false,
+        slots: {
+          some: {
+            date: selectedDate
+          }
+        }
+      },
+      include: {
+        slots: true
+      }
     });
- 
+
     if (!dailyDoc) {
       return res.json({
         success: true,
@@ -278,15 +237,14 @@ exports.getDailySlots = async (req, res) => {
         data: []
       });
     }
- 
-    // Filter ACTIVE slots only
+
     const activeSlots = dailyDoc.slots
       .filter(s =>
         s.status === "ACTIVE" &&
         new Date(s.date).toISOString().split("T")[0] === date
       )
       .sort((a, b) => a.startTime.localeCompare(b.startTime));
- 
+
     return res.json({
       success: true,
       message: "Daily slots fetched",
@@ -296,428 +254,11 @@ exports.getDailySlots = async (req, res) => {
       count: activeSlots.length,
       data: activeSlots
     });
- 
+
   } catch (err) {
     console.error("Get Daily Slots Error:", err);
     res.status(500).json({ success: false, message: "Server error" });
   }
-};
- 
-
-
-// exports.getDailySlotsWithStatus = async (req, res) => {
-//   try {
-//     const riderId = req.rider?.id;
-//     const { date, city, zone, status = "all" } = req.query;
-
-//     if (!date || !city || !zone) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "date, city and zone are required"
-//       });
-//     }
-
-//     /* ----------------------------------
-//        Fetch slots
-//     ---------------------------------- */
-//     const slots = await prisma.slot.findMany({
-//       where: {
-//         date: new Date(date),
-//         weeklySlot: {
-//           city,
-//           zone
-//         }
-//       },
-//       include: {
-//         slotBookings: riderId
-//           ? { where: { riderId } }
-//           : false
-//       },
-//       orderBy: { startTime: "asc" }
-//     });
-
-//     if (!slots.length) {
-//       return res.json({
-//         success: true,
-//         message: "No slots found",
-//         data: []
-//       });
-//     }
-
-//     /* ----------------------------------
-//        Enrich slots
-//     ---------------------------------- */
-//     let enriched = slots.map(slot => {
-//       const booking = slot.slotBookings?.[0];
-
-//       return {
-//         ...slot,
-//         isBooked: booking?.status === "BOOKED",
-//         isCancelled: booking?.status === "CANCELLED_BY_RIDER",
-//         bookingId: booking?.id || null,
-//         bookingStatus: booking?.status || "NOT_BOOKED"
-//       };
-//     });
-
-//     /* ----------------------------------
-//        Filters
-//     ---------------------------------- */
-//     if (status === "booked")
-//       enriched = enriched.filter(s => s.bookingStatus === "BOOKED");
-
-//     if (status === "cancelled")
-//       enriched = enriched.filter(s => s.bookingStatus === "CANCELLED_BY_RIDER");
-
-//     if (status === "available")
-//       enriched = enriched.filter(
-//         s =>
-//           s.bookingStatus === "NOT_BOOKED" ||
-//           s.bookingStatus === "CANCELLED_BY_RIDER"
-//       );
-
-//     return res.json({
-//       success: true,
-//       message: "Daily slots fetched",
-//       date,
-//       count: enriched.length,
-//       data: enriched
-//     });
-
-//   } catch (err) {
-//     console.error("Daily Slots Error:", err);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error"
-//     });
-//   }
-// };
-
-
-// exports.bookSlot = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     const { date, slotId } = req.body;
-
-//     if (!date || !slotId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "date and slotId are required"
-//       });
-//     }
-
-//     // Fetch Rider
-//     const rider = await Rider.findById(riderId);
-//     if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
-
-//     if (!rider.isFullyRegistered) {
-//       return res.status(403).json({
-//         success: false,
-//         message: "Complete onboarding before booking slots"
-//       });
-//     }
-
-//     // Get day slot document
-//     const daySlot = await Slot.findOne({ date });
-
-//     if (!daySlot) {
-//       return res.status(404).json({ success: false, message: "No slots found for this date" });
-//     }
-
-//     // Find nested slot
-//     const slot = daySlot.slots.find(
-//       s => s.slotId.toString() === slotId.toString()
-//     );
-
-//     if (!slot) {
-//       return res.status(404).json({ success: false, message: "Slot not found" });
-//     }
-
-//     if (slot.status !== "ACTIVE") {
-//       return res.status(400).json({ success: false, message: "Slot is inactive" });
-//     }
-
-//     if (slot.bookedRiders >= slot.maxRiders) {
-//       return res.status(400).json({ success: false, message: "Slot is full" });
-//     }
-
-//     // Prevent duplicate booking
-//     const existing = await SlotBooking.findOne({
-//       riderId,
-//       date,
-//       slotId,
-//       status: { $in: ["BOOKED"] }
-//     });
-
-//     if (existing) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "You already booked this slot"
-//       });
-//     }
-
-//     // ------------------------
-//     // AUTO-GENERATE MISSING FIELDS
-//     // ------------------------
-
-//     const jsDate = new Date(date);
-
-//     const dayOfWeekArr = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-//     const dayOfWeek = dayOfWeekArr[jsDate.getUTCDay()];
-
-//     const dayNumber = jsDate.getUTCDay() === 0 ? 7 : jsDate.getUTCDay(); // SUN=7
-
-//     // slotKey = MON_06_08
-//     const slotKey = `${dayOfWeek}_${slot.startTime.replace(":", "")}_${slot.endTime.replace(":", "")}`;
-
-//     const durationMinutes = (slot.durationInHours || 0) * 60;
-
-//     // ------------------------
-
-//     const booking = await SlotBooking.create({
-//       riderId,
-//       daySlotId: daySlot._id,
-//       slotId,
-//       slotKey,
-//       date,
-//       dayOfWeek,
-//       dayNumber,
-//       weekNumber: daySlot.weekNumber,
-//       year: daySlot.year,
-//       city: daySlot.city,
-//       zone: daySlot.zone,
-//       startTime: slot.startTime,
-//       endTime: slot.endTime,
-//       slotStartAt: new Date(`${date}T${slot.startTime}:00`),
-//       slotEndAt: new Date(`${date}T${slot.endTime}:00`),
-//       totalMinutes: durationMinutes,
-//       isPeakSlot: slot.isPeakSlot,
-//       incentiveText: slot.incentiveText,
-//       status: "BOOKED",
-//       bookedFrom: "APP"
-//     });
-
-//     // Increase bookedRiders
-//     await Slot.updateOne(
-//       { _id: daySlot._id, "slots.slotId": slotId },
-//       { $inc: { "slots.$.bookedRiders": 1 } }
-//     );
-
-//     return res.json({
-//       success: true,
-//       message: "Slot booked successfully",
-//       data: booking
-//     });
-
-//   } catch (err) {
-//     console.error("Slot Booking Error:", err);
-//     res.status(500).json({ success: false, message: "Server error" });
-//   }
-// };
-
-
-// exports.cancelSlot = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     const { bookingId } = req.params;
-
-//     if (!bookingId) {
-//       return res.status(400).json({ success: false, message: "bookingId is required" });
-//     }
-
-//     // 1) Get Booking
-//     const booking = await SlotBooking.findById(bookingId);
-//     if (!booking) {
-//       return res.status(404).json({ success: false, message: "Booking not found" });
-//     }
-
-//     // 2) Ensure booking belongs to rider
-//     if (booking.riderId.toString() !== riderId.toString()) {
-//       return res.status(403).json({ success: false, message: "Unauthorized cancel attempt" });
-//     }
-
-//     // 3) Prevent cancelling past-time slots
-//     const slotDateTime = new Date(`${booking.date}T${booking.startTime}:00`);
-//     if (slotDateTime < new Date()) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Cannot cancel past or ongoing slot"
-//       });
-//     }
-
-//     // 4) Get the daily slot document
-//     const daySlot = await Slot.findById(booking.daySlotId);
-//     if (!daySlot) {
-//       return res.status(404).json({ success: false, message: "Day slot document missing" });
-//     }
-
-//     // 5) Find nested slot
-//     const slot = daySlot.slots.find(
-//       s => s._id.toString() === booking.slotId.toString()
-//     );
-
-//     if (!slot) {
-//       return res.status(404).json({ success: false, message: "Slot not found in daily collection" });
-//     }
-
-//     // 6) Update booking status
-//     booking.status = "CANCELLED_BY_RIDER";
-//     await booking.save();
-
-//     // 7) Decrease booked count in nested slot
-//     await Slot.updateOne(
-//       { _id: daySlot._id, "slots._id": booking.slotId },
-//       { $inc: { "slots.$.bookedRiders": -1 } }
-//     );
-
-//     return res.json({
-//       success: true,
-//       message: "Slot cancelled successfully",
-//       data: booking
-//     });
-
-//   } catch (err) {
-//     console.error("Cancel Slot Error:", err);
-//     res.status(500).json({ success: false, message: "Server error" });
-//   }
-// };
-
-exports.getDailySlotsWithStatus = async (req, res) => {
-  try {
-    const riderId = req.rider?.id;
-    const { date, city, zone, status = "all" } = req.query;
-
-    /* -----------------------------
-       Validate inputs
-    ----------------------------- */
-    if (!date || !city || !zone) {
-      return res.status(400).json({
-        success: false,
-        message: "date, city and zone are required"
-      });
-    }
-
-    const parsedDate = new Date(date);
-
-    if (isNaN(parsedDate.getTime())) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid date format (YYYY-MM-DD required)"
-      });
-    }
-
-    /* -----------------------------
-       Build day range (timezone safe)
-    ----------------------------- */
-    const start = new Date(parsedDate);
-    start.setHours(0, 0, 0, 0);
-
-    const end = new Date(parsedDate);
-    end.setHours(23, 59, 59, 999);
-
-    /* -----------------------------
-       Fetch slots
-    ----------------------------- */
-    const slots = await prisma.slot.findMany({
-      where: {
-        date: {
-          gte: start,
-          lte: end
-        },
-        weeklySlot: {
-          city,
-          zone
-        }
-      },
-      include: riderId
-        ? {
-            slotBookings: {
-              where: { riderId }
-            }
-          }
-        : {},
-      orderBy: { startTime: "asc" }
-    });
-
-    if (!slots.length) {
-      return res.json({
-        success: true,
-        message: "No slots found",
-        date,
-        count: 0,
-        data: []
-      });
-    }
-
-    /* -----------------------------
-       Enrich slot data
-    ----------------------------- */
-    let enriched = slots.map(slot => {
-      const booking = slot.slotBookings?.[0];
-
-      return {
-        slotId: slot.id,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-
-        isBooked: booking?.status === "BOOKED",
-        isCancelled: booking?.status === "CANCELLED_BY_RIDER",
-
-        bookingId: booking?.id || null,
-        bookingStatus: booking?.status || "NOT_BOOKED"
-      };
-    });
-
-    /* -----------------------------
-       Apply filters
-    ----------------------------- */
-    if (status === "booked") {
-      enriched = enriched.filter(
-        s => s.bookingStatus === "BOOKED"
-      );
-    }
-
-    if (status === "cancelled") {
-      enriched = enriched.filter(
-        s => s.bookingStatus === "CANCELLED_BY_RIDER"
-      );
-    }
-
-    if (status === "available") {
-      enriched = enriched.filter(
-        s =>
-          s.bookingStatus === "NOT_BOOKED" ||
-          s.bookingStatus === "CANCELLED_BY_RIDER"
-      );
-    }
-
-    /* -----------------------------
-       Response
-    ----------------------------- */
-    return res.json({
-      success: true,
-      message: "Daily slots fetched",
-      date,
-      count: enriched.length,
-      data: enriched
-    });
-
-  }catch (err) {
-  console.error("Daily Slots Error:", err);
-
-  res.status(500).json({
-    success: false,
-    message: err.message || "Server error"
-  });
-}
-
-  // } catch (err) {
-  //   console.error("🔥 Daily Slots Error:", err);
-
-  //   return res.status(500).json({
-  //     success: false,
-  //     message: err.message || "Server error"
-  //   });
-  // }
 };
 
 
@@ -1343,486 +884,9 @@ exports.getCurrentSlot = async (req, res) => {
   }
 };
 
-
-
-
-
-
-
-
-// exports.getSlotHistory = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     let { weekNumber, year } = req.query;
-
-//     if (!weekNumber) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "weekNumber is required"
-//       });
-//     }
-
-//     const currentYear = new Date().getFullYear();
-//     year = year || currentYear;
-
-//     // Fetch all bookings for that week
-//     const bookings = await SlotBooking.find({
-//       riderId,
-//       weekNumber: Number(weekNumber),
-//       year: Number(year)
-//     }).sort({ date: 1, startTime: 1 });
-
-//     /* ------------------------------
-//         1. Weekly Summary Counts
-//     -------------------------------*/
-
-//     const summary = {
-//       totalSlots: bookings.length,
-//       completed: bookings.filter(b => b.status === "COMPLETED").length,
-//       cancelled: bookings.filter(b => b.status === "CANCELLED_BY_RIDER").length,
-//       noShow: bookings.filter(b => b.status === "NO_SHOW").length,
-//       failed: bookings.filter(b => b.status === "FAILED").length || 0 // if future logic
-//     };
-
-//     /* ------------------------------
-//         2. Group bookings by day
-//     -------------------------------*/
-
-//     const daysMap = {};
-
-//     bookings.forEach(b => {
-//       const dateKey = b.date; // "YYYY-MM-DD"
-
-//       if (!daysMap[dateKey]) {
-//         daysMap[dateKey] = {
-//           date: dateKey,
-//           totalSlots: 0,
-//           completed: 0,
-//           cancelled: 0,
-//           noShow: 0,
-//           failed: 0,
-//           slots: []
-//         };
-//       }
-
-//       daysMap[dateKey].slots.push(b);
-//       daysMap[dateKey].totalSlots++;
-
-//       if (b.status === "COMPLETED") daysMap[dateKey].completed++;
-//       if (b.status === "CANCELLED_BY_RIDER") daysMap[dateKey].cancelled++;
-//       if (b.status === "NO_SHOW") daysMap[dateKey].noShow++;
-//       if (b.status === "FAILED") daysMap[dateKey].failed++;
-//     });
-
-//     // Convert map to array sorted by date
-//     const dailyHistory = Object.values(daysMap).sort(
-//       (a, b) => new Date(a.date) - new Date(b.date)
-//     );
-
-//     /* ------------------------------
-//         3. Response
-//     -------------------------------*/
-
-//     return res.json({
-//       success: true,
-//       message: "Weekly slot history fetched",
-//       weekNumber: Number(weekNumber),
-//       year: Number(year),
-//       summary,
-//       days: dailyHistory
-//     });
-
-//   } catch (err) {
-//     console.error("Slot History Error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error"
-//     });
-//   }
-// };
-
-// exports.getSlotHistory = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     let { weekNumber, year } = req.query;
-
-//     if (!weekNumber) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "weekNumber is required"
-//       });
-//     }
-
-//     const currentYear = new Date().getFullYear();
-//     year = Number(year) || currentYear;
-//     weekNumber = Number(weekNumber);
-
-//     /* ----------------------------------------------------
-//        1. Fetch all bookings for the week
-//     -----------------------------------------------------*/
-//     const bookings = await SlotBooking.find({
-//       riderId,
-//       weekNumber,
-//       year
-//     }).sort({ date: 1, startTime: 1 });
-
-//     /* ----------------------------------------------------
-//        2. Weekly Summary
-//     -----------------------------------------------------*/
-//     const summary = {
-//       totalSlots: bookings.length,
-//       completed: bookings.filter(b => b.status === "COMPLETED").length,
-//       cancelled: bookings.filter(b => b.status === "CANCELLED_BY_RIDER").length,
-//       noShow: bookings.filter(b => b.status === "NO_SHOW").length,
-//       failed: bookings.filter(b => b.status === "FAILED").length
-//     };
-
-//     /* ----------------------------------------------------
-//        3. Generate all 7 dates of selected week
-//     -----------------------------------------------------*/
-// function getISOWeekStart(week, year) {
-//   const jan4 = new Date(year, 0, 4); // Jan 4 is always in ISO week 1
-//   const day = jan4.getDay() || 7;    // Sunday = 7
-//   const monday = new Date(jan4);
-//   monday.setDate(jan4.getDate() - (day - 1)); // Monday of week 1
-//   monday.setHours(0, 0, 0, 0);
-
-//   const targetWeekStart = new Date(monday);
-//   targetWeekStart.setDate(monday.getDate() + (week - 1) * 7);
-
-//   return targetWeekStart;
-// }
-
-
-//     const weekStart = getISOWeekStart(weekNumber, year);
-
-//     const weekDates = [];
-//     for (let i = 0; i < 7; i++) {
-//       const d = new Date(weekStart);
-//       d.setDate(d.getDate() + i);
-//       weekDates.push(d.toISOString().slice(0, 10));
-//     }
-
-//     /* ----------------------------------------------------
-//        4. Organize bookings by date
-//     -----------------------------------------------------*/
-//     const daysMap = {};
-//     weekDates.forEach(date => {
-//       daysMap[date] = {
-//         date,
-//         totalSlots: 0,
-//         completed: 0,
-//         cancelled: 0,
-//         noShow: 0,
-//         failed: 0,
-//         slots: []
-//       };
-//     });
-
-//     bookings.forEach(b => {
-//       const dateKey = b.date;
-
-//       if (!daysMap[dateKey]) {
-//   // booking date is outside expected week range
-//         return;
-//       }
-
-//       daysMap[dateKey].slots.push(b);
-//       daysMap[dateKey].totalSlots++;
-
-//       if (b.status === "COMPLETED") daysMap[dateKey].completed++;
-//       if (b.status === "CANCELLED_BY_RIDER") daysMap[dateKey].cancelled++;
-//       if (b.status === "NO_SHOW") daysMap[dateKey].noShow++;
-//       if (b.status === "FAILED") daysMap[dateKey].failed++;
-//     });
-
-//     const dailyHistory = Object.values(daysMap);
-
-//     return res.json({
-//       success: true,
-//       message: "Weekly slot history fetched",
-//       weekNumber,
-//       year,
-//       summary,
-//       days: dailyHistory
-//     });
-
-//   } catch (err) {
-//     console.error("Slot History Error:", err);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error"
-//     });
-//   }
-// };
-
-exports.getCurrentAndNextSlot = async (req, res) => {
-  try {
-    const riderId = req.rider._id;
- 
-    const now = new Date();
-    const todayDate = now.toISOString().split("T")[0];
- 
-    // Fetch today's booked slots
-    let todaySlots = await SlotBooking.find({
-      riderId,
-      date: todayDate,
-      status: "BOOKED"
-    }).sort({ startTime: 1 });
- 
-    // If no slots today, check tomorrow
-    const tomorrowDate = new Date(now);
-    tomorrowDate.setDate(now.getDate() + 1);
-    const tomorrow = tomorrowDate.toISOString().split("T")[0];
- 
-    let tomorrowSlots = [];
-    if (todaySlots.length === 0) {
-      tomorrowSlots = await SlotBooking.find({
-        riderId,
-        date: tomorrow,
-        status: "BOOKED"
-      }).sort({ startTime: 1 });
-    }
- 
-    const allSlots = [...todaySlots, ...tomorrowSlots];
- 
-    if (allSlots.length === 0) {
-      return res.json({
-        success: true,
-        message: "No booked slots found",
-        currentSlot: null,
-        nextSlot: null
-      });
-    }
- 
-    let currentSlot = null;
-    let nextSlot = null;
- 
-    for (let slot of allSlots) {
-      const slotStart = new Date(`${slot.date}T${slot.startTime}:00`);
-      const slotEnd = new Date(`${slot.date}T${slot.endTime}:00`);
- 
-      if (now >= slotStart && now <= slotEnd) {
-        currentSlot = slot;
-      }
- 
-      if (slotStart > now && !nextSlot) {
-        nextSlot = slot;
-      }
-    }
- 
-    return res.json({
-      success: true,
-      message: "Current & next slot fetched",
-      currentSlot,
-      nextSlot
-    });
- 
-  } catch (err) {
-    console.error("Current/Next Slot Error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
-  }
-};
- 
-
-
-// exports.getCurrentAndNextSlot = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-
-//     const now = new Date();
-//     const todayDate = now.toISOString().split("T")[0];
-
-//     // Fetch today's booked slots
-//     let todaySlots = await SlotBooking.find({
-//       riderId,
-//       date: todayDate,
-//       status: "BOOKED"
-//     }).sort({ startTime: 1 });
-
-//     // If no slots today, check tomorrow
-//     const tomorrowDate = new Date(now);
-//     tomorrowDate.setDate(now.getDate() + 1);
-//     const tomorrow = tomorrowDate.toISOString().split("T")[0];
-
-//     let tomorrowSlots = [];
-//     if (todaySlots.length === 0) {
-//       tomorrowSlots = await SlotBooking.find({
-//         riderId,
-//         date: tomorrow,
-//         status: "BOOKED"
-//       }).sort({ startTime: 1 });
-//     }
-
-//     const allSlots = [...todaySlots, ...tomorrowSlots];
-
-//     if (allSlots.length === 0) {
-//       return res.json({
-//         success: true,
-//         message: "No booked slots found",
-//         currentSlot: null,
-//         nextSlot: null
-//       });
-//     }
-
-//     let currentSlot = null;
-//     let nextSlot = null;
-
-//     for (let slot of allSlots) {
-//       const slotStart = new Date(`${slot.date}T${slot.startTime}:00`);
-//       const slotEnd = new Date(`${slot.date}T${slot.endTime}:00`);
-
-//       if (now >= slotStart && now <= slotEnd) {
-//         currentSlot = slot;
-//       }
-
-//       if (slotStart > now && !nextSlot) {
-//         nextSlot = slot;
-//       }
-//     }
-
-//     return res.json({
-//       success: true,
-//       message: "Current & next slot fetched",
-//       currentSlot,
-//       nextSlot
-//     });
-
-//   } catch (err) {
-//     console.error("Current/Next Slot Error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error"
-//     });
-//   }
-// };
-
-
-// // get riders 
-
-// exports.getSlotHistory = async (req, res) => {
-//   try {
-//     const riderId = req.rider.id;
-//     let { weekNumber, year } = req.query;
-
-//     if (!weekNumber) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "weekNumber is required"
-//       });
-//     }
-
-//     const currentYear = new Date().getFullYear();
-//     year = Number(year) || currentYear;
-//     weekNumber = Number(weekNumber);
-
-//     /* ---------------------------------------
-//        1. Fetch bookings (Prisma)
-//     --------------------------------------- */
-//     const bookings = await prisma.slotBooking.findMany({
-//       where: {
-//         riderId,
-//         weekNumber,
-//         year
-//       },
-//       orderBy: [
-//         { date: "asc" },
-//         { startTime: "asc" }
-//       ]
-//     });
-
-//     /* ---------------------------------------
-//        2. Weekly Summary
-//     --------------------------------------- */
-//     const summary = {
-//       totalSlots: bookings.length,
-//       completed: bookings.filter(b => b.status === "COMPLETED").length,
-//       cancelled: bookings.filter(b => b.status === "CANCELLED_BY_RIDER").length,
-//       noShow: bookings.filter(b => b.status === "NO_SHOW").length,
-//       failed: bookings.filter(b => b.status === "FAILED").length
-//     };
-
-//     /* ---------------------------------------
-//        3. ISO week generator
-//     --------------------------------------- */
-//     function getISOWeekStart(week, year) {
-//       const jan4 = new Date(year, 0, 4);
-//       const day = jan4.getDay() || 7;
-
-//       const monday = new Date(jan4);
-//       monday.setDate(jan4.getDate() - (day - 1));
-//       monday.setHours(0, 0, 0, 0);
-
-//       const target = new Date(monday);
-//       target.setDate(monday.getDate() + (week - 1) * 7);
-
-//       return target;
-//     }
-
-//     const weekStart = getISOWeekStart(weekNumber, year);
-
-//     const weekDates = [];
-//     for (let i = 0; i < 7; i++) {
-//       const d = new Date(weekStart);
-//       d.setDate(d.getDate() + i);
-//       weekDates.push(d.toISOString().slice(0, 10));
-//     }
-
-//     /* ---------------------------------------
-//        4. Map days
-//     --------------------------------------- */
-//     const daysMap = {};
-
-//     weekDates.forEach(date => {
-//       daysMap[date] = {
-//         date,
-//         totalSlots: 0,
-//         completed: 0,
-//         cancelled: 0,
-//         noShow: 0,
-//         failed: 0,
-//         slots: []
-//       };
-//     });
-
-//     bookings.forEach(b => {
-//       const dateKey = b.date;
-
-//       if (!daysMap[dateKey]) return;
-
-//       daysMap[dateKey].slots.push(b);
-//       daysMap[dateKey].totalSlots++;
-
-//       if (b.status === "COMPLETED") daysMap[dateKey].completed++;
-//       if (b.status === "CANCELLED_BY_RIDER") daysMap[dateKey].cancelled++;
-//       if (b.status === "NO_SHOW") daysMap[dateKey].noShow++;
-//       if (b.status === "FAILED") daysMap[dateKey].failed++;
-//     });
-
-//     return res.json({
-//       success: true,
-//       message: "Weekly slot history fetched",
-//       weekNumber,
-//       year,
-//       summary,
-//       days: Object.values(daysMap)
-//     });
-
-//   } catch (err) {
-//     console.error("Slot History Error:", err);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error"
-//     });
-//   }
-// };
-
 exports.getSlotHistory = async (req, res) => {
   try {
-    const riderId = req.rider.id;
+    const riderId = req.rider._id;
     let { weekNumber, year } = req.query;
 
     if (!weekNumber) {
@@ -1836,72 +900,42 @@ exports.getSlotHistory = async (req, res) => {
     year = Number(year) || currentYear;
     weekNumber = Number(weekNumber);
 
-    /* ---------------------------------------
-       1. Fetch bookings
-    --------------------------------------- */
-    const bookings = await prisma.slotBooking.findMany({
-      where: {
-        riderId,
-        weekNumber,
-        year
-      },
-      orderBy: [
-        { date: "asc" },
-        { startTime: "asc" }
-      ]
-    });
+    /* ----------------------------------------------------
+       1. Fetch all bookings for the week
+    -----------------------------------------------------*/
+    const bookings = await SlotBooking.find({
+      riderId,
+      weekNumber,
+      year
+    }).sort({ date: 1, startTime: 1 });
 
-    /* ---------------------------------------
-       2. Derive runtime status (MISSED logic)
-    --------------------------------------- */
-    const now = new Date();
-
-    const enrichedBookings = bookings.map(b => {
-      let derivedStatus = b.status;
-
-      const slotDateTime = new Date(`${b.date}T${b.startTime}`);
-
-      // If slot is past and still booked → MISSED
-      if (
-        b.status === "BOOKED" &&
-        slotDateTime < now
-      ) {
-        derivedStatus = "MISSED";
-      }
-
-      return {
-        ...b,
-        derivedStatus
-      };
-    });
-
-    /* ---------------------------------------
-       3. Weekly Summary
-    --------------------------------------- */
+    /* ----------------------------------------------------
+       2. Weekly Summary
+    -----------------------------------------------------*/
     const summary = {
-      totalSlots: enrichedBookings.length,
-      completed: enrichedBookings.filter(b => b.derivedStatus === "COMPLETED").length,
-      cancelled: enrichedBookings.filter(b => b.derivedStatus === "CANCELLED_BY_RIDER").length,
-      noShow: enrichedBookings.filter(b => b.derivedStatus === "MISSED").length,
-      booked: enrichedBookings.filter(b => b.derivedStatus === "BOOKED").length
+      totalSlots: bookings.length,
+      completed: bookings.filter(b => b.status === "COMPLETED").length,
+      cancelled: bookings.filter(b => b.status === "CANCELLED_BY_RIDER").length,
+      noShow: bookings.filter(b => b.status === "NO_SHOW").length,
+      failed: bookings.filter(b => b.status === "FAILED").length
     };
 
-    /* ---------------------------------------
-       4. ISO week generator
-    --------------------------------------- */
+    /* ----------------------------------------------------
+       3. Generate all 7 dates of selected week
+    -----------------------------------------------------*/
     function getISOWeekStart(week, year) {
-      const jan4 = new Date(year, 0, 4);
-      const day = jan4.getDay() || 7;
-
+      const jan4 = new Date(year, 0, 4); // Jan 4 is always in ISO week 1
+      const day = jan4.getDay() || 7;    // Sunday = 7
       const monday = new Date(jan4);
-      monday.setDate(jan4.getDate() - (day - 1));
+      monday.setDate(jan4.getDate() - (day - 1)); // Monday of week 1
       monday.setHours(0, 0, 0, 0);
 
-      const target = new Date(monday);
-      target.setDate(monday.getDate() + (week - 1) * 7);
+      const targetWeekStart = new Date(monday);
+      targetWeekStart.setDate(monday.getDate() + (week - 1) * 7);
 
-      return target;
+      return targetWeekStart;
     }
+
 
     const weekStart = getISOWeekStart(weekNumber, year);
 
@@ -1912,11 +946,10 @@ exports.getSlotHistory = async (req, res) => {
       weekDates.push(d.toISOString().slice(0, 10));
     }
 
-    /* ---------------------------------------
-       5. Map days
-    --------------------------------------- */
+    /* ----------------------------------------------------
+       4. Organize bookings by date
+    -----------------------------------------------------*/
     const daysMap = {};
-
     weekDates.forEach(date => {
       daysMap[date] = {
         date,
@@ -1924,24 +957,29 @@ exports.getSlotHistory = async (req, res) => {
         completed: 0,
         cancelled: 0,
         noShow: 0,
-        booked: 0,
+        failed: 0,
         slots: []
       };
     });
 
-    enrichedBookings.forEach(b => {
+    bookings.forEach(b => {
       const dateKey = b.date;
 
-      if (!daysMap[dateKey]) return;
+      if (!daysMap[dateKey]) {
+        // booking date is outside expected week range
+        return;
+      }
 
       daysMap[dateKey].slots.push(b);
       daysMap[dateKey].totalSlots++;
 
-      if (b.derivedStatus === "COMPLETED") daysMap[dateKey].completed++;
-      if (b.derivedStatus === "CANCELLED_BY_RIDER") daysMap[dateKey].cancelled++;
-      if (b.derivedStatus === "MISSED") daysMap[dateKey].noShow++;
-      if (b.derivedStatus === "BOOKED") daysMap[dateKey].booked++;
+      if (b.status === "COMPLETED") daysMap[dateKey].completed++;
+      if (b.status === "CANCELLED_BY_RIDER") daysMap[dateKey].cancelled++;
+      if (b.status === "NO_SHOW") daysMap[dateKey].noShow++;
+      if (b.status === "FAILED") daysMap[dateKey].failed++;
     });
+
+    const dailyHistory = Object.values(daysMap);
 
     return res.json({
       success: true,
@@ -1949,7 +987,7 @@ exports.getSlotHistory = async (req, res) => {
       weekNumber,
       year,
       summary,
-      days: Object.values(daysMap)
+      days: dailyHistory
     });
 
   } catch (err) {
@@ -1960,6 +998,75 @@ exports.getSlotHistory = async (req, res) => {
     });
   }
 };
+
+
+
+
+exports.getCurrentAndNextSlot = async (req, res) => {
+  try {
+    const riderId = req.rider.id;
+
+    const now = new Date();
+
+    // Fetch today's booked slots
+    let todaySlots = await prisma.slotBooking.findMany({
+      where: {
+        riderId,
+        status: "BOOKED",
+        slotEndAt: { gte: now }
+      },
+      include: { slot: true },
+      orderBy: { slotStartAt: "asc" }
+    });
+
+    
+    const allSlots = todaySlots;
+
+    if (allSlots.length === 0) {
+      return res.json({
+        success: true,
+        message: "No booked slots found",
+        currentSlot: null,
+        nextSlot: null
+      });
+    }
+
+    let currentSlot = null;
+    let nextSlot = null;
+
+    for (let slot of allSlots) {
+      const slotStart = slot.slotStartAt;
+      const slotEnd = slot.slotEndAt;
+
+      if (now >= slotStart && now <= slotEnd) {
+        currentSlot = slot;
+      }
+
+      if (slotStart > now && !nextSlot) {
+        nextSlot = slot;
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: "Current & next slot fetched",
+      currentSlot,
+      nextSlot
+    });
+
+  } catch (err) {
+    console.error("Current/Next Slot Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
+};
+
+
+// get riders 
+
+
 
 exports.getSlotCapacity = async (req, res) => {
   try {
