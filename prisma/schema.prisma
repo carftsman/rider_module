@@ -27,6 +27,7 @@ model Rider {
   isPartnerActive   Boolean              @default(false)
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
+  Order             Order[]
   bankDetails       RiderBankDetails?
   cashInHand        RiderCashInHand?
   deliveryStatus    RiderDeliveryStatus?
@@ -41,9 +42,9 @@ model Rider {
   status            RiderStatus?
   vehicle           RiderVehicle?
   wallet            RiderWallet?
-  rider_assets      rider_assets[]
-  slotRiders        SlotRider[]
   slotBookings      SlotBooking[]
+  slotRiders        SlotRider[]
+  rider_assets      rider_assets[]
 
   @@index([phoneNumber])
   @@index([isOnline])
@@ -208,7 +209,7 @@ model RiderDeliveryStatus {
 }
 
 model AssetMaster {
-  id          String    @id
+  id          String    @id @default(uuid())
   assetType   AssetType @unique
   price       Float
   freeLimit   Int
@@ -312,6 +313,274 @@ model rider_assets {
   Rider              Rider                @relation(fields: [riderId], references: [id], onDelete: Cascade)
 
   @@index([riderId])
+}
+
+model WeeklySlot {
+  id           String        @id @default(uuid())
+  weekNumber   Int
+  year         Int
+  city         String
+  zone         String
+  isDeleted    Boolean       @default(false)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  slots        Slot[]
+  slotBookings SlotBooking[]
+
+  @@unique([weekNumber, year, city, zone])
+}
+
+model Slot {
+  id              String           @id @default(uuid())
+  weeklySlotId    String
+  date            DateTime
+  slotKey         String
+  dayOfWeek       DayOfWeek
+  dayNumber       Int
+  startTime       String
+  endTime         String
+  durationMinutes Int
+  slotStartAt     DateTime
+  slotEndAt       DateTime
+  breakMinutes    Int              @default(10)
+  maxRiders       Int
+  bookedRiders    Int              @default(0)
+  isAvailable     Boolean          @default(true)
+  isVisible       Boolean          @default(true)
+  isLocked        Boolean          @default(false)
+  autoLocked      Boolean          @default(false)
+  isPeakSlot      Boolean          @default(false)
+  incentiveText   String           @default("")
+  incentiveAmount Float            @default(0)
+  priority        Int              @default(0)
+  status          WeeklySlotStatus @default(ACTIVE)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  weeklySlot      WeeklySlot       @relation(fields: [weeklySlotId], references: [id], onDelete: Cascade)
+  slotBookings    SlotBooking[]
+  riderBookings   SlotRider[]
+
+  @@index([slotKey])
+  @@index([slotStartAt])
+}
+
+model SlotRider {
+  id          String          @id @default(uuid())
+  slotId      String
+  riderId     String
+  status      RiderSlotStatus
+  bookedAt    DateTime        @default(now())
+  cancelledAt DateTime?
+  noShowAt    DateTime?
+  rider       Rider           @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  slot        Slot            @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@unique([slotId, riderId])
+}
+
+model SlotBooking {
+  id                 String            @id @default(uuid())
+  riderId            String
+  daySlotId          String
+  slotId             String
+  slotKey            String?
+  date               String
+  dayOfWeek          DayOfWeek
+  dayNumber          Int
+  weekNumber         Int
+  year               Int
+  city               String?
+  zone               String?
+  startTime          String?
+  endTime            String?
+  slotStartAt        DateTime
+  slotEndAt          DateTime
+  totalMinutes       Int?
+  isPeakSlot         Boolean           @default(false)
+  incentiveText      String            @default("")
+  status             SlotBookingStatus @default(BOOKED)
+  progress           SlotProgress      @default(UPCOMING)
+  bookedFrom         SlotBookedFrom    @default(APP)
+  cancellationReason String            @default("")
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  weeklySlot         WeeklySlot        @relation(fields: [daySlotId], references: [id])
+  rider              Rider             @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  slot               Slot              @relation(fields: [slotId], references: [id])
+
+  @@unique([riderId, date, slotId])
+  @@index([riderId])
+  @@index([slotStartAt])
+  @@index([status])
+}
+
+model Order {
+  id                   String                @id @default(uuid())
+  orderId              String?
+  riderId              String?
+  vendorShopName       String
+  orderStatus          OrderStatus           @default(CREATED)
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime
+  Rider                Rider?                @relation(fields: [riderId], references: [id])
+  OrderAllocation      OrderAllocation?
+  OrderCancelIssue     OrderCancelIssue?
+  OrderCod             OrderCod?
+  OrderDeliveryAddress OrderDeliveryAddress?
+  OrderItem            OrderItem[]
+  OrderPayment         OrderPayment?
+  OrderPickupAddress   OrderPickupAddress?
+  OrderPricing         OrderPricing?
+  OrderRiderEarning    OrderRiderEarning?
+  OrderSettlement      OrderSettlement?
+  OrderSlotInfo        OrderSlotInfo?
+  OrderTracking        OrderTracking?
+
+  @@index([orderId])
+  @@index([orderStatus])
+  @@index([riderId])
+}
+
+model OrderAllocation {
+  id                  String                @id
+  orderId             String                @unique
+  assignedAt          DateTime?
+  expiresAt           DateTime?
+  Order               Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  OrderCandidateRider OrderCandidateRider[]
+}
+
+model OrderCancelIssue {
+  id          String       @id
+  orderId     String       @unique
+  cancelledBy CancelledBy?
+  reasonCode  String?
+  reasonText  String?
+  Order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderCandidateRider {
+  id              String           @id
+  allocationId    String
+  riderId         String
+  status          AllocationStatus @default(PENDING)
+  notifiedAt      DateTime?
+  OrderAllocation OrderAllocation  @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+}
+
+model OrderCod {
+  id              String    @id
+  orderId         String    @unique
+  amount          Float     @default(0)
+  depositedAmount Float     @default(0)
+  pendingAmount   Float     @default(0)
+  status          CodStatus @default(PENDING)
+  collectedAt     DateTime?
+  depositedAt     DateTime?
+  Order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderDeliveryAddress {
+  id            String  @id
+  orderId       String  @unique
+  name          String?
+  addressLine   String?
+  contactNumber String?
+  latitude      Float
+  longitude     Float
+  Order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderItem {
+  id       String @id
+  orderId  String
+  itemName String
+  quantity Int
+  price    Float
+  total    Float
+  Order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderPayment {
+  id             String              @id
+  orderId        String              @unique
+  mode           OrderPaymentMode?
+  codPaymentType CodPaymentType      @default(CASH)
+  status         OrderPaymentStatus?
+  transactionId  String?
+  Order          Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderPickupAddress {
+  id            String  @id
+  orderId       String  @unique
+  name          String?
+  addressLine   String?
+  contactNumber String?
+  latitude      Float
+  longitude     Float
+  Order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderPricing {
+  id                 String @id
+  orderId            String @unique
+  itemTotal          Float?
+  deliveryFee        Float?
+  tax                Float?
+  platformCommission Float?
+  totalAmount        Float?
+  Order              Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderRiderEarning {
+  id           String       @id
+  orderId      String       @unique
+  basePay      Float        @default(0)
+  distancePay  Float        @default(0)
+  surgePay     Float        @default(0)
+  tips         Float        @default(0)
+  totalEarning Float        @default(0)
+  credited     Boolean      @default(false)
+  Order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  OrderSurge   OrderSurge[]
+}
+
+model OrderSettlement {
+  id                String  @id
+  orderId           String  @unique
+  riderEarningAdded Boolean @default(false)
+  vendorSettled     Boolean @default(false)
+  Order             Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderSlotInfo {
+  id            String    @id
+  orderId       String    @unique
+  slotBookingId String?
+  slotId        String?
+  isSlotBooked  Boolean   @default(false)
+  isPeakSlot    Boolean?
+  slotStartAt   DateTime?
+  slotEndAt     DateTime?
+  Order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderSurge {
+  id                String            @id
+  riderEarningId    String
+  type              SurgeType
+  multiplierType    MultiplierType
+  value             Float?
+  OrderRiderEarning OrderRiderEarning @relation(fields: [riderEarningId], references: [id], onDelete: Cascade)
+}
+
+model OrderTracking {
+  id            String @id
+  orderId       String @unique
+  distanceInKm  Float?
+  durationInMin Float?
+  Order         Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 enum OnboardingStage {
@@ -486,133 +755,62 @@ enum RiderSlotStatus {
   COMPLETED
 }
 
-model WeeklySlot {
-  id String @id @default(uuid())
-
-  weekNumber Int
-  year       Int
-  city       String
-  zone       String
-
-  isDeleted Boolean @default(false)
-
-  slots        Slot[] // one-to-many
-  slotBookings SlotBooking[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([weekNumber, year, city, zone])
+enum AllocationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  TIMEOUT
 }
 
-model Slot {
-  id String @id @default(uuid())
-
-  weeklySlotId String
-  weeklySlot   WeeklySlot @relation(fields: [weeklySlotId], references: [id], onDelete: Cascade)
-
-  date      DateTime
-  slotKey   String
-  dayOfWeek DayOfWeek
-  dayNumber Int
-
-  startTime       String
-  endTime         String
-  durationMinutes Int
-
-  slotStartAt DateTime
-  slotEndAt   DateTime
-
-  breakMinutes Int @default(10)
-
-  maxRiders    Int
-  bookedRiders Int @default(0)
-
-  isAvailable Boolean @default(true)
-  isVisible   Boolean @default(true)
-  isLocked    Boolean @default(false)
-  autoLocked  Boolean @default(false)
-
-  isPeakSlot      Boolean @default(false)
-  incentiveText   String  @default("")
-  incentiveAmount Float   @default(0)
-
-  priority Int              @default(0)
-  status   WeeklySlotStatus @default(ACTIVE)
-
-  riderBookings SlotRider[] // who booked this slot
-  slotBookings  SlotBooking[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([slotKey])
-  @@index([slotStartAt])
+enum CancelledBy {
+  CUSTOMER
+  RIDER
+  VENDOR
+  ADMIN
 }
 
-model SlotRider {
-  id String @id @default(uuid())
-
-  slotId String
-  slot   Slot   @relation(fields: [slotId], references: [id], onDelete: Cascade)
-
-  riderId String
-  rider   Rider  @relation(fields: [riderId], references: [id], onDelete: Cascade)
-
-  status   RiderSlotStatus
-  bookedAt DateTime        @default(now())
-
-  cancelledAt DateTime?
-  noShowAt    DateTime?
-
-  @@unique([slotId, riderId])
+enum CodPaymentType {
+  CASH
+  UPI
+  BANK_TRANSFER
 }
 
-model SlotBooking {
-  id String @id @default(uuid())
+enum CodStatus {
+  PENDING
+  PARTIAL_DEPOSITED
+  DEPOSITED
+}
 
-  riderId String
-  rider   Rider  @relation(fields: [riderId], references: [id], onDelete: Cascade)
+enum MultiplierType {
+  FIXED
+  PER_ORDER
+}
 
-  daySlotId  String // WeeklySlot.id
-  weeklySlot WeeklySlot @relation(fields: [daySlotId], references: [id])
+enum OrderPaymentMode {
+  ONLINE
+  COD
+}
 
-  slotId String
-  slot   Slot   @relation(fields: [slotId], references: [id])
+enum OrderPaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
 
-  slotKey String?
+enum OrderStatus {
+  CREATED
+  CONFIRMED
+  ASSIGNED
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+}
 
-  date       String
-  dayOfWeek  DayOfWeek
-  dayNumber  Int
-  weekNumber Int
-  year       Int
-
-  city String?
-  zone String?
-
-  startTime String?
-  endTime   String?
-
-  slotStartAt DateTime
-  slotEndAt   DateTime
-
-  totalMinutes Int?
-
-  isPeakSlot    Boolean @default(false)
-  incentiveText String  @default("")
-
-  status   SlotBookingStatus @default(BOOKED)
-  progress SlotProgress      @default(UPCOMING)
-
-  bookedFrom         SlotBookedFrom @default(APP)
-  cancellationReason String         @default("")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([riderId, date, slotId]) // 🔥 same rule as Mongo
-  @@index([riderId])
-  @@index([slotStartAt])
-  @@index([status])
+enum SurgeType {
+  PEAK
+  RAIN
+  ZONE
+  NIGHT
+  HIGH_DEMAND
 }
