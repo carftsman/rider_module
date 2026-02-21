@@ -331,7 +331,7 @@ model WeeklySlot {
 }
 
 model Slot {
-  id              String           @id @default(uuid())
+  slotId            String           @id @default(uuid())
   weeklySlotId    String
   date            DateTime
   slotKey         String
