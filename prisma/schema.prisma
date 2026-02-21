@@ -218,7 +218,7 @@ model AssetMaster {
   assetName   String?
   imageUrl    String?
   createdAt   DateTime  @default(now())
-  updatedAt   DateTime
+  updatedAt   DateTime  @updatedAt
 }
 
 model AssetRequest {
@@ -416,12 +416,12 @@ model SlotBooking {
 
 model Order {
   id                   String                @id @default(uuid())
-  orderId              String?
+  orderId              String?               @unique
   riderId              String?
   vendorShopName       String
   orderStatus          OrderStatus           @default(CREATED)
   createdAt            DateTime              @default(now())
-  updatedAt            DateTime
+  updatedAt            DateTime              @updatedAt
   Rider                Rider?                @relation(fields: [riderId], references: [id])
   OrderAllocation      OrderAllocation?
   OrderCancelIssue     OrderCancelIssue?
@@ -442,7 +442,7 @@ model Order {
 }
 
 model OrderAllocation {
-  id                  String                @id
+  id                  String                @id  @default(uuid())
   orderId             String                @unique
   assignedAt          DateTime?
   expiresAt           DateTime?
@@ -451,7 +451,7 @@ model OrderAllocation {
 }
 
 model OrderCancelIssue {
-  id          String       @id
+  id          String       @id @default(uuid())
   orderId     String       @unique
   cancelledBy CancelledBy?
   reasonCode  String?
@@ -460,7 +460,7 @@ model OrderCancelIssue {
 }
 
 model OrderCandidateRider {
-  id              String           @id
+  id              String           @id @default(uuid())
   allocationId    String
   riderId         String
   status          AllocationStatus @default(PENDING)
@@ -469,7 +469,7 @@ model OrderCandidateRider {
 }
 
 model OrderCod {
-  id              String    @id
+  id              String    @id @default(uuid())
   orderId         String    @unique
   amount          Float     @default(0)
   depositedAmount Float     @default(0)
@@ -481,7 +481,7 @@ model OrderCod {
 }
 
 model OrderDeliveryAddress {
-  id            String  @id
+  id            String  @id  @default(uuid())
   orderId       String  @unique
   name          String?
   addressLine   String?
@@ -492,27 +492,33 @@ model OrderDeliveryAddress {
 }
 
 model OrderItem {
-  id       String @id
+  id       String @id @default(uuid())
   orderId  String
   itemName String
   quantity Int
   price    Float
   total    Float
   Order    Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+ 
 }
 
 model OrderPayment {
-  id             String              @id
+  id             String              @id @default(uuid())
   orderId        String              @unique
   mode           OrderPaymentMode?
   codPaymentType CodPaymentType      @default(CASH)
   status         OrderPaymentStatus?
   transactionId  String?
   Order          Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+ 
 }
 
 model OrderPickupAddress {
-  id            String  @id
+  id            String  @id @default(uuid())
   orderId       String  @unique
   name          String?
   addressLine   String?
@@ -523,7 +529,7 @@ model OrderPickupAddress {
 }
 
 model OrderPricing {
-  id                 String @id
+  id                 String @id @default(uuid())
   orderId            String @unique
   itemTotal          Float?
   deliveryFee        Float?
@@ -534,7 +540,7 @@ model OrderPricing {
 }
 
 model OrderRiderEarning {
-  id           String       @id
+  id           String       @id @default(uuid())
   orderId      String       @unique
   basePay      Float        @default(0)
   distancePay  Float        @default(0)
@@ -547,15 +553,18 @@ model OrderRiderEarning {
 }
 
 model OrderSettlement {
-  id                String  @id
+  id                String  @id @default(uuid())
   orderId           String  @unique
   riderEarningAdded Boolean @default(false)
   vendorSettled     Boolean @default(false)
   Order             Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+ 
 }
 
 model OrderSlotInfo {
-  id            String    @id
+  id            String    @id @default(uuid())
   orderId       String    @unique
   slotBookingId String?
   slotId        String?
@@ -567,7 +576,7 @@ model OrderSlotInfo {
 }
 
 model OrderSurge {
-  id                String            @id
+  id                String            @id @default(uuid())
   riderEarningId    String
   type              SurgeType
   multiplierType    MultiplierType
@@ -576,11 +585,14 @@ model OrderSurge {
 }
 
 model OrderTracking {
-  id            String @id
+  id            String @id @default(uuid())
   orderId       String @unique
   distanceInKm  Float?
   durationInMin Float?
   Order         Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+ 
 }
 
 enum OnboardingStage {
