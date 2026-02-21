@@ -373,7 +373,7 @@ model SlotRider {
   cancelledAt DateTime?
   noShowAt    DateTime?
   rider       Rider           @relation(fields: [riderId], references: [id], onDelete: Cascade)
-  slot        Slot            @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slot        Slot            @relation(fields: [slotId], references: [slotId], onDelete: Cascade)
 
   @@unique([slotId, riderId])
 }
@@ -406,7 +406,7 @@ model SlotBooking {
   updatedAt          DateTime          @updatedAt
   weeklySlot         WeeklySlot        @relation(fields: [daySlotId], references: [id])
   rider              Rider             @relation(fields: [riderId], references: [id], onDelete: Cascade)
-  slot               Slot              @relation(fields: [slotId], references: [id])
+  slot               Slot              @relation(fields: [slotId], references: [slotId])
 
   @@unique([riderId, date, slotId])
   @@index([riderId])
