@@ -20,6 +20,7 @@ const adminRouterIncentives = require("./routes/adminInccentiveRoutes");
 const riderIncentiveRoutes = require("./routes/incentiveRiderRoutes");
 const webIncentiveRoutes = require("./routes/order.routes");
 const riderIncentiveProgressRoutes = require("./routes/riderIncentiveProgress.routes");
+const kitRoutes = require("./routes/kitSelectionRoutes");
 
 
 
@@ -149,6 +150,7 @@ app.use("/api", riderCashRoutes);
 app.use('/api',orderStateReady)
 app.use("/api/rider-incentives", riderIncentiveProgressRoutes);
 app.use("/api/rider", require("./routes/availableRidersRoutes"));
+app.use("/api/kit", kitRoutes);
 
 
 
