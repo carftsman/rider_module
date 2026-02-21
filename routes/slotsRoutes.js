@@ -4,6 +4,7 @@ const slotRouter = express.Router();
 const { getWeeklySlots, getDailySlots ,bookSlot , cancelSlot ,getCurrentSlot ,getDailySlotsWithStatus, getSlotHistory ,  getCurrentAndNextSlot ,getSlotCapacity} = require("../controllers/slotsController");
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 
+
 /**
  * @swagger
  * /api/slots/week:
