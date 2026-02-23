@@ -32,8 +32,7 @@ exports.getWeeklySlots = async (req, res) => {
       year = today.getFullYear();
     }
 
-    // Fetch all days of this week
-        const weekDocs = await prisma.weeklySlot.findMany({
+    const weekDocs = await prisma.weeklySlot.findMany({
       where: {
         city,
         zone,
@@ -42,7 +41,15 @@ exports.getWeeklySlots = async (req, res) => {
         isDeleted: false
       },
       include: {
-        slots: true
+        slots: {
+          where: {
+            status: "ACTIVE"
+          },
+          orderBy: [
+            { date: "asc" },
+            { startTime: "asc" }
+          ]
+        }
       },
       orderBy: {
         createdAt: "asc"
@@ -60,32 +67,32 @@ exports.getWeeklySlots = async (req, res) => {
       });
     }
 
+    const weekly = weekDocs[0]; 
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-    const result = weekDocs.map(day => {
+    const grouped = {};
 
-      const currentDate = day.slots.length
-        ? day.slots[0].date
-        : null;
+    weekly.slots.forEach(slot => {
+      const dateKey = slot.date;
 
-      const dayName = currentDate
-        ? dayNames[new Date(currentDate).getDay()]
-        : "Invalid";
+      if (!grouped[dateKey]) {
+        const currentDate = new Date(dateKey);
 
-      const activeSlots = day.slots
-        .filter(s => s.status === "ACTIVE")
-        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+        grouped[dateKey] = {
+          date: dateKey, 
+          dayName: dayNames[currentDate.getDay()],
+          weekNumber: weekly.weekNumber,
+          year: weekly.year,
+          city: weekly.city,
+          zone: weekly.zone,
+          slots: []
+        };
+      }
 
-      return {
-        date: currentDate || null,
-        dayName,
-        weekNumber: day.weekNumber,
-        year: day.year,
-        city: day.city,
-        zone: day.zone,
-        slots: activeSlots
-      };
+      grouped[dateKey].slots.push(slot);
     });
+
+    const result = Object.values(grouped);
 
     return res.json({
       success: true,
@@ -101,9 +108,6 @@ exports.getWeeklySlots = async (req, res) => {
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
-
-
-
 
 
 
@@ -254,25 +258,25 @@ exports.getDailySlots = async (req, res) => {
       return res.status(400).json({ success: false, message: "Zone is required" });
     }
 
-    const selectedDate = new Date(`${date}T00:00:00`);
-
-    const dailyDoc = await prisma.weeklySlot.findFirst({
+    const slots = await prisma.slot.findMany({
       where: {
-        city,
-        zone,
-        isDeleted: false,
-        slots: {
-          some: {
-            date: selectedDate
-          }
+        date: date, 
+        status: "ACTIVE",
+        weeklySlot: {
+          city,
+          zone,
+          isDeleted: false
         }
       },
       include: {
-        slots: true
+        weeklySlot: true
+      },
+      orderBy: {
+        startTime: "asc"
       }
     });
 
-    if (!dailyDoc) {
+    if (!slots.length) {
       return res.json({
         success: true,
         message: "No slots found for this date",
@@ -282,21 +286,14 @@ exports.getDailySlots = async (req, res) => {
       });
     }
 
-    const activeSlots = dailyDoc.slots
-      .filter(s =>
-        s.status === "ACTIVE" &&
-        new Date(s.date).toISOString().split("T")[0] === date
-      )
-      .sort((a, b) => a.startTime.localeCompare(b.startTime));
-
     return res.json({
       success: true,
       message: "Daily slots fetched",
       date,
-      weekNumber: dailyDoc.weekNumber,
-      year: dailyDoc.year,
-      count: activeSlots.length,
-      data: activeSlots
+      weekNumber: slots[0].weeklySlot.weekNumber,
+      year: slots[0].weeklySlot.year,
+      count: slots.length,
+      data: slots
     });
 
   } catch (err) {
