@@ -222,7 +222,7 @@ model AssetMaster {
 }
 
 model AssetRequest {
-  id        String        @id
+  id        String        @id @default(uuid())
   riderId   String
   assetType AssetType
   quantity  Int
@@ -233,7 +233,7 @@ model AssetRequest {
 }
 
 model EMIPlan {
-  id              String   @id
+  id              String   @id @default(uuid())
   paymentId       String   @unique
   totalAmount     Float
   interestRate    Float
@@ -246,7 +246,7 @@ model EMIPlan {
 }
 
 model Payment {
-  id             String        @id
+  id             String        @id @default(uuid())
   assetRequestId String        @unique
   amount         Float
   paymentMode    PaymentMode
@@ -260,7 +260,7 @@ model Payment {
 }
 
 model Shipment {
-  id             String         @id
+  id             String         @id @default(uuid())
   assetRequestId String         @unique
   courierName    String?
   trackingId     String?
@@ -271,7 +271,7 @@ model Shipment {
 }
 
 model rider_asset_issues {
-  id            String           @id
+  id            String           @id @default(uuid())
   riderAssetsId String
   assetType     AssetType
   assetName     String?
@@ -287,7 +287,7 @@ model rider_asset_issues {
 }
 
 model rider_asset_items {
-  id            String         @id
+  id            String         @id @default(uuid())
   riderAssetsId String
   assetType     AssetType
   assetName     String?
@@ -302,7 +302,7 @@ model rider_asset_items {
 }
 
 model rider_assets {
-  id                 String               @id
+  id                 String               @id @default(uuid())
   riderId            String
   issuedByAdminId    String?
   remarks            String?
@@ -331,7 +331,7 @@ model WeeklySlot {
 }
 
 model Slot {
-  id              String           @id @default(uuid())
+  slotId            String           @id @default(uuid())
   weeklySlotId    String
   date            DateTime
   slotKey         String
@@ -342,7 +342,7 @@ model Slot {
   durationMinutes Int
   slotStartAt     DateTime
   slotEndAt       DateTime
-  breakMinutes    Int              @default(10)
+  breakInMinutes  Int              @default(10)
   maxRiders       Int
   bookedRiders    Int              @default(0)
   isAvailable     Boolean          @default(true)
@@ -373,7 +373,7 @@ model SlotRider {
   cancelledAt DateTime?
   noShowAt    DateTime?
   rider       Rider           @relation(fields: [riderId], references: [id], onDelete: Cascade)
-  slot        Slot            @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  slot        Slot            @relation(fields: [slotId], references: [slotId], onDelete: Cascade)
 
   @@unique([slotId, riderId])
 }
@@ -406,7 +406,7 @@ model SlotBooking {
   updatedAt          DateTime          @updatedAt
   weeklySlot         WeeklySlot        @relation(fields: [daySlotId], references: [id])
   rider              Rider             @relation(fields: [riderId], references: [id], onDelete: Cascade)
-  slot               Slot              @relation(fields: [slotId], references: [id])
+  slot               Slot              @relation(fields: [slotId], references: [slotId])
 
   @@unique([riderId, date, slotId])
   @@index([riderId])
