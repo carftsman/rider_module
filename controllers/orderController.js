@@ -8,8 +8,9 @@ const mongoose=require('mongoose')
 const { getLatLng } = require("../services/geocodeService");
 const Incentive = require("../models/IncentiveSchema");
 const RiderIncentiveProgress = require("../models/RiderIncentiveProgressSchema");
+const prisma=require('../config/prisma');
       
-
+const prisma=require("../config/prisma");
 
 // 👉 Dummy transaction generator
 function generateTxn() {
@@ -204,15 +205,175 @@ function generateOrderId(){
 //   }
 // }
 
+
+
+
+
+// async function createOrder(req, res) {
+
+//   try {
+
+//     const body = req.body;
+
+//     // ===============================
+//     // 1️⃣ ADDRESS → LAT LNG
+//     // ===============================
+
+//     const pickupGeo = await getLatLng(
+//       body.pickupAddress.addressLine
+//     );
+
+//     const deliveryGeo = await getLatLng(
+//       body.deliveryAddress.addressLine
+//     );
+
+
+//     // ===============================
+//     // 2️⃣ PAYMENT LOGIC
+//     // ===============================
+
+//     let paymentData = {
+//       mode: body.payment.mode,
+//       status: "PENDING"
+//     };
+
+//     // 👉 ONLINE → create dummy txn
+//     if (body.payment.mode === "ONLINE") {
+
+//       paymentData.transactionId = generateTxn();
+//       paymentData.status = "SUCCESS";
+//       paymentData.paidAt = new Date();
+
+//     }
+
+//     // 👉 COD
+//     if (body.payment.mode === "COD") {
+
+//       paymentData.codPaymentType =
+//         body.payment.codPaymentType || "CASH";
+
+//     }
+
+
+//     // ===============================
+//     // 3️⃣ CALCULATE ITEM TOTAL
+//     // ===============================
+
+//     let itemTotal = body.items.reduce(
+//       (sum, i) => sum + i.total,
+//       0
+//     );
+
+
+//     // ===============================
+//     // 4️⃣ CREATE ORDER OBJECT
+//     // ===============================
+
+//     const order = new Order({
+
+//       orderId: generateOrderId(),
+
+//       vendorShopName: body.vendorShopName,
+
+//       items: body.items,
+
+
+//       // 👉 PICKUP WITH GEO
+//       pickupAddress: {
+//         name: body.pickupAddress.name,
+//         addressLine: body.pickupAddress.addressLine,
+//         contactNumber: body.pickupAddress.contactNumber,
+
+//         location: {
+//           type: "Point",
+//           coordinates: [
+//             pickupGeo.lng,
+//             pickupGeo.lat
+//           ]
+//         }
+//       },
+
+
+//       // 👉 DELIVERY WITH GEO
+//       deliveryAddress: {
+//         name: body.deliveryAddress.name,
+//         addressLine: body.deliveryAddress.addressLine,
+//         contactNumber: body.deliveryAddress.contactNumber,
+
+//         location: {
+//           type: "Point",
+//           coordinates: [
+//             deliveryGeo.lng,
+//             deliveryGeo.lat
+//           ]
+//         }
+//       },
+
+
+//       // 👉 PRICING (basic dummy)
+//       pricing: {
+//         itemTotal: itemTotal,
+//         deliveryFee: 40,
+//         tax: 5,
+//         platformCommission: 10,
+//         totalAmount: itemTotal + 45
+//       },
+
+
+//       // 👉 PAYMENT
+//       payment: paymentData,
+
+
+//       // 👉 COD AMOUNT IF COD
+//       cod:
+//         body.payment.mode === "COD"
+//           ? {
+//               amount: itemTotal + 45,
+//               pendingAmount: itemTotal + 45
+//             }
+//           : undefined
+
+//     });
+
+
+//     await order.save();
+
+
+//     // ===============================
+//     // 5️⃣ RESPONSE
+//     // ===============================
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Order created successfully",
+//       orderId: order.orderId,
+//       payment: order.payment
+//     });
+
+
+//   } catch (err) {
+
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message
+//     });
+
+//   }
+// }
+
+
+
+
+
 async function createOrder(req, res) {
 
   try {
 
     const body = req.body;
 
-    // ===============================
-    // 1️⃣ ADDRESS → LAT LNG
-    // ===============================
+    //////////////////////////////////////////////////////
+    // 1️⃣ GET LAT LNG
+    //////////////////////////////////////////////////////
 
     const pickupGeo = await getLatLng(
       body.pickupAddress.addressLine
@@ -222,26 +383,22 @@ async function createOrder(req, res) {
       body.deliveryAddress.addressLine
     );
 
-
-    // ===============================
+    //////////////////////////////////////////////////////
     // 2️⃣ PAYMENT LOGIC
-    // ===============================
+    //////////////////////////////////////////////////////
 
     let paymentData = {
       mode: body.payment.mode,
       status: "PENDING"
     };
 
-    // 👉 ONLINE → create dummy txn
     if (body.payment.mode === "ONLINE") {
 
       paymentData.transactionId = generateTxn();
       paymentData.status = "SUCCESS";
-      paymentData.paidAt = new Date();
 
     }
 
-    // 👉 COD
     if (body.payment.mode === "COD") {
 
       paymentData.codPaymentType =
@@ -249,112 +406,156 @@ async function createOrder(req, res) {
 
     }
 
-
-    // ===============================
+    //////////////////////////////////////////////////////
     // 3️⃣ CALCULATE ITEM TOTAL
-    // ===============================
+    //////////////////////////////////////////////////////
 
     let itemTotal = body.items.reduce(
       (sum, i) => sum + i.total,
       0
     );
 
+    const deliveryFee = 40;
+    const tax = 5;
+    const platformCommission = 10;
 
-    // ===============================
-    // 4️⃣ CREATE ORDER OBJECT
-    // ===============================
+    const totalAmount =
+      itemTotal + deliveryFee + tax;
 
-    const order = new Order({
-
-      orderId: generateOrderId(),
-
-      vendorShopName: body.vendorShopName,
-
-      items: body.items,
+    //////////////////////////////////////////////////////
+    // 4️⃣ CREATE ORDER (PRISMA)
+    //////////////////////////////////////////////////////
 
 
-      // 👉 PICKUP WITH GEO
-      pickupAddress: {
+    const order = await prisma.order.create({
+
+  data: {
+
+    orderId: generateOrderId(),
+
+    vendorShopName: body.vendorShopName,
+
+    //////////////////////////////////////////////////
+    // ITEMS
+    //////////////////////////////////////////////////
+
+    OrderItem: {
+      create: body.items.map(item => ({
+        itemName: item.itemName,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total
+      }))
+    },
+
+    //////////////////////////////////////////////////
+    // PICKUP ADDRESS
+    //////////////////////////////////////////////////
+
+    OrderPickupAddress: {
+      create: {
         name: body.pickupAddress.name,
         addressLine: body.pickupAddress.addressLine,
         contactNumber: body.pickupAddress.contactNumber,
+        latitude: pickupGeo.lat,
+        longitude: pickupGeo.lng
+      }
+    },
 
-        location: {
-          type: "Point",
-          coordinates: [
-            pickupGeo.lng,
-            pickupGeo.lat
-          ]
-        }
-      },
+    //////////////////////////////////////////////////
+    // DELIVERY ADDRESS
+    //////////////////////////////////////////////////
 
-
-      // 👉 DELIVERY WITH GEO
-      deliveryAddress: {
+    OrderDeliveryAddress: {
+      create: {
         name: body.deliveryAddress.name,
         addressLine: body.deliveryAddress.addressLine,
         contactNumber: body.deliveryAddress.contactNumber,
+        latitude: deliveryGeo.lat,
+        longitude: deliveryGeo.lng
+      }
+    },
 
-        location: {
-          type: "Point",
-          coordinates: [
-            deliveryGeo.lng,
-            deliveryGeo.lat
-          ]
-        }
-      },
+    //////////////////////////////////////////////////
+    // PRICING
+    //////////////////////////////////////////////////
 
+    OrderPricing: {
+      create: {
+        itemTotal,
+        deliveryFee,
+        tax,
+        platformCommission,
+        totalAmount
+      }
+    },
 
-      // 👉 PRICING (basic dummy)
-      pricing: {
-        itemTotal: itemTotal,
-        deliveryFee: 40,
-        tax: 5,
-        platformCommission: 10,
-        totalAmount: itemTotal + 45
-      },
+    //////////////////////////////////////////////////
+    // PAYMENT
+    //////////////////////////////////////////////////
 
+    OrderPayment: {
+      create: paymentData
+    },
 
-      // 👉 PAYMENT
-      payment: paymentData,
+    //////////////////////////////////////////////////
+    // COD (ONLY IF COD)
+    //////////////////////////////////////////////////
 
-
-      // 👉 COD AMOUNT IF COD
-      cod:
-        body.payment.mode === "COD"
-          ? {
-              amount: itemTotal + 45,
-              pendingAmount: itemTotal + 45
+    OrderCod:
+      body.payment.mode === "COD"
+        ? {
+            create: {
+              amount: totalAmount,
+              pendingAmount: totalAmount
             }
-          : undefined
+          }
+        : undefined
 
-    });
+  },
 
+  include: {
+    OrderPayment: true
+  }
 
-    await order.save();
+});
 
-
-    // ===============================
-    // 5️⃣ RESPONSE
-    // ===============================
+    //////////////////////////////////////////////////////
+    // 5️⃣ RESPONSE (same Swagger)
+    //////////////////////////////////////////////////////
 
     return res.status(201).json({
+
       success: true,
+
       message: "Order created successfully",
+
       orderId: order.orderId,
+
       payment: order.payment
-    });
 
-
-  } catch (err) {
-
-    return res.status(500).json({
-      success: false,
-      message: err.message
     });
 
   }
+  catch (err) {
+
+    console.error(err);
+
+    return res.status(500).json({
+
+      success: false,
+
+      message: err.message
+
+    });
+
+  }
+
 }
+
+
+
+
 
  
 /* ===============================
@@ -503,255 +704,255 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
 
 ================================ */
 
+
 // async function confirmOrder(req, res) {
-
 //   try {
-
 //     const { orderId } = req.params;
- 
-//     // 1️⃣ Find order
 
+//     /* ===============================
+//        1️⃣ FETCH ORDER
+//     =============================== */
 //     const order = await Order.findOne({ orderId });
- 
+
 //     if (!order) {
-
 //       return res.status(404).json({
-
 //         success: false,
-
 //         message: "Order not found"
-
 //       });
-
 //     }
- 
+
 //     if (order.orderStatus !== "CREATED") {
-
 //       return res.status(400).json({
-
 //         success: false,
-
 //         message: "Order already processed"
-
 //       });
-
 //     }
- 
-//     // 2️⃣ Fetch eligible riders
 
-//     const riders = await Rider.find({
+//     /* ===============================
+//        2️⃣ FETCH ELIGIBLE RIDERS
+//     =============================== */
+//     // const riders = await Rider.find({
+//     //   // "deliveryStatus.isActive": true,
+//     //   orderState: "READY",
+//     //   "riderStatus.isOnline": true
+//     // })
+//     //   .limit(10)
+//     //   .select("_id");
+//      const now = new Date();
 
-//       "deliveryStatus.isActive": true,
-
+// const riders = await Rider.aggregate([
+//   {
+//     $match: {
 //       orderState: "READY",
-
 //       "riderStatus.isOnline": true
+//     }
+//   },
+//   {
+//     $lookup: {
+//       from: "slotbookings",
+//       let: { riderId: "$_id" },
+//       pipeline: [
+//         {
+//           $match: {
+//             $expr: {
+//               $and: [
+//                 { $eq: ["$riderId", "$$riderId"] },
+//                 { $eq: ["$status", "BOOKED"] },
+//                 { $gte: ["$slotEndAt", now] } // active + upcoming
+//               ]
+//             }
+//           }
+//         }
+//       ],
+//       as: "validSlots"
+//     }
+//   },
+//   {
+//     $match: {
+//       "validSlots.0": { $exists: true }
+//     }
+//   },
+//   {
+//     $limit: 10
+//   },
+//   {
+//     $project: { _id: 1 }
+//   }
+// ]);
 
-//     })
+//     // const riders = await Rider.find({}).limit(10);
 
-//       .limit(5)
 
-//       .select("_id");
- 
 //     if (!riders.length) {
-
 //       return res.status(400).json({
-
 //         success: false,
-
 //         message: "No riders available"
-
 //       });
-
 //     }
- 
-//     // 3️⃣ Update order allocation
 
+//     /* ===============================
+//        3️⃣ UPDATE ORDER STATUS + ALLOCATION
+//     =============================== */
 //     order.orderStatus = "CONFIRMED";
-
 //     order.allocation = {
-
 //       candidateRiders: riders.map(r => ({
-
 //         riderId: r._id,
-
 //         status: "PENDING",
-
 //         notifiedAt: new Date()
-
 //       })),
-
-//       expiresAt: new Date(Date.now() + 30 * 1000)
-
+//       expiresAt: new Date(Date.now() + 120 * 1000)
 //     };
- 
+
 //     await order.save();
- 
-//     /* =====================================
 
-//        DISTANCE + ETA + PRICING CALCULATION
-
-//     ====================================== */
- 
-//     // 📍 Distantailsce & ETA
-// console.log(`order details${order}`); 
+//     /* ===============================
+//        4️⃣ DISTANCE + ETA
+//     =============================== */
 //     const routeInfo = await getRouteInfo(
-
 //       order.pickupAddress,
-
 //       order.deliveryAddress
-
 //     );
- 
-//     // 💰 Pricing config
 
+//     /* ===============================
+//        5️⃣ FETCH PRICING CONFIG
+//     =============================== */
 //     const pricingConfig = await PricingConfig.findOne({ isActive: true });
-
 //     if (!pricingConfig) {
-
 //       throw new Error("Pricing config not found");
-
 //     }
- 
-//     const currentTime = new Date().toTimeString().slice(0, 5);
 
-//     const isRaining = order.weather === "RAIN";
- 
-//     let estimatedEarning = 0;
- 
-//     // Base fare (ALWAYS)
+//     /* ===============================
+//        6️⃣ RIDER EARNING CALCULATION
+//     =============================== */
+//     let basePay = pricingConfig.baseFare.baseAmount;
+//     let distancePay = 0;
+//     let surgePay = 0;
+//     let appliedSurges = [];
 
-//     estimatedEarning += pricingConfig.baseFare.baseAmount;
- 
-//     // Distance fare
+//     const distanceKm = routeInfo.distanceKm;
 
-//     if (routeInfo.distanceKm > pricingConfig.baseFare.baseDistanceKm) {
-
+//     // Distance pay
+//     if (distanceKm > pricingConfig.baseFare.baseDistanceKm) {
 //       const extraKm =
+//         distanceKm - pricingConfig.baseFare.baseDistanceKm;
 
-//         routeInfo.distanceKm - pricingConfig.baseFare.baseDistanceKm;
- 
-//       estimatedEarning +=
-
+//       distancePay =
 //         extraKm * pricingConfig.distanceFare.perKmRate;
-
 //     }
- 
-//     // Auto surges
+
+//     // Surge logic
+//     const currentTime = new Date().toTimeString().slice(0, 5);
+//     const isRaining = order.weather === "RAIN";
 
 //     pricingConfig.surges.forEach(surge => {
-
 //       if (!surge.isActive) return;
- 
+
 //       let apply = false;
- 
-//       if (
 
+//       if (
 //         surge.type === "PEAK" &&
-
 //         currentTime >= surge.conditions.startTime &&
-
 //         currentTime <= surge.conditions.endTime
-
 //       ) apply = true;
- 
+
 //       if (surge.type === "RAIN" && isRaining) apply = true;
- 
+
 //       if (
-
 //         surge.type === "ZONE" &&
-
 //         surge.conditions.zoneIds?.includes(order.zoneId)
-
 //       ) apply = true;
- 
+
 //       if (apply) {
+//         surgePay += surge.value;
 
-//         estimatedEarning += surge.value;
-
+//         appliedSurges.push({
+//           type: surge.type,
+//           multiplierType: surge.multiplierType || "FIXED",
+//           value: surge.value
+//         });
 //       }
-
 //     });
- 
-//     // Save snapshot
 
-//     order.earningEstimate = {
+//     const totalEarning = basePay + distancePay + surgePay;
 
-//       distanceKm: routeInfo.distanceKm,
-
-//       etaMinutes: routeInfo.etaMinutes,
-
-//       estimatedEarning
-
-//     };
- 
-//     await order.save();
- 
 //     /* ===============================
+//        7️⃣ SAVE SNAPSHOT INTO ORDER
+//     =============================== */
+//     order.riderEarning = {
+//       basePay,
+//       distancePay,
+//       surgePay,
+//       appliedSurges,
+//       tips: 0,
+//       totalEarning,
+//       credited: false
+//     };
 
-//        WEBSOCKET NOTIFICATION
+//     order.tracking = {
+//       distanceInKm: routeInfo.distanceKm,
+//       durationInMin: routeInfo.etaMinutes
+//     };
 
-//     ================================ */
+//     await order.save();
 
+//     console.log(
+//   "Riders getting popup:",
+//   riders.map(r => r._id.toString())
+// );
+
+
+//     /* ===============================
+//        8️⃣ WEBSOCKET NOTIFICATION
+//     =============================== */
 //     riders.forEach(rider => {
-
 //       notifyRider(rider._id.toString(), {
-
 //         type: "ORDER_POPUP",
-
 //         orderId: order.orderId,
-
 //         vendorShopName: order.vendorShopName,
-
-//         pickupLocation: order.pickupLocation,
-
-//         dropLocation: order.dropLocation,
-
+//         pickupLocation: order.pickupAddress,
+//         dropLocation: order.deliveryAddress,
 //         distanceKm: routeInfo.distanceKm,
-
 //         etaMinutes: routeInfo.etaMinutes,
-
-//         estimatedEarning
-
+//         estimatedEarning: totalEarning
 //       });
-
 //     });
- 
-//     return res.json({
 
+//     /* ===============================
+//        9️⃣ RESPONSE
+//     =============================== */
+//     return res.status(200).json({
 //       success: true,
-
 //       message: "Order confirmed and sent to riders",
-
+//       estimatedEarning: totalEarning,
 //       notifiedRiders: riders.length
-
 //     });
- 
+
 //   } catch (err) {
-
 //     console.error("Confirm order error:", err);
-
 //     return res.status(500).json({
-
 //       success: false,
-
-//       message: "Failed to confirm order"
-
+//       message: err.message || "Failed to confirm order"
 //     });
-
 //   }
-
 // }
+
 
 
 async function confirmOrder(req, res) {
   try {
     const { orderId } = req.params;
 
-    /* ===============================
-       1️⃣ FETCH ORDER
-    =============================== */
-    const order = await Order.findOne({ orderId });
+    //////////////////////////////////////////////////////
+    // 1️⃣ FETCH ORDER
+    //////////////////////////////////////////////////////
+
+    const order = await prisma.order.findFirst({
+      where: { orderId },
+      include: {
+        OrderPickupAddress: true,
+        OrderDeliveryAddress: true
+      }
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -767,60 +968,26 @@ async function confirmOrder(req, res) {
       });
     }
 
-    /* ===============================
-       2️⃣ FETCH ELIGIBLE RIDERS
-    =============================== */
-    // const riders = await Rider.find({
-    //   // "deliveryStatus.isActive": true,
-    //   orderState: "READY",
-    //   "riderStatus.isOnline": true
-    // })
-    //   .limit(10)
-    //   .select("_id");
-     const now = new Date();
+    //////////////////////////////////////////////////////
+    // 2️⃣ FETCH ELIGIBLE RIDERS
+    //////////////////////////////////////////////////////
 
-const riders = await Rider.aggregate([
-  {
-    $match: {
-      orderState: "READY",
-      "riderStatus.isOnline": true
-    }
-  },
-  {
-    $lookup: {
-      from: "slotbookings",
-      let: { riderId: "$_id" },
-      pipeline: [
-        {
-          $match: {
-            $expr: {
-              $and: [
-                { $eq: ["$riderId", "$$riderId"] },
-                { $eq: ["$status", "BOOKED"] },
-                { $gte: ["$slotEndAt", now] } // active + upcoming
-              ]
-            }
+    const now = new Date();
+
+    const riders = await prisma.rider.findMany({
+      where: {
+        orderState: "READY",
+        isOnline: true,
+        slotBookings: {
+          some: {
+            status: "BOOKED",
+            slotEndAt: { gte: now }
           }
         }
-      ],
-      as: "validSlots"
-    }
-  },
-  {
-    $match: {
-      "validSlots.0": { $exists: true }
-    }
-  },
-  {
-    $limit: 10
-  },
-  {
-    $project: { _id: 1 }
-  }
-]);
-
-    // const riders = await Rider.find({}).limit(10);
-
+      },
+      take: 10,
+      select: { id: true }
+    });
 
     if (!riders.length) {
       return res.status(400).json({
@@ -829,136 +996,100 @@ const riders = await Rider.aggregate([
       });
     }
 
-    /* ===============================
-       3️⃣ UPDATE ORDER STATUS + ALLOCATION
-    =============================== */
-    order.orderStatus = "CONFIRMED";
-    order.allocation = {
-      candidateRiders: riders.map(r => ({
-        riderId: r._id,
-        status: "PENDING",
-        notifiedAt: new Date()
-      })),
-      expiresAt: new Date(Date.now() + 120 * 1000)
-    };
+    //////////////////////////////////////////////////////
+    // 3️⃣ UPDATE ORDER STATUS
+    //////////////////////////////////////////////////////
 
-    await order.save();
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { orderStatus: "CONFIRMED" }
+    });
 
-    /* ===============================
-       4️⃣ DISTANCE + ETA
-    =============================== */
-    const routeInfo = await getRouteInfo(
-      order.pickupAddress,
-      order.deliveryAddress
-    );
+    //////////////////////////////////////////////////////
+    // 4️⃣ CREATE ORDER ALLOCATION
+    //////////////////////////////////////////////////////
 
-    /* ===============================
-       5️⃣ FETCH PRICING CONFIG
-    =============================== */
-    const pricingConfig = await PricingConfig.findOne({ isActive: true });
-    if (!pricingConfig) {
-      throw new Error("Pricing config not found");
-    }
-
-    /* ===============================
-       6️⃣ RIDER EARNING CALCULATION
-    =============================== */
-    let basePay = pricingConfig.baseFare.baseAmount;
-    let distancePay = 0;
-    let surgePay = 0;
-    let appliedSurges = [];
-
-    const distanceKm = routeInfo.distanceKm;
-
-    // Distance pay
-    if (distanceKm > pricingConfig.baseFare.baseDistanceKm) {
-      const extraKm =
-        distanceKm - pricingConfig.baseFare.baseDistanceKm;
-
-      distancePay =
-        extraKm * pricingConfig.distanceFare.perKmRate;
-    }
-
-    // Surge logic
-    const currentTime = new Date().toTimeString().slice(0, 5);
-    const isRaining = order.weather === "RAIN";
-
-    pricingConfig.surges.forEach(surge => {
-      if (!surge.isActive) return;
-
-      let apply = false;
-
-      if (
-        surge.type === "PEAK" &&
-        currentTime >= surge.conditions.startTime &&
-        currentTime <= surge.conditions.endTime
-      ) apply = true;
-
-      if (surge.type === "RAIN" && isRaining) apply = true;
-
-      if (
-        surge.type === "ZONE" &&
-        surge.conditions.zoneIds?.includes(order.zoneId)
-      ) apply = true;
-
-      if (apply) {
-        surgePay += surge.value;
-
-        appliedSurges.push({
-          type: surge.type,
-          multiplierType: surge.multiplierType || "FIXED",
-          value: surge.value
-        });
+    const allocation = await prisma.orderAllocation.create({
+      data: {
+        orderId: order.id,
+        expiresAt: new Date(Date.now() + 120 * 1000),
+        OrderCandidateRider: {
+          create: riders.map(r => ({
+            riderId: r.id,
+            status: "PENDING",
+            notifiedAt: new Date()
+          }))
+        }
       }
     });
 
+    //////////////////////////////////////////////////////
+    // 5️⃣ DISTANCE + ETA
+    //////////////////////////////////////////////////////
+
+    const routeInfo = await getRouteInfo(
+      order.OrderPickupAddress,
+      order.OrderDeliveryAddress
+    );
+
+    //////////////////////////////////////////////////////
+    // 6️⃣ RIDER EARNING CALCULATION (simplified)
+    //////////////////////////////////////////////////////
+
+    const basePay = 40;
+    const distancePay = routeInfo.distanceKm * 5;
+    const surgePay = 0;
+
     const totalEarning = basePay + distancePay + surgePay;
 
-    /* ===============================
-       7️⃣ SAVE SNAPSHOT INTO ORDER
-    =============================== */
-    order.riderEarning = {
-      basePay,
-      distancePay,
-      surgePay,
-      appliedSurges,
-      tips: 0,
-      totalEarning,
-      credited: false
-    };
+    //////////////////////////////////////////////////////
+    // 7️⃣ SAVE RIDER EARNING SNAPSHOT
+    //////////////////////////////////////////////////////
 
-    order.tracking = {
-      distanceInKm: routeInfo.distanceKm,
-      durationInMin: routeInfo.etaMinutes
-    };
+    await prisma.orderRiderEarning.create({
+      data: {
+        orderId: order.id,
+        basePay,
+        distancePay,
+        surgePay,
+        totalEarning,
+        credited: false
+      }
+    });
 
-    await order.save();
+    //////////////////////////////////////////////////////
+    // 8️⃣ SAVE TRACKING SNAPSHOT
+    //////////////////////////////////////////////////////
 
-    console.log(
-  "Riders getting popup:",
-  riders.map(r => r._id.toString())
-);
+    await prisma.orderTracking.create({
+      data: {
+        orderId: order.id,
+        distanceInKm: routeInfo.distanceKm,
+        durationInMin: routeInfo.etaMinutes
+      }
+    });
 
+    //////////////////////////////////////////////////////
+    // 9️⃣ NOTIFY RIDERS (WebSocket)
+    //////////////////////////////////////////////////////
 
-    /* ===============================
-       8️⃣ WEBSOCKET NOTIFICATION
-    =============================== */
     riders.forEach(rider => {
-      notifyRider(rider._id.toString(), {
+      notifyRider(rider.id, {
         type: "ORDER_POPUP",
         orderId: order.orderId,
         vendorShopName: order.vendorShopName,
-        pickupLocation: order.pickupAddress,
-        dropLocation: order.deliveryAddress,
+        pickupLocation: order.OrderPickupAddress,
+        dropLocation: order.OrderDeliveryAddress,
         distanceKm: routeInfo.distanceKm,
         etaMinutes: routeInfo.etaMinutes,
         estimatedEarning: totalEarning
       });
     });
 
-    /* ===============================
-       9️⃣ RESPONSE
-    =============================== */
+    //////////////////////////////////////////////////////
+    // 🔟 RESPONSE
+    //////////////////////////////////////////////////////
+
     return res.status(200).json({
       success: true,
       message: "Order confirmed and sent to riders",
@@ -974,7 +1105,6 @@ const riders = await Rider.aggregate([
     });
   }
 }
-
 
  
 
@@ -1112,32 +1242,39 @@ const riders = await Rider.aggregate([
 
  
 async function acceptOrder(req, res) {
+  const client = await pool.connect();
 
-  const session = await mongoose.startSession();
- 
   try {
-
     const { orderId } = req.params;
+    const riderId = req.rider.id; // postgres usually uses id not _id
 
-    const riderId = req.rider._id;
+    await client.query("BEGIN");
 
-    const now = new Date();
- 
-    // 🚫 Rider already busy
+    // 🚫 Check if rider already busy
+    const riderResult = await client.query(
+      `SELECT order_state FROM riders WHERE id = $1 FOR UPDATE`,
+      [riderId]
+    );
 
-    if (req.rider.orderState === "BUSY") {
-
-      return res.status(409).json({
-
+    if (!riderResult.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
         success: false,
-
-        message: "Rider already busy"
-
+        message: "Rider not found"
       });
-
     }
- 
-    session.startTransaction();
+
+    if (riderResult.rows[0].order_state === "BUSY") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        success: false,
+        message: "Rider already busy"
+      });
+    }
+
+    
+
+  
  
     /* ============================
 
@@ -1317,61 +1454,60 @@ async function acceptOrder(req, res) {
  
 
 async function rejectOrder(req, res) {
+  const client = await pool.connect();
+
   try {
     const { orderId } = req.params;
-    const riderId = req.rider._id
-   
- 
-    const result = await Order.findOneAndUpdate(
-      {
-        orderId,
-        orderStatus: "CONFIRMED",
-        riderId: null,
-        "allocation.candidateRiders": {
-          $elemMatch: {
-            riderId,
-            status: "PENDING"
-          }
-        }
-      },
-      {
-        $set: {
-          "allocation.candidateRiders.$[r].status": "REJECTED",
-          "allocation.candidateRiders.$[r].rejectedAt": new Date(),
-        
-        }
-      },
-      {
-        new: true,
-        arrayFilters: [
-          { "r.riderId": riderId, "r.status": "PENDING" }
-        ]
-      }
+    const riderId = req.rider.id;
+
+    await client.query("BEGIN");
+
+    // Update candidate rider status
+    const result = await client.query(
+      `UPDATE order_candidate_riders
+       SET status = 'REJECTED',
+           rejected_at = NOW()
+       WHERE order_id = $1
+         AND rider_id = $2
+         AND status = 'PENDING'
+       RETURNING *`,
+      [orderId, riderId]
     );
- 
-    if (!result) {
+
+    if (!result.rows.length) {
+      await client.query("ROLLBACK");
       return res.status(409).json({
         success: false,
         message: "Order already assigned or cannot be rejected"
       });
     }
- 
-    const pendingCount = result.allocation.candidateRiders.filter(
-      r => r.status === "PENDING"
-    ).length;
- 
+
+    // Count remaining pending riders
+    const pendingResult = await client.query(
+      `SELECT COUNT(*) 
+       FROM order_candidate_riders
+       WHERE order_id = $1
+         AND status = 'PENDING'`,
+      [orderId]
+    );
+
+    await client.query("COMMIT");
+
     return res.json({
       success: true,
       message: "Order rejected successfully",
-      pendingRiders: pendingCount
+      pendingRiders: parseInt(pendingResult.rows[0].count)
     });
- 
+
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("Reject order error:", err);
     return res.status(500).json({
       success: false,
       message: "Failed to reject order"
     });
+  } finally {
+    client.release();
   }
 }
 
@@ -1379,11 +1515,21 @@ async function rejectOrder(req, res) {
 async function getOrderDetails(req, res) {
   try {
     const { orderId } = req.params;
-
-    // 1️⃣ Find order
-    const order = await Order.findOne({ orderId })
-      .populate("riderId", "name phone") // optional, if rider assigned
-      .lean();
+    const order = await prisma.Order.findFirst({
+      where: { orderId },
+      include: {
+        Rider: {
+          select: {
+              id: true,
+              phoneNumber: true
+            }
+          },
+          OrderItem: true,
+          OrderPickupAddress: true,
+          OrderDeliveryAddress: true,
+          OrderPricing: true
+        }
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -1391,16 +1537,14 @@ async function getOrderDetails(req, res) {
         message: "Order not found"
       });
     }
-
-
      const filteredOrder = {
-      _id: order._id,
+      id: order.id,
       orderId: order.orderId,
       vendorShopName: order.vendorShopName,
-      items: order.items,
-      pickupAddress: order.pickupAddress,
-      deliveryAddress: order.deliveryAddress,
-      pricing: order.pricing
+      items: order.OrderItem,
+      pickupAddress: order.OrderPickupAddress,
+      deliveryAddress: order.OrderDeliveryAddress,
+      pricing: order.OrderPricing
     };
 
 
@@ -1425,12 +1569,11 @@ async function getOrderDetails(req, res) {
 async function pickupOrder(req, res) {
   try {
     const { orderId } = req.params;
-    const riderId  = req.rider._id;
+    const riderId  = req.rider.id;
 
-    /* ===============================
-       1️⃣ FETCH ORDER
-    =============================== */
-    const order = await Order.findOne({ orderId });
+    const order = await prisma.Order.findFirst({
+      where: { orderId }
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -1439,9 +1582,7 @@ async function pickupOrder(req, res) {
       });
     }
 
-    /* ===============================
-       2️⃣ VALIDATE ORDER STATE
-    =============================== */
+ 
     if (order.orderStatus !== "ASSIGNED") {
       return res.status(400).json({
         success: false,
@@ -1449,59 +1590,39 @@ async function pickupOrder(req, res) {
       });
     }
 
-    /* ===============================
-       3️⃣ VALIDATE RIDER
-    =============================== */
-    if (!order.riderId || order.riderId.toString() !== riderId.toString()) {
+
+    if (!order.riderId || order.riderId !== riderId) {
       return res.status(403).json({
         success: false,
         message: "You are not assigned to this order"
       });
     }
 
-    /* ===============================
-       4️⃣ UPDATE ORDER STATUS
-    =============================== */
-    order.orderStatus = "PICKED_UP";
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          orderStatus: "PICKED_UP"
+        }
+      });
 
-    // Snapshot assigned rider info
-    order.assignedRider = {
-      riderId,
-      acceptedAt: order.assignedRider?.acceptedAt || new Date()
-    };
+      await tx.orderTracking.updateMany({
+        where: { orderId: order.id },
+        data: {
+          durationInMin: null
+        }
+      });
+    });
 
-    // Tracking update (optional but recommended)
-    order.tracking = {
-      ...order.tracking,
-      pickedUpAt: new Date()
-    };
-
-    await order.save();
-
-    /* ===============================
-       5️⃣ REAL-TIME NOTIFICATIONS
-    =============================== */
-
-    // Notify rider dashboard
     notifyRider(riderId.toString(), {
       type: "ORDER_PICKED_UP",
       orderId: order.orderId
     });
 
-    // Notify customer (if you have WS)
-
-    // notifyCustomer?.(order.customerId?.toString(), {
-    //   type: "ORDER_PICKED_UP",
-    //   orderId: order.orderId
-    // });
-
-    /* ===============================
-       6️⃣ RESPONSE
-    =============================== */
     return res.status(200).json({
       success: true,
       message: "Order picked up successfully",
-      orderStatus: order.orderStatus
+      orderStatus: "PICKED_UP"
     });
 
   } catch (err) {
