@@ -115,7 +115,7 @@ exports.getDailySlotsWithStatus = async (req, res) => {
   try {
     const riderId = req.rider?.id;
     const { date, city, zone, status = "all" } = req.query;
- 
+
     /* -----------------------------
        Validate inputs
     ----------------------------- */
@@ -125,31 +125,21 @@ exports.getDailySlotsWithStatus = async (req, res) => {
         message: "date, city and zone are required"
       });
     }
- 
-    // const parsedDate = new Date(date);
- 
-    if (isNaN(parsedDate.getTime())) {
+
+    // Validate date format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({
         success: false,
         message: "Invalid date format (YYYY-MM-DD required)"
       });
     }
- 
+
     /* -----------------------------
-       Build day range (timezone safe)
-    ----------------------------- */
-    // const start = new Date(parsedDate);
-    // start.setHours(0, 0, 0, 0);
- 
-    // const end = new Date(parsedDate);
-    // end.setHours(23, 59, 59, 999);
- 
-    /* -----------------------------
-       Fetch slots
+       Fetch slots (STRING DATE MATCH)
     ----------------------------- */
     const slots = await prisma.slot.findMany({
       where: {
-        date: {date},
+        date: date, // string comparison
         weeklySlot: {
           city,
           zone
@@ -164,7 +154,7 @@ exports.getDailySlotsWithStatus = async (req, res) => {
         : {},
       orderBy: { startTime: "asc" }
     });
- 
+
     if (!slots.length) {
       return res.json({
         success: true,
@@ -174,26 +164,26 @@ exports.getDailySlotsWithStatus = async (req, res) => {
         data: []
       });
     }
- 
+
     /* -----------------------------
        Enrich slot data
     ----------------------------- */
     let enriched = slots.map(slot => {
       const booking = slot.slotBookings?.[0];
- 
+
       return {
         slotId: slot.id,
         startTime: slot.startTime,
         endTime: slot.endTime,
- 
+
         isBooked: booking?.status === "BOOKED",
         isCancelled: booking?.status === "CANCELLED_BY_RIDER",
- 
+
         bookingId: booking?.id || null,
         bookingStatus: booking?.status || "NOT_BOOKED"
       };
     });
- 
+
     /* -----------------------------
        Apply filters
     ----------------------------- */
@@ -202,13 +192,13 @@ exports.getDailySlotsWithStatus = async (req, res) => {
         s => s.bookingStatus === "BOOKED"
       );
     }
- 
+
     if (status === "cancelled") {
       enriched = enriched.filter(
         s => s.bookingStatus === "CANCELLED_BY_RIDER"
       );
     }
- 
+
     if (status === "available") {
       enriched = enriched.filter(
         s =>
@@ -216,7 +206,7 @@ exports.getDailySlotsWithStatus = async (req, res) => {
           s.bookingStatus === "CANCELLED_BY_RIDER"
       );
     }
- 
+
     /* -----------------------------
        Response
     ----------------------------- */
@@ -227,16 +217,15 @@ exports.getDailySlotsWithStatus = async (req, res) => {
       count: enriched.length,
       data: enriched
     });
- 
-  }catch (err) {
-  console.error("Daily Slots Error:", err);
- 
-  res.status(500).json({
-    success: false,
-    message: err.message || "Server error"
-  });
-}
- 
+
+  } catch (err) {
+    console.error("Daily Slots Error:", err);
+
+    res.status(500).json({
+      success: false,
+      message: err.message || "Server error"
+    });
+  }
 };
 
 
