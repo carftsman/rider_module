@@ -1,112 +1,219 @@
+const prisma = require("../config/prisma");
+ 
+/**
 
+* Create local IST Date (server must run in Asia/Kolkata)
 
-const prisma = require("../config/prisma")
+*/
 
-const { startOfISOWeek, addDays, setHours, setMinutes,setISOWeek ,setISOWeekYear} = require("date-fns")
+function createDate(year, month, day, hour = 0, minute = 0) {
 
-// const { PrismaClient } = require("@prisma/client");
-// const prisma = new PrismaClient();
+  return new Date(year, month, day, hour, minute, 0, 0);
 
+}
+ 
+/**
 
+* Format Date → YYYY-MM-DD (for Prisma String field)
 
+*/
 
+function formatDateYYYYMMDD(date) {
 
+  const y = date.getFullYear();
+
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+
+  const d = String(date.getDate()).padStart(2, "0");
+
+  return `${y}-${m}-${d}`;
+
+}
+ 
+/**
+
+* Get ISO week start date (Monday) in IST
+
+*/
+
+function getISOWeekStartDate(year, weekNumber) {
+
+  const jan4 = new Date(year, 0, 4);
+ 
+  const dayOfWeek = jan4.getDay() === 0 ? 7 : jan4.getDay();
+ 
+  const week1Monday = new Date(jan4);
+
+  week1Monday.setDate(jan4.getDate() - (dayOfWeek - 1));
+ 
+  const targetMonday = new Date(week1Monday);
+
+  targetMonday.setDate(week1Monday.getDate() + (weekNumber - 1) * 7);
+ 
+  return createDate(
+
+    targetMonday.getFullYear(),
+
+    targetMonday.getMonth(),
+
+    targetMonday.getDate()
+
+  );
+
+}
+ 
 exports.createWeeklySlots = async (req, res) => {
+
   try {
 
     const { weekNumber, year, city, zone, slotTemplate } = req.body;
-
+ 
     if (!weekNumber || !year || !city || !zone || !slotTemplate?.length) {
-      return res.status(400).json({
-        message: "Missing required fields"
-      });
+
+      return res.status(400).json({ message: "Missing required fields" });
+
     }
+ 
+    // Prevent duplicate weeks
 
-    // ✅ FIXED HERE
-const existing = await prisma.weeklySlot.findFirst({
-  where: {
-    
-      weekNumber,
-      year,
-      city,
-      zone
-    
-  }
-});
+    const existing = await prisma.weeklySlot.findFirst({
 
+      where: { weekNumber, year, city, zone }
+
+    });
+ 
     if (existing) {
-      return res.status(400).json({
-        message: "Weekly slots already exist"
-      });
+
+      return res.status(400).json({ message: "Weekly slots already exist" });
+
     }
+ 
+    const weekStartDate = getISOWeekStartDate(year, weekNumber);
+ 
+    const weeklySlot = await prisma.$transaction(async (tx) => {
 
-    const weekStartDate = startOfISOWeek(
-      setISOWeek(setISOWeekYear(new Date(), year), weekNumber)
-    );
+      const parent = await tx.weeklySlot.create({
 
-    const WeeklySlot = await prisma.$transaction(async (tx) => {
-
-      // ✅ FIXED HERE
-      const parent = await tx.WeeklySlot.create({
         data: { weekNumber, year, city, zone }
+
       });
+ 
+      const days = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
 
       const slotsToCreate = [];
-      const days = ["MON","TUE","WED","THU","FRI","SAT","SUN"];
-
+ 
       for (let i = 0; i < 7; i++) {
 
-        const baseDate = addDays(weekStartDate, i);
+        const baseDate = new Date(weekStartDate);
 
+        baseDate.setDate(weekStartDate.getDate() + i);
+ 
+        const normalizedDate = createDate(
+
+          baseDate.getFullYear(),
+
+          baseDate.getMonth(),
+
+          baseDate.getDate()
+
+        );
+ 
         for (const tpl of slotTemplate) {
 
           const [sh, sm] = tpl.startTime.split(":").map(Number);
+
           const [eh, em] = tpl.endTime.split(":").map(Number);
+ 
+          const slotStartAt = createDate(
 
-          const slotStartAt = setMinutes(setHours(new Date(baseDate), sh), sm);
-          const slotEndAt = setMinutes(setHours(new Date(baseDate), eh), em);
+            normalizedDate.getFullYear(),
 
+            normalizedDate.getMonth(),
+
+            normalizedDate.getDate(),
+
+            sh,
+
+            sm
+
+          );
+ 
+          const slotEndAt = createDate(
+
+            normalizedDate.getFullYear(),
+
+            normalizedDate.getMonth(),
+
+            normalizedDate.getDate(),
+
+            eh,
+
+            em
+
+          );
+ 
           slotsToCreate.push({
+
             weeklySlotId: parent.id,
-            date: baseDate,
-            slotKey: `${days[i]}_${tpl.startTime.replace(":","")}_${tpl.endTime.replace(":","")}`,
+ 
+            // ✅ Prisma expects STRING
+
+            date: formatDateYYYYMMDD(normalizedDate),
+ 
+            slotKey: `${days[i]}_${tpl.startTime.replace(":", "")}_${tpl.endTime.replace(":", "")}`,
+
             dayOfWeek: days[i],
+
             dayNumber: i + 1,
+
             startTime: tpl.startTime,
+
             endTime: tpl.endTime,
+
             durationMinutes: tpl.durationMinutes,
+
             slotStartAt,
+
             slotEndAt,
+
             maxRiders: tpl.maxRiders,
+
             isPeakSlot: tpl.isPeakSlot ?? false,
+
             incentiveText: tpl.incentiveText ?? "",
+
             incentiveAmount: tpl.incentiveAmount ?? 0,
+
             priority: tpl.priority ?? 0
+
           });
 
         }
-      }
 
-      await tx.slot.createMany({
-        data: slotsToCreate
-      });
+      }
+ 
+      await tx.slot.createMany({ data: slotsToCreate });
 
       return parent;
 
     });
-
+ 
     return res.status(201).json({
-      message: "Weekly slots created successfully",
-      weeklySlotId: WeeklySlot.id
-    });
 
+      message: "Weekly slots created successfully",
+
+      weeklySlotId: weeklySlot.id
+
+    });
+ 
   } catch (error) {
 
     console.error(error);
 
-    return res.status(500).json({
-      message: "Internal server error"
-    });
+    return res.status(500).json({ message: "Internal server error" });
 
   }
+
 };
+
+ 
