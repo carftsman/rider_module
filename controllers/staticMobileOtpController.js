@@ -195,7 +195,7 @@ exports.verifyStaticMobileOtp = async (req, res) => {
     const accessToken = jwt.sign(
       { riderId: rider.id, type: "access" },
       process.env.JWT_ACCESS_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "30d" }
     );
 
     const refreshToken = jwt.sign(

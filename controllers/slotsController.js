@@ -109,89 +109,133 @@ exports.getWeeklySlots = async (req, res) => {
 
 exports.getDailySlotsWithStatus = async (req, res) => {
   try {
-    const riderId = req.rider?._id;
+    const riderId = req.rider?.id;
     const { date, city, zone, status = "all" } = req.query;
-
+ 
+    /* -----------------------------
+       Validate inputs
+    ----------------------------- */
     if (!date || !city || !zone) {
       return res.status(400).json({
         success: false,
         message: "date, city and zone are required"
       });
     }
-
-    // Get daily slot doc
-    const dailyDoc = await Slot.findOne({ date, city, zone });
-
-    if (!dailyDoc) {
+ 
+    const parsedDate = new Date(date);
+ 
+    if (isNaN(parsedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format (YYYY-MM-DD required)"
+      });
+    }
+ 
+    /* -----------------------------
+       Build day range (timezone safe)
+    ----------------------------- */
+    const start = new Date(parsedDate);
+    start.setHours(0, 0, 0, 0);
+ 
+    const end = new Date(parsedDate);
+    end.setHours(23, 59, 59, 999);
+ 
+    /* -----------------------------
+       Fetch slots
+    ----------------------------- */
+    const slots = await prisma.slot.findMany({
+      where: {
+        date: {
+          gte: start,
+          lte: end
+        },
+        weeklySlot: {
+          city,
+          zone
+        }
+      },
+      include: riderId
+        ? {
+            slotBookings: {
+              where: { riderId }
+            }
+          }
+        : {},
+      orderBy: { startTime: "asc" }
+    });
+ 
+    if (!slots.length) {
       return res.json({
         success: true,
-        message: "No slots found for this date",
+        message: "No slots found",
+        date,
+        count: 0,
         data: []
       });
     }
-
+ 
     /* -----------------------------
-       Fetch rider bookings for date
-    ------------------------------*/
-    let bookingMap = {};
-
-    if (riderId) {
-      const riderBookings = await SlotBooking.find({ riderId, date });
-
-      for (const b of riderBookings) {
-        bookingMap[b.slotId.toString()] = b;
-      }
-    }
-
+       Enrich slot data
+    ----------------------------- */
+    let enriched = slots.map(slot => {
+      const booking = slot.slotBookings?.[0];
+ 
+      return {
+        slotId: slot.id,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+ 
+        isBooked: booking?.status === "BOOKED",
+        isCancelled: booking?.status === "CANCELLED_BY_RIDER",
+ 
+        bookingId: booking?.id || null,
+        bookingStatus: booking?.status || "NOT_BOOKED"
+      };
+    });
+ 
     /* -----------------------------
-       Build enriched slot data
-    ------------------------------*/
-    let enrichedSlots = dailyDoc.slots
-      .sort((a, b) => a.startTime.localeCompare(b.startTime))
-      .map(slot => {
-        const booking = bookingMap[slot.slotId.toString()];
-
-        return {
-          ...slot._doc,
-          isBooked: !!booking && booking.status === "BOOKED",
-          isCancelled: !!booking && booking.status === "CANCELLED_BY_RIDER",
-          bookingId: booking ? booking._id : null,
-          bookingStatus: booking ? booking.status : "NOT_BOOKED"
-        };
-      });
-
-    /* -----------------------------
-       FILTER BASED ON STATUS
-    ------------------------------*/
-
-    // Show only booked slots
+       Apply filters
+    ----------------------------- */
     if (status === "booked") {
-      enrichedSlots = enrichedSlots.filter(s => s.bookingStatus === "BOOKED");
-    }
-
-    // Show only cancelled slots
-    if (status === "cancelled") {
-      enrichedSlots = enrichedSlots.filter(s => s.bookingStatus === "CANCELLED_BY_RIDER");
-    }
-
-    if (status === "available") {
-      enrichedSlots = enrichedSlots.filter(s =>
-        s.bookingStatus === "NOT_BOOKED" || s.bookingStatus === "CANCELLED_BY_RIDER"
+      enriched = enriched.filter(
+        s => s.bookingStatus === "BOOKED"
       );
     }
-
-    return res.json({
+ 
+    if (status === "cancelled") {
+      enriched = enriched.filter(
+        s => s.bookingStatus === "CANCELLED_BY_RIDER"
+      );
+    }
+ 
+    if (status === "available") {
+      enriched = enriched.filter(
+        s =>
+          s.bookingStatus === "NOT_BOOKED" ||
+          s.bookingStatus === "CANCELLED_BY_RIDER"
+      );
+    }
+ 
+    /* -----------------------------
+       Response
+    ----------------------------- */
+    return res.status(200).json({
       success: true,
       message: "Daily slots fetched",
       date,
-      count: enrichedSlots.length,
-      data: enrichedSlots
+      count: enriched.length,
+      data: enriched
     });
-
-  } catch (err) {
-    console.error("Get Daily Slots Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
+ 
+  }catch (err) {
+  console.error("Daily Slots Error:", err);
+ 
+  res.status(500).json({
+    success: false,
+    message: err.message || "Server error"
+  });
+}
+ 
 };
 
 
@@ -886,70 +930,101 @@ exports.getCurrentSlot = async (req, res) => {
 
 exports.getSlotHistory = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
     let { weekNumber, year } = req.query;
-
+ 
     if (!weekNumber) {
       return res.status(400).json({
         success: false,
         message: "weekNumber is required"
       });
     }
-
+ 
     const currentYear = new Date().getFullYear();
     year = Number(year) || currentYear;
     weekNumber = Number(weekNumber);
-
-    /* ----------------------------------------------------
-       1. Fetch all bookings for the week
-    -----------------------------------------------------*/
-    const bookings = await SlotBooking.find({
-      riderId,
-      weekNumber,
-      year
-    }).sort({ date: 1, startTime: 1 });
-
-    /* ----------------------------------------------------
-       2. Weekly Summary
-    -----------------------------------------------------*/
+ 
+    /* ---------------------------------------
+       1. Fetch bookings
+    --------------------------------------- */
+    const bookings = await prisma.slotBooking.findMany({
+      where: {
+        riderId,
+        weekNumber,
+        year
+      },
+      orderBy: [
+        { date: "asc" },
+        { startTime: "asc" }
+      ]
+    });
+ 
+    /* ---------------------------------------
+       2. Derive runtime status (MISSED logic)
+    --------------------------------------- */
+    const now = new Date();
+ 
+    const enrichedBookings = bookings.map(b => {
+      let derivedStatus = b.status;
+ 
+      const slotDateTime = new Date(`${b.date}T${b.startTime}`);
+ 
+      // If slot is past and still booked → MISSED
+      if (
+        b.status === "BOOKED" &&
+        slotDateTime < now
+      ) {
+        derivedStatus = "MISSED";
+      }
+ 
+      return {
+        ...b,
+        derivedStatus
+      };
+    });
+ 
+    /* ---------------------------------------
+       3. Weekly Summary
+    --------------------------------------- */
     const summary = {
-      totalSlots: bookings.length,
-      completed: bookings.filter(b => b.status === "COMPLETED").length,
-      cancelled: bookings.filter(b => b.status === "CANCELLED_BY_RIDER").length,
-      noShow: bookings.filter(b => b.status === "NO_SHOW").length,
-      failed: bookings.filter(b => b.status === "FAILED").length
+      totalSlots: enrichedBookings.length,
+      completed: enrichedBookings.filter(b => b.derivedStatus === "COMPLETED").length,
+      cancelled: enrichedBookings.filter(b => b.derivedStatus === "CANCELLED_BY_RIDER").length,
+      noShow: enrichedBookings.filter(b => b.derivedStatus === "MISSED").length,
+      booked: enrichedBookings.filter(b => b.derivedStatus === "BOOKED").length
     };
-
-    /* ----------------------------------------------------
-       3. Generate all 7 dates of selected week
-    -----------------------------------------------------*/
+ 
+    /* ---------------------------------------
+       4. ISO week generator
+    --------------------------------------- */
     function getISOWeekStart(week, year) {
-      const jan4 = new Date(year, 0, 4); // Jan 4 is always in ISO week 1
-      const day = jan4.getDay() || 7;    // Sunday = 7
+      const jan4 = new Date(year, 0, 4);
+      const day = jan4.getDay() || 7;
+ 
       const monday = new Date(jan4);
-      monday.setDate(jan4.getDate() - (day - 1)); // Monday of week 1
+      monday.setDate(jan4.getDate() - (day - 1));
       monday.setHours(0, 0, 0, 0);
-
-      const targetWeekStart = new Date(monday);
-      targetWeekStart.setDate(monday.getDate() + (week - 1) * 7);
-
-      return targetWeekStart;
+ 
+      const target = new Date(monday);
+      target.setDate(monday.getDate() + (week - 1) * 7);
+ 
+      return target;
     }
-
-
+ 
     const weekStart = getISOWeekStart(weekNumber, year);
-
+ 
     const weekDates = [];
     for (let i = 0; i < 7; i++) {
       const d = new Date(weekStart);
       d.setDate(d.getDate() + i);
       weekDates.push(d.toISOString().slice(0, 10));
     }
-
-    /* ----------------------------------------------------
-       4. Organize bookings by date
-    -----------------------------------------------------*/
+ 
+    /* ---------------------------------------
+       5. Map days
+    --------------------------------------- */
     const daysMap = {};
+ 
     weekDates.forEach(date => {
       daysMap[date] = {
         date,
@@ -957,39 +1032,34 @@ exports.getSlotHistory = async (req, res) => {
         completed: 0,
         cancelled: 0,
         noShow: 0,
-        failed: 0,
+        booked: 0,
         slots: []
       };
     });
-
-    bookings.forEach(b => {
+ 
+    enrichedBookings.forEach(b => {
       const dateKey = b.date;
-
-      if (!daysMap[dateKey]) {
-        // booking date is outside expected week range
-        return;
-      }
-
+ 
+      if (!daysMap[dateKey]) return;
+ 
       daysMap[dateKey].slots.push(b);
       daysMap[dateKey].totalSlots++;
-
-      if (b.status === "COMPLETED") daysMap[dateKey].completed++;
-      if (b.status === "CANCELLED_BY_RIDER") daysMap[dateKey].cancelled++;
-      if (b.status === "NO_SHOW") daysMap[dateKey].noShow++;
-      if (b.status === "FAILED") daysMap[dateKey].failed++;
+ 
+      if (b.derivedStatus === "COMPLETED") daysMap[dateKey].completed++;
+      if (b.derivedStatus === "CANCELLED_BY_RIDER") daysMap[dateKey].cancelled++;
+      if (b.derivedStatus === "MISSED") daysMap[dateKey].noShow++;
+      if (b.derivedStatus === "BOOKED") daysMap[dateKey].booked++;
     });
-
-    const dailyHistory = Object.values(daysMap);
-
+ 
     return res.json({
       success: true,
       message: "Weekly slot history fetched",
       weekNumber,
       year,
       summary,
-      days: dailyHistory
+      days: Object.values(daysMap)
     });
-
+ 
   } catch (err) {
     console.error("Slot History Error:", err);
     res.status(500).json({

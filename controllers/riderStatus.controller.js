@@ -1,222 +1,100 @@
-const Rider = require("../models/RiderModel");
-
-// exports.goOnline = async (req, res) => {
-//   try {
-
-//     const riderId = req.rider._id;
-
-//     // ------------------------
-//     // COD LIMIT CHECK
-//     // ------------------------
-
-//     const riderData = await Rider.findById(riderId);
-
-//     if (!riderData) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found"
-//       });
-//     }
-
-//     // if (riderData.cashInHand.balance >= riderData.cashInHand.limit) {
-//     //   return res.status(403).json({
-//     //     success: false,
-//     //     message: "COD limit exceeded. Clear cash to go online"
-//     //   });
-//     // }
-
-//     if (riderData.riderStatus.isOnline) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Rider already online"
-//       });
-//     }
-
-//     // ------------------------
-//     // ATOMIC UPDATE
-//     // ------------------------
-
-//     const rider = await Rider.findByIdAndUpdate(
-//       riderId,
-//       {
-//         $set: {
-//           "riderStatus.isOnline": true,
-//           "riderStatus.lastLoginAt": new Date(),
-//           "riderStatus.lastLogoutAt": null
-//         }
-//       },
-//       { new: true }
-//     );
-
-//     // ------------------------
-//     // RESPONSE
-//     // ------------------------
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Rider is now ONLINE",
-//       riderStatus: {
-//         isOnline: rider.riderStatus.isOnline,
-//         lastLoginAt: rider.riderStatus.lastLoginAt,
-//         lastLogoutAt: rider.riderStatus.lastLogoutAt,
-//         totalOnlineMinutesToday: rider.riderStatus.totalOnlineMinutesToday
-//       }
-//     });
-
-//   } catch (error) {
-//     console.error("GO ONLINE ERROR:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server Error"
-//     });
-//   }
-// };
+const prisma = require("../config/prisma");
+ 
 exports.goOnline = async (req, res) => {
   try {
-    const riderId = req.rider._id;
-
-    const riderData = await Rider.findById(riderId);
-
-    if (!riderData) {
-      return res.status(404).json({
-        success: false,
-        message: "Rider not found"
-      });
-    }
-
-    
-    if (
-      riderData.deliveryStatus.inactiveReason === "ACCOUNT_SUSPENDED" ||
-      riderData.deliveryStatus.inactiveReason === "KYC_PENDING"
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "Rider is not allowed to go online"
-      });
-    }
-
-    // ------------------------
-    // ATOMIC UPDATE
-    // ------------------------
-
-    const rider = await Rider.findByIdAndUpdate(
-      riderId,
-      {
-        $set: {
-          // rider online
-          "riderStatus.isOnline": true,
-          "riderStatus.lastLoginAt": new Date(),
-          "riderStatus.lastLogoutAt": null,
-
-          // delivery active
-          "deliveryStatus.isActive": true,
-          "deliveryStatus.inactiveReason": null,
-                isPartnerActive: true
-
+    const riderId = req.rider.id;
+    const now = new Date();
+ 
+    const result = await prisma.$transaction(async (tx) => {
+ 
+      const riderData = await tx.rider.findUnique({
+        where: { id: riderId },
+        include: {
+          deliveryStatus: true,
+          status: true // your RiderStatus relation
         }
-      },
-      { new: true }
-    );
-
-    // ------------------------
-    // RESPONSE
-    // ------------------------
-
+      });
+ 
+      if (!riderData) {
+        throw new Error("Rider not found");
+      }
+ 
+      if (riderData.isOnline) {
+        throw new Error("Rider already online");
+      }
+ 
+      // ✅ YOUR LOGIC — safe first time access
+      const loginTime = riderData?.status?.lastLoginAt || null;
+ 
+      // update rider main status
+      await tx.rider.update({
+        where: { id: riderId },
+        data: {
+          isOnline: true,
+          isPartnerActive: true
+        }
+      });
+ 
+      // ✅ rider status upsert (safe)
+      const updatedStatus = await tx.riderStatus.upsert({
+        where: { riderId },
+ 
+        update: {
+          lastLoginAt: now,
+          lastLogoutAt: null
+        },
+ 
+        create: {
+          riderId,
+          lastLoginAt: now,
+          lastLogoutAt: null
+        }
+      });
+ 
+      // delivery active
+      const deliveryStatus = await tx.riderDeliveryStatus.upsert({
+        where: { riderId },
+ 
+        update: {
+          isActive: true,
+          inactiveReason: null,
+          updatedAt: now
+        },
+ 
+        create: {
+          riderId,
+          isActive: true,
+          updatedAt: now
+        }
+      });
+ 
+      return { updatedStatus, deliveryStatus };
+    });
+ 
     res.status(200).json({
       success: true,
       message: "Rider is now ONLINE",
-      riderStatus: {
-        isOnline: rider.riderStatus.isOnline,
-        lastLoginAt: rider.riderStatus.lastLoginAt,
-        lastLogoutAt: rider.riderStatus.lastLogoutAt,
-        totalOnlineMinutesToday: rider.riderStatus.totalOnlineMinutesToday
-      },
-      deliveryStatus: {
-        isActive: rider.deliveryStatus.isActive
-      }
+      isPartnerActive: true,
+      riderStatus: result.updatedStatus,
+      deliveryStatus: result.deliveryStatus
     });
-
+ 
   } catch (error) {
-    console.error("GO ONLINE ERROR:", error);
-    res.status(500).json({
+    console.error("ONLINE ERROR:", error);
+ 
+    res.status(400).json({
       success: false,
-      message: "Server Error"
+      message: error.message || "Server error"
     });
   }
 };
-
-// exports.goOffline = async (req, res) => {
-//   try {
-
-//     const riderId = req.rider._id;
-
-//     const riderData = await Rider.findById(riderId);
-
-//     if (!riderData || !riderData.riderStatus.isOnline) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Rider already offline"
-//       });
-//     }
-
-//     const logoutTime = new Date();
-//     const loginTime = riderData.riderStatus.lastLoginAt;
-
-//     // ------------------------
-//     // SESSION CALCULATION
-//     // ------------------------
-
-//     const diffMs = logoutTime - loginTime;
-//     const sessionMinutes = Math.floor(diffMs / 60000);
-
-//     const updatedTotalMinutes =
-//       riderData.riderStatus.totalOnlineMinutesToday + sessionMinutes;
-
-//     // ------------------------
-//     // ATOMIC UPDATE
-//     // ------------------------
-
-//     const rider = await Rider.findByIdAndUpdate(
-//       riderId,
-//       {
-//         $set: {
-//           "riderStatus.isOnline": false,
-//           "riderStatus.lastLogoutAt": logoutTime,
-//           "riderStatus.totalOnlineMinutesToday": updatedTotalMinutes
-//         }
-//       },
-//       { new: true }
-//     );
-
-//     // ------------------------
-//     // RESPONSE
-//     // ------------------------
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Rider is now OFFLINE",
-//       riderStatus: {
-//         isOnline: rider.riderStatus.isOnline,
-//         lastLoginAt: rider.riderStatus.lastLoginAt,
-//         lastLogoutAt: rider.riderStatus.lastLogoutAt,
-//         totalOnlineMinutesToday: rider.riderStatus.totalOnlineMinutesToday
-//       }
-//     });
-
-//   } catch (error) {
-//     console.error("GO OFFLINE ERROR:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Server Error"
-//     });
-//   }
-// };
+ 
+ 
 exports.goOffline = async (req, res) => {
   try {
-    const riderId = req.rider._id;
-
+    const riderId = req.rider.id;
     const { reason = "MANUAL_OFF" } = req.body || {};
-
+ 
     const allowedReasons = [
       "MANUAL_OFF",
       "KYC_PENDING",
@@ -224,79 +102,105 @@ exports.goOffline = async (req, res) => {
       "OUT_OF_SERVICE_AREA",
       "COD_LIMIT_EXCEEDED"
     ];
-
+ 
     if (!allowedReasons.includes(reason)) {
       return res.status(400).json({
         success: false,
         message: "Invalid inactive reason"
       });
     }
-
-    const riderData = await Rider.findById(riderId);
-
-    // if (!riderData || !riderData.riderStatus.isOnline) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Rider already offline"
-    //   });
-    // }
-
-    const logoutTime = new Date();
-    const loginTime = riderData.riderStatus.lastLoginAt;
-
-    // ------------------------
-    // SESSION CALCULATION
-    // ------------------------
-    const diffMs = logoutTime - loginTime;
-    const sessionMinutes = Math.floor(diffMs / 60000);
-
-    const updatedTotalMinutes =
-      riderData.riderStatus.totalOnlineMinutesToday + sessionMinutes;
-
-    // ------------------------
-    // ATOMIC UPDATE
-    // ------------------------
-    const rider = await Rider.findByIdAndUpdate(
-      riderId,
-      {
-        $set: {
-          "riderStatus.isOnline": false,
-          "riderStatus.lastLogoutAt": logoutTime,
-          "riderStatus.totalOnlineMinutesToday": updatedTotalMinutes,
-
-          "deliveryStatus.isActive": false,
-          "deliveryStatus.inactiveReason": reason,
-          "deliveryStatus.updatedAt": new Date(),
-                isPartnerActive: false
-
-        }
-      },
-      { new: true }
-    );
-
-    // ------------------------
-    // RESPONSE
-    // ------------------------
-    res.status(200).json({
-      success: true,
-      message: "Rider is now OFFLINE",
-      riderStatus: {
-        isOnline: rider.riderStatus.isOnline,
-        lastLoginAt: rider.riderStatus.lastLoginAt,
-        lastLogoutAt: rider.riderStatus.lastLogoutAt,
-        totalOnlineMinutesToday: rider.riderStatus.totalOnlineMinutesToday
-      },
-      deliveryStatus: {
-        isActive: rider.deliveryStatus.isActive,
-        inactiveReason: rider.deliveryStatus.inactiveReason
+ 
+    // Fetch rider with status
+    const riderData = await prisma.rider.findUnique({
+      where: { id: riderId },
+      include: {
+        status: true // prisma relation name
       }
     });
-
+ 
+    if (!riderData) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found"
+      });
+    }
+ 
+    // ✅ Your logic — safely guarded
+    const loginTime =
+      riderData.status && riderData.status.lastLoginAt
+        ? riderData.status.lastLoginAt
+        : null;
+ 
+    const logoutTime = new Date();
+ 
+    let sessionMinutes = 0;
+ 
+    if (loginTime) {
+      const diffMs = logoutTime - loginTime;
+      sessionMinutes = Math.floor(diffMs / 60000);
+    }
+ 
+    const previousMinutes =
+      riderData.status?.totalOnlineMinutesToday || 0;
+ 
+    const updatedTotalMinutes =
+      previousMinutes + sessionMinutes;
+ 
+    // Transaction update
+    const result = await prisma.$transaction(async (tx) => {
+ 
+      const updatedStatus = await tx.riderStatus.upsert({
+        where: { riderId },
+        update: {
+          lastLogoutAt: logoutTime,
+          totalOnlineMinutesToday: updatedTotalMinutes
+        },
+        create: {
+          riderId,
+          lastLogoutAt: logoutTime,
+          totalOnlineMinutesToday: updatedTotalMinutes
+        }
+      });
+ 
+      await tx.riderDeliveryStatus.upsert({
+        where: { riderId },
+        update: {
+          isActive: false,
+          inactiveReason: reason,
+          updatedAt: logoutTime
+        },
+        create: {
+          riderId,
+          isActive: false,
+          inactiveReason: reason,
+          updatedAt: logoutTime
+        }
+      });
+ 
+      await tx.rider.update({
+        where: { id: riderId },
+        data: {
+          isOnline: false,
+          isPartnerActive: false
+        }
+      });
+ 
+      return updatedStatus;
+    });
+ 
+    return res.status(200).json({
+      success: true,
+      message: "Rider is now OFFLINE",
+      riderStatus: result
+    });
+ 
   } catch (error) {
     console.error("GO OFFLINE ERROR:", error);
-    res.status(500).json({
+ 
+    return res.status(500).json({
       success: false,
-      message: "Server Error"
+      message: error.message
     });
   }
 };
+ 
