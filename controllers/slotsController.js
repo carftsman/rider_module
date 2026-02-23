@@ -1212,24 +1212,9 @@ exports.getSlotCapacity = async (req, res) => {
       });
     }
 
-    // Default date = today (IST)
-    const now = new Date(
-      new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-    );
-    const date = req.query.date || now.toISOString().split("T")[0];
-
-    // Convert date string to Date object range
-    const startOfDay = new Date(date + "T00:00:00.000Z");
-    const endOfDay = new Date(date + "T23:59:59.999Z");
-
-    // 🔥 Find Slot
-    const slot = await prisma.slot.findFirst({
+    const slot = await prisma.slot.findUnique({
       where: {
-        id: slotId,
-        date: {
-          gte: startOfDay,
-          lte: endOfDay
-        }
+        slotId: slotId   
       },
       include: {
         riderBookings: {
@@ -1247,27 +1232,21 @@ exports.getSlotCapacity = async (req, res) => {
       });
     }
 
-    const bookedRiders = slot.riderBookings.map(r => r.riderId);
-
-    const bookedRidersCount = bookedRiders.length;
-
+    const bookedRidersCount = slot.riderBookings.length;
     const availableRiders = Math.max(
       0,
       slot.maxRiders - bookedRidersCount
     );
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       message: "Slot capacity fetched successfully",
       data: {
-        slotId: slot.id,
-        date,
+        slotId: slot.slotId,   
+        date: slot.date,
         startTime: slot.startTime,
         endTime: slot.endTime,
         maxRiders: slot.maxRiders,
-
-        riders: bookedRiders,
-
         bookedRidersCount,
         availableRiders,
         isFull: availableRiders === 0,
@@ -1275,11 +1254,11 @@ exports.getSlotCapacity = async (req, res) => {
       }
     });
 
-  } catch (err) {
-    console.error("Slot Capacity Error:", err);
+  } catch (error) {
+    console.error("Slot Capacity Error:", error);
     return res.status(500).json({
       success: false,
-      message: "Server error"
+      message: error.message || "Internal server error"
     });
   }
 };

@@ -10,7 +10,7 @@ const Incentive = require("../models/IncentiveSchema");
 const RiderIncentiveProgress = require("../models/RiderIncentiveProgressSchema");
 const prisma=require('../config/prisma');
       
-
+const prisma=require("../config/prisma");
 
 // 👉 Dummy transaction generator
 function generateTxn() {
@@ -1242,32 +1242,39 @@ async function confirmOrder(req, res) {
 
  
 async function acceptOrder(req, res) {
+  const client = await pool.connect();
 
-  const session = await mongoose.startSession();
- 
   try {
-
     const { orderId } = req.params;
+    const riderId = req.rider.id; // postgres usually uses id not _id
 
-    const riderId = req.rider._id;
+    await client.query("BEGIN");
 
-    const now = new Date();
- 
-    // 🚫 Rider already busy
+    // 🚫 Check if rider already busy
+    const riderResult = await client.query(
+      `SELECT order_state FROM riders WHERE id = $1 FOR UPDATE`,
+      [riderId]
+    );
 
-    if (req.rider.orderState === "BUSY") {
-
-      return res.status(409).json({
-
+    if (!riderResult.rows.length) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
         success: false,
-
-        message: "Rider already busy"
-
+        message: "Rider not found"
       });
-
     }
- 
-    session.startTransaction();
+
+    if (riderResult.rows[0].order_state === "BUSY") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({
+        success: false,
+        message: "Rider already busy"
+      });
+    }
+
+    
+
+  
  
     /* ============================
 
@@ -1447,61 +1454,60 @@ async function acceptOrder(req, res) {
  
 
 async function rejectOrder(req, res) {
+  const client = await pool.connect();
+
   try {
     const { orderId } = req.params;
-    const riderId = req.rider._id
-   
- 
-    const result = await Order.findOneAndUpdate(
-      {
-        orderId,
-        orderStatus: "CONFIRMED",
-        riderId: null,
-        "allocation.candidateRiders": {
-          $elemMatch: {
-            riderId,
-            status: "PENDING"
-          }
-        }
-      },
-      {
-        $set: {
-          "allocation.candidateRiders.$[r].status": "REJECTED",
-          "allocation.candidateRiders.$[r].rejectedAt": new Date(),
-        
-        }
-      },
-      {
-        new: true,
-        arrayFilters: [
-          { "r.riderId": riderId, "r.status": "PENDING" }
-        ]
-      }
+    const riderId = req.rider.id;
+
+    await client.query("BEGIN");
+
+    // Update candidate rider status
+    const result = await client.query(
+      `UPDATE order_candidate_riders
+       SET status = 'REJECTED',
+           rejected_at = NOW()
+       WHERE order_id = $1
+         AND rider_id = $2
+         AND status = 'PENDING'
+       RETURNING *`,
+      [orderId, riderId]
     );
- 
-    if (!result) {
+
+    if (!result.rows.length) {
+      await client.query("ROLLBACK");
       return res.status(409).json({
         success: false,
         message: "Order already assigned or cannot be rejected"
       });
     }
- 
-    const pendingCount = result.allocation.candidateRiders.filter(
-      r => r.status === "PENDING"
-    ).length;
- 
+
+    // Count remaining pending riders
+    const pendingResult = await client.query(
+      `SELECT COUNT(*) 
+       FROM order_candidate_riders
+       WHERE order_id = $1
+         AND status = 'PENDING'`,
+      [orderId]
+    );
+
+    await client.query("COMMIT");
+
     return res.json({
       success: true,
       message: "Order rejected successfully",
-      pendingRiders: pendingCount
+      pendingRiders: parseInt(pendingResult.rows[0].count)
     });
- 
+
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("Reject order error:", err);
     return res.status(500).json({
       success: false,
       message: "Failed to reject order"
     });
+  } finally {
+    client.release();
   }
 }
 
