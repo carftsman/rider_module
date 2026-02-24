@@ -401,7 +401,7 @@ async function confirmOrder(req, res) {
 
     console.log(
        "Riders getting popup:",
-       riders.map(r => r._id.toString())
+       riders.map(r => r.id.toString())
      );
     //////////////////////////////////////////////////////
     // 8️⃣ SAVE TRACKING SNAPSHOT
