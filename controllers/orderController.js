@@ -448,276 +448,167 @@ async function confirmOrder(req, res) {
   }
 }
 
-
-
- 
 async function acceptOrder(req, res) {
-  const client = await pool.connect();
-
   try {
     const { orderId } = req.params;
-    const riderId = req.rider.id; // postgres usually uses id not _id
+    const riderId = req.rider.id;
 
-    await client.query("BEGIN");
+    // 1️⃣ Find order with allocation
+    const order = await prisma.order.findUnique({
+      where: { orderId },
+      include: {
+        OrderAllocation: true
+      }
+    });
 
-    // 🚫 Check if rider already busy
-    const riderResult = await client.query(
-      `SELECT order_state FROM riders WHERE id = $1 FOR UPDATE`,
-      [riderId]
-    );
-
-    if (!riderResult.rows.length) {
-      await client.query("ROLLBACK");
+    if (!order) {
       return res.status(404).json({
         success: false,
-        message: "Rider not found"
+        message: "Order not found"
       });
     }
 
-    if (riderResult.rows[0].order_state === "BUSY") {
-      await client.query("ROLLBACK");
-      return res.status(409).json({
+    if (!order.OrderAllocation) {
+      return res.status(400).json({
         success: false,
-        message: "Rider already busy"
+        message: "Order not allocated"
       });
     }
 
-    
-
-  
- 
-    /* ============================
-
-       1️⃣ ASSIGN ORDER
-
-    ============================ */
-
-    const order = await Order.findOneAndUpdate(
-
-      {
-
-        orderId,
-
-        orderStatus: "CONFIRMED",
-
-        riderId: null,
-
-        "allocation.expiresAt": { $gt: now },
-
-        "allocation.candidateRiders": {
-
-          $elemMatch: {
-
-            riderId,
-
-            status: "PENDING"
-
-          }
-
-        }
-
-      },
-
-      {
-
-        $set: {
-
-          riderId,
-
-          orderStatus: "ASSIGNED",
-
-          "allocation.assignedAt": now,
-
-          "allocation.candidateRiders.$[r].status": "ACCEPTED"
-
-        }
-
-      },
-
-      {
-
-        new: true,
-
-        session,
-
-        arrayFilters: [{ "r.riderId": riderId }]
-
-      }
-
-    );
- 
-    if (!order) {
-
-      await session.abortTransaction();
-
-      return res.status(409).json({
-
+    if (order.orderStatus !== "CONFIRMED") {
+      return res.status(400).json({
         success: false,
+        message: "Order not available"
+      });
+    }
 
-        message: "Order already assigned or expired"
+    await prisma.$transaction(async (tx) => {
 
+      // Assign order
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          riderId: riderId,
+          orderStatus: "ASSIGNED"
+        }
       });
 
-    }
- 
-    /* ============================
-
-       2️⃣ MARK OTHER RIDERS REJECTED
-
-    ============================ */
-
-    await Order.updateOne(
-
-      { orderId },
-
-      {
-
-        $set: {
-
-          "allocation.candidateRiders.$[r].status": "REJECTED"
-
+      // Accept this rider
+      await tx.orderCandidateRider.updateMany({
+        where: {
+          allocationId: order.OrderAllocation.id,
+          riderId: riderId,
+          status: "PENDING"
+        },
+        data: {
+          status: "ACCEPTED"
         }
+      });
 
-      },
+      // Reject others
+      await tx.orderCandidateRider.updateMany({
+        where: {
+          allocationId: order.OrderAllocation.id,
+          riderId: { not: riderId },
+          status: "PENDING"
+        },
+        data: {
+          status: "REJECTED"
+        }
+      });
 
-      {
+      // Mark allocation assigned time
+      await tx.orderAllocation.update({
+        where: { id: order.OrderAllocation.id },
+        data: {
+          assignedAt: new Date()
+        }
+      });
 
-        session,
-
-        arrayFilters: [
-
-          { "r.riderId": { $ne: riderId }, "r.status": "PENDING" }
-
-        ]
-
-      }
-
-    );
- 
-    /* ============================
-
-       3️⃣ UPDATE RIDER → BUSY
-
-    ============================ */
-
-    await Rider.updateOne(
-
-      {
-
-        _id: riderId,
-
-        orderState: "READY" // 🔒 safety check
-
-      },
-
-      {
-
-        $set: {
-
+      // Make rider busy
+      await tx.rider.update({
+        where: { id: riderId },
+        data: {
           orderState: "BUSY",
-
-          currentOrderId: order._id
-
+          currentOrderId: order.id
         }
+      });
 
-      },
+    });
 
-      { session }
-
-    );
- 
-    await session.commitTransaction();
- 
     return res.json({
-
       success: true,
-
-      message: "Order accepted, rider is now busy",
-
-      orderId: order.orderId,
-      orderStatus:order.orderStatus
-
+      message: "Order accepted successfully"
     });
- 
+
   } catch (err) {
-
-    await session.abortTransaction();
-
     console.error("Accept order error:", err);
- 
     return res.status(500).json({
-
       success: false,
-
       message: "Failed to accept order"
-
     });
-
-  } finally {
-
-    session.endSession();
-
   }
-
 }
 
  
 
 async function rejectOrder(req, res) {
-  const client = await pool.connect();
-
   try {
     const { orderId } = req.params;
     const riderId = req.rider.id;
 
-    await client.query("BEGIN");
+    // 1️⃣ Find order with allocation
+    const order = await prisma.order.findUnique({
+      where: { orderId },
+      include: {
+        OrderAllocation: true
+      }
+    });
 
-    // Update candidate rider status
-    const result = await client.query(
-      `UPDATE order_candidate_riders
-       SET status = 'REJECTED',
-           rejected_at = NOW()
-       WHERE order_id = $1
-         AND rider_id = $2
-         AND status = 'PENDING'
-       RETURNING *`,
-      [orderId, riderId]
-    );
-
-    if (!result.rows.length) {
-      await client.query("ROLLBACK");
-      return res.status(409).json({
+    if (!order) {
+      return res.status(404).json({
         success: false,
-        message: "Order already assigned or cannot be rejected"
+        message: "Order not found"
       });
     }
 
-    // Count remaining pending riders
-    const pendingResult = await client.query(
-      `SELECT COUNT(*) 
-       FROM order_candidate_riders
-       WHERE order_id = $1
-         AND status = 'PENDING'`,
-      [orderId]
-    );
+    if (!order.OrderAllocation) {
+      return res.status(400).json({
+        success: false,
+        message: "Order not allocated"
+      });
+    }
 
-    await client.query("COMMIT");
+    // 2️⃣ Reject rider inside allocation
+    const result = await prisma.orderCandidateRider.updateMany({
+      where: {
+        allocationId: order.OrderAllocation.id,
+        riderId: riderId,
+        status: "PENDING"
+      },
+      data: {
+        status: "REJECTED"
+      }
+    });
+
+    if (result.count === 0) {
+      return res.status(409).json({
+        success: false,
+        message: "Order already handled or not assigned to this rider"
+      });
+    }
 
     return res.json({
       success: true,
-      message: "Order rejected successfully",
-      pendingRiders: parseInt(pendingResult.rows[0].count)
+      message: "Order rejected successfully"
     });
 
   } catch (err) {
-    await client.query("ROLLBACK");
     console.error("Reject order error:", err);
     return res.status(500).json({
       success: false,
       message: "Failed to reject order"
     });
-  } finally {
-    client.release();
   }
 }
 
