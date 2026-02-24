@@ -414,46 +414,57 @@ model SlotBooking {
   @@index([status])
 }
 
+//////////////////// ORDER ////////////////////
+
 model Order {
-  id                   String                @id @default(uuid())
-  orderId              String                @unique
-  riderId              String?
-  vendorShopName       String
-  orderStatus          OrderStatus           @default(CREATED)
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  Rider                Rider?                @relation(fields: [riderId], references: [id])
-  OrderAllocation      OrderAllocation?
-  OrderCancelIssue     OrderCancelIssue?
-  OrderCod             OrderCod?
-  OrderDeliveryAddress OrderDeliveryAddress?
+  id             String      @id @default(uuid())
+  orderId        String      @unique
+  riderId        String?
+  vendorShopName String
+  orderStatus    OrderStatus @default(CREATED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Rider Rider? @relation(fields: [riderId], references: [id])
+
   OrderItems           OrderItem[]
-  OrderPayment         OrderPayment?
-  OrderPickupAddress   OrderPickupAddress?
   OrderPricing         OrderPricing?
+  OrderPayment         OrderPayment?
+  OrderCod             OrderCod?
+  OrderPickupAddress   OrderPickupAddress?
+  OrderDeliveryAddress OrderDeliveryAddress?
   OrderRiderEarning    OrderRiderEarning?
-  OrderSettlement      OrderSettlement?
   OrderSlotInfo        OrderSlotInfo?
   OrderTracking        OrderTracking?
+  OrderAllocation      OrderAllocation?
+  OrderCancelIssue     OrderCancelIssue?
+  OrderSettlement      OrderSettlement?
 
   @@index([orderStatus])
   @@index([riderId])
   @@index([createdAt])
 }
 
+//////////////////// ITEMS ////////////////////
+
 model OrderItem {
-  id        String   @id @default(uuid())
-  orderId   String
-  itemName  String
-  quantity  Int
-  price     Float
-  total     Float
+  id       String @id @default(uuid())
+  orderId  String
+  itemName String
+  quantity Int
+  price    Float
+  total    Float
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-  Order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
+
+//////////////////// PRICING ////////////////////
 
 model OrderPricing {
   id                 String @id @default(uuid())
@@ -463,10 +474,13 @@ model OrderPricing {
   tax                Float?
   platformCommission Float?
   totalAmount        Float?
-  Order              Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
+
+//////////////////// PAYMENT ////////////////////
 
 model OrderPayment {
   id             String             @id @default(uuid())
@@ -475,9 +489,11 @@ model OrderPayment {
   codPaymentType CodPaymentType     @default(CASH)
   status         OrderPaymentStatus @default(PENDING)
   transactionId  String?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  Order          Order              @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([mode])
@@ -485,22 +501,30 @@ model OrderPayment {
   @@index([createdAt])
 }
 
+//////////////////// COD ////////////////////
+
 model OrderCod {
-  id              String    @id @default(uuid())
-  orderId         String    @unique
-  amount          Float     @default(0)
-  depositedAmount Float     @default(0)
-  pendingAmount   Float     @default(0)
-  status          CodStatus @default(PENDING)
-  collectedAt     DateTime?
-  depositedAt     DateTime?
-  Order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id      String @id @default(uuid())
+  orderId String @unique
+
+  amount          Float @default(0)
+  depositedAmount Float @default(0)
+  pendingAmount   Float @default(0)
+
+  status CodStatus @default(PENDING)
+
+  collectedAt DateTime?
+  depositedAt DateTime?
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
   @@index([status])
   @@index([collectedAt])
   @@index([depositedAt])
 }
+
+//////////////////// ADDRESSES ////////////////////
 
 model OrderPickupAddress {
   id            String  @id @default(uuid())
@@ -510,7 +534,8 @@ model OrderPickupAddress {
   contactNumber String?
   latitude      Float?
   longitude     Float?
-  Order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -523,34 +548,42 @@ model OrderDeliveryAddress {
   contactNumber String?
   latitude      Float?
   longitude     Float?
-  Order         Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
 
+//////////////////// RIDER EARNING ////////////////////
+
 model OrderRiderEarning {
-  id           String       @id @default(uuid())
-  orderId      String       @unique
-  basePay      Float        @default(0)
-  distancePay  Float        @default(0)
-  surgePay     Float        @default(0)
-  tips         Float        @default(0)
-  totalEarning Float        @default(0)
-  credited     Boolean      @default(false)
-  Order        Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  OrderSurges  OrderSurge[]
+  id           String  @id @default(uuid())
+  orderId      String  @unique
+  basePay      Float   @default(0)
+  distancePay  Float   @default(0)
+  surgePay     Float   @default(0)
+  tips         Float   @default(0)
+  totalEarning Float   @default(0)
+  credited     Boolean @default(false)
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  OrderSurges OrderSurge[]
 
   @@index([orderId])
 }
 
 model OrderSurge {
-  id                String            @id @default(uuid())
-  riderEarningId    String
-  type              SurgeType
-  multiplierType    MultiplierType
-  value             Float?
+  id             String         @id @default(uuid())
+  riderEarningId String
+  type           SurgeType
+  multiplierType MultiplierType
+  value          Float?
+
   OrderRiderEarning OrderRiderEarning @relation(fields: [riderEarningId], references: [id], onDelete: Cascade)
 }
+
+//////////////////// SLOT INFO ////////////////////
 
 model OrderSlotInfo {
   id            String    @id @default(uuid())
@@ -561,42 +594,54 @@ model OrderSlotInfo {
   isPeakSlot    Boolean?
   slotStartAt   DateTime?
   slotEndAt     DateTime?
-  Order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
+
+//////////////////// TRACKING ////////////////////
 
 model OrderTracking {
-  id            String   @id @default(uuid())
-  orderId       String   @unique
+  id            String @id @default(uuid())
+  orderId       String @unique
   distanceInKm  Float?
   durationInMin Float?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  Order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
 
+//////////////////// ALLOCATION ////////////////////
+
 model OrderAllocation {
-  id                   String                @id @default(uuid())
-  orderId              String                @unique
-  assignedAt           DateTime?
-  expiresAt            DateTime?
-  Order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id         String    @id @default(uuid())
+  orderId    String    @unique
+  assignedAt DateTime?
+  expiresAt  DateTime?
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
   OrderCandidateRiders OrderCandidateRider[]
 
   @@index([orderId])
 }
 
 model OrderCandidateRider {
-  id              String           @id @default(uuid())
-  allocationId    String
-  riderId         String
-  status          AllocationStatus @default(PENDING)
-  notifiedAt      DateTime?
-  OrderAllocation OrderAllocation  @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  id           String           @id @default(uuid())
+  allocationId String
+  riderId      String
+  status       AllocationStatus @default(PENDING)
+  notifiedAt   DateTime?
+
+  OrderAllocation OrderAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
 }
+
+//////////////////// CANCEL ISSUE ////////////////////
 
 model OrderCancelIssue {
   id          String       @id @default(uuid())
@@ -604,19 +649,24 @@ model OrderCancelIssue {
   cancelledBy CancelledBy?
   reasonCode  String?
   reasonText  String?
-  Order       Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
 
+//////////////////// SETTLEMENT ////////////////////
+
 model OrderSettlement {
-  id                String   @id @default(uuid())
-  orderId           String   @unique
-  riderEarningAdded Boolean  @default(false)
-  vendorSettled     Boolean  @default(false)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  Order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id                String  @id @default(uuid())
+  orderId           String  @unique
+  riderEarningAdded Boolean @default(false)
+  vendorSettled     Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -793,14 +843,7 @@ enum RiderSlotStatus {
   COMPLETED
 }
 
-enum OrderStatus {
-  CREATED
-  CONFIRMED
-  ASSIGNED
-  PICKED_UP
-  DELIVERED
-  CANCELLED
-}
+//////////////////// ENUMS ////////////////////
 
 enum CancelledBy {
   CUSTOMER
@@ -809,28 +852,10 @@ enum CancelledBy {
   ADMIN
 }
 
-enum OrderPaymentMode {
-  ONLINE
-  COD
-}
-
 enum CodPaymentType {
   CASH
   UPI
   BANK_TRANSFER
-}
-
-enum OrderPaymentStatus {
-  PENDING
-  SUCCESS
-  FAILED
-  REFUNDED
-}
-
-enum CodStatus {
-  PENDING
-  PARTIAL_DEPOSITED
-  DEPOSITED
 }
 
 enum AllocationStatus {
@@ -840,15 +865,42 @@ enum AllocationStatus {
   TIMEOUT
 }
 
+enum CodStatus {
+  PENDING
+  PARTIAL_DEPOSITED
+  DEPOSITED
+}
+
+enum MultiplierType {
+  FIXED
+  PER_ORDER
+}
+
+enum OrderPaymentMode {
+  ONLINE
+  COD
+}
+
+enum OrderPaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum OrderStatus {
+  CREATED
+  CONFIRMED
+  ASSIGNED
+  PICKED_UP
+  DELIVERED
+  CANCELLED
+}
+
 enum SurgeType {
   PEAK
   RAIN
   ZONE
   NIGHT
   HIGH_DEMAND
-}
-
-enum MultiplierType {
-  FIXED
-  PER_ORDER
 }
