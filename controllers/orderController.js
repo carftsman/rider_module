@@ -437,7 +437,7 @@ async function createOrder(req, res) {
     // ITEMS
     //////////////////////////////////////////////////
 
-    OrderItem: {
+    OrderItems: {
       create: body.items.map(item => ({
         itemName: item.itemName,
         quantity: item.quantity,
@@ -562,52 +562,56 @@ async function createOrder(req, res) {
 
 ================================ */
 
+async function getRouteInfo(pickupAddress, deliveryAddress) {
+  if (!pickupAddress || !deliveryAddress) {
+    throw new Error("Pickup or Delivery address missing");
+  }
+
+  const pickupLat = pickupAddress.latitude;
+  const pickupLng = pickupAddress.longitude;
+
+  const dropLat = deliveryAddress.latitude;
+  const dropLng = deliveryAddress.longitude;
+
+  if (
+    pickupLat == null || pickupLng == null ||
+    dropLat == null || dropLng == null
+  ) {
+    throw new Error("Invalid pickup/delivery coordinates");
+  }
+
+  const response = await axios.get(
+    "https://maps.googleapis.com/maps/api/directions/json",
+    {
+      params: {
+        origin: `${pickupLat},${pickupLng}`,
+        destination: `${dropLat},${dropLng}`,
+        key: process.env.GOOGLE_KEY
+      }
+    }
+  );
+
+  if (!response.data.routes?.length) {
+    throw new Error("No route found between pickup and drop");
+  }
+
+  const leg = response.data.routes[0].legs[0];
+
+  return {
+    distanceKm: Number((leg.distance.value / 1000).toFixed(2)),
+    etaMinutes: Math.ceil(leg.duration.value / 60)
+  };
+}
+
+
+
 // async function getRouteInfo(pickupAddress, deliveryAddress) {
-//   // 🛡️ Safety checks
 //   if (!pickupAddress || !deliveryAddress) {
 //     throw new Error("Pickup or Delivery address missing");
 //   }
 
-//   const { lat: pickupLat, lng: pickupLng } = pickupAddress;
-//   const { lat: dropLat, lng: dropLng } = deliveryAddress;
-
-//   if (
-//     pickupLat == null ||
-//     pickupLng == null ||
-//     dropLat == null ||
-//     dropLng == null
-//   ) {
-//     throw new Error("Invalid pickup/delivery coordinates");
-//   }
-
-//   const url = "https://maps.googleapis.com/maps/api/directions/json";
-
-//   const response = await axios.get(url, {
-//     params: {
-//       origin: `${pickupLat},${pickupLng}`,
-//       destination: `${dropLat},${dropLng}`,
-//       key: process.env.GOOGLE_KEY,
-//     },
-//   });
-
-//   if (!response.data.routes || response.data.routes.length === 0) {
-//     throw new Error("No route found between pickup and drop");
-//   }
-
-//   const leg = response.data.routes[0].legs[0];
-
-//   return {
-//     distanceKm: Number((leg.distance.value / 1000).toFixed(2)),
-//     etaMinutes: Math.ceil(leg.duration.value / 60),
-//   };
-// }
-
-// async function getRouteInfo(pickupAddress, deliveryAddress) {
-//   console.log("Pickup:99", order.pickupAddress);
-// console.log("Delivery:99", order.deliveryAddress);
-
-//   const pickupCoords = pickupAddress?.location?.coordinates;
-//   const dropCoords = deliveryAddress?.location?.coordinates;
+//   const pickupCoords = pickupAddress.location?.coordinates;
+//   const dropCoords = deliveryAddress.location?.coordinates;
 
 //   if (
 //     !Array.isArray(pickupCoords) || pickupCoords.length !== 2 ||
@@ -630,59 +634,17 @@ async function createOrder(req, res) {
 //     }
 //   );
 
-//   if (!response.data.routes?.length) {
-//     throw new Error("No route found");
+//   if (!response.data.routes || response.data.routes.length === 0) {
+//     throw new Error("No route found between pickup and drop");
 //   }
 
 //   const leg = response.data.routes[0].legs[0];
 
 //   return {
-//     distanceKm: +(leg.distance.value / 1000).toFixed(2),
+//     distanceKm: Number((leg.distance.value / 1000).toFixed(2)),
 //     etaMinutes: Math.ceil(leg.duration.value / 60)
 //   };
 // }
-//2nd line is new
-
-async function getRouteInfo(pickupAddress, deliveryAddress) {
-  if (!pickupAddress || !deliveryAddress) {
-    throw new Error("Pickup or Delivery address missing");
-  }
-
-  const pickupCoords = pickupAddress.location?.coordinates;
-  const dropCoords = deliveryAddress.location?.coordinates;
-
-  if (
-    !Array.isArray(pickupCoords) || pickupCoords.length !== 2 ||
-    !Array.isArray(dropCoords) || dropCoords.length !== 2
-  ) {
-    throw new Error("Invalid pickup/delivery coordinates");
-  }
-
-  const [pickupLng, pickupLat] = pickupCoords;
-  const [dropLng, dropLat] = dropCoords;
-
-  const response = await axios.get(
-    "https://maps.googleapis.com/maps/api/directions/json",
-    {
-      params: {
-        origin: `${pickupLat},${pickupLng}`,
-        destination: `${dropLat},${dropLng}`,
-        key: process.env.GOOGLE_KEY
-      }
-    }
-  );
-
-  if (!response.data.routes || response.data.routes.length === 0) {
-    throw new Error("No route found between pickup and drop");
-  }
-
-  const leg = response.data.routes[0].legs[0];
-
-  return {
-    distanceKm: Number((leg.distance.value / 1000).toFixed(2)),
-    etaMinutes: Math.ceil(leg.duration.value / 60)
-  };
-}
 
 
 
@@ -1011,7 +973,7 @@ async function confirmOrder(req, res) {
       data: {
         orderId: order.id,
         expiresAt: new Date(Date.now() + 120 * 1000),
-        OrderCandidateRider: {
+        OrderCandidateRiders: {
           create: riders.map(r => ({
             riderId: r.id,
             status: "PENDING",

@@ -57,12 +57,14 @@ exports.goOnline = async (req, res) => {
  
         update: {
           isActive: true,
+          inactiveReason: "MANUAL_OFF",
           updatedAt: now
         },
  
         create: {
           riderId,
           isActive: true,
+          inactiveReason: "MANUAL_OFF",
           updatedAt: now
         }
       });
