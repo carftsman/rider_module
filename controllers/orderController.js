@@ -616,20 +616,27 @@ async function rejectOrder(req, res) {
 async function getOrderDetails(req, res) {
   try {
     const { orderId } = req.params;
-    const order = await prisma.Order.findFirst({
+
+    const order = await prisma.order.findFirst({
       where: { orderId },
       include: {
-        Rider: {
-          select: {
-              id: true,
-              phoneNumber: true
-            }
-          },
-          OrderItem: true,
-          OrderPickupAddress: true,
-          OrderDeliveryAddress: true,
-          OrderPricing: true
-        }
+        OrderItems: true,
+        OrderPickupAddress: true,
+        OrderDeliveryAddress: true,
+        OrderPricing: true,
+        OrderRiderEarning: {
+          include: {
+            OrderSurges: true
+          }
+        },
+        OrderPayment: true,
+        OrderAllocation: {
+          include: {
+            OrderCandidateRiders: true
+          }
+        },
+        OrderSettlement: true
+      }
     });
 
     if (!order) {
@@ -638,23 +645,100 @@ async function getOrderDetails(req, res) {
         message: "Order not found"
       });
     }
-     const filteredOrder = {
-      id: order.id,
+
+    // 🔥 Shape response EXACTLY like old Mongo response
+    const formattedOrder = {
+      _id: order.id, // match old _id style
       orderId: order.orderId,
       vendorShopName: order.vendorShopName,
-      items: order.OrderItem,
-      pickupAddress: order.OrderPickupAddress,
-      deliveryAddress: order.OrderDeliveryAddress,
-      pricing: order.OrderPricing
-    };
+      orderStatus: order.orderStatus,
 
+      items: order.OrderItems.map(item => ({
+        _id: item.id,
+        itemName: item.itemName,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total
+      })),
+
+      pickupAddress: order.OrderPickupAddress
+        ? {
+            name: order.OrderPickupAddress.name,
+            addressLine: order.OrderPickupAddress.addressLine,
+            contactNumber: order.OrderPickupAddress.contactNumber,
+            lat: order.OrderPickupAddress.latitude,
+            lng: order.OrderPickupAddress.longitude
+          }
+        : null,
+
+      deliveryAddress: order.OrderDeliveryAddress
+        ? {
+            name: order.OrderDeliveryAddress.name,
+            addressLine: order.OrderDeliveryAddress.addressLine,
+            contactNumber: order.OrderDeliveryAddress.contactNumber,
+            lat: order.OrderDeliveryAddress.latitude,
+            lng: order.OrderDeliveryAddress.longitude
+          }
+        : null,
+
+      pricing: order.OrderPricing
+        ? {
+            itemTotal: order.OrderPricing.itemTotal,
+            deliveryFee: order.OrderPricing.deliveryFee,
+            tax: order.OrderPricing.tax,
+            platformCommission: order.OrderPricing.platformCommission,
+            totalAmount: order.OrderPricing.totalAmount
+          }
+        : null,
+
+      riderEarning: order.OrderRiderEarning
+        ? {
+            basePay: order.OrderRiderEarning.basePay,
+            distancePay: order.OrderRiderEarning.distancePay,
+            surgePay: order.OrderRiderEarning.surgePay,
+            tips: order.OrderRiderEarning.tips,
+            totalEarning: order.OrderRiderEarning.totalEarning,
+            credited: order.OrderRiderEarning.credited
+          }
+        : null,
+
+      payment: order.OrderPayment
+        ? {
+            mode: order.OrderPayment.mode,
+            status: order.OrderPayment.status
+          }
+        : null,
+
+      allocation: order.OrderAllocation
+        ? {
+            expiresAt: order.OrderAllocation.expiresAt,
+            candidateRiders:
+              order.OrderAllocation.OrderCandidateRiders.map(r => ({
+                _id: r.id,
+                riderId: r.riderId,
+                status: r.status,
+                notifiedAt: r.notifiedAt
+              }))
+          }
+        : null,
+
+      settlement: order.OrderSettlement
+        ? {
+            riderEarningAdded: order.OrderSettlement.riderEarningAdded,
+            vendorSettled: order.OrderSettlement.vendorSettled
+          }
+        : null,
+
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      riderId: order.riderId
+    };
 
     return res.status(200).json({
       success: true,
       message: "Order details fetched successfully",
-      orderStatus:order.orderStatus,
-      order
-
+      orderStatus: order.orderStatus,
+      order: formattedOrder
     });
 
   } catch (err) {
@@ -672,7 +756,7 @@ async function pickupOrder(req, res) {
     const { orderId } = req.params;
     const riderId  = req.rider.id;
 
-    const order = await prisma.Order.findFirst({
+    const order = await prisma.Order.findUnique({
       where: { orderId }
     });
 
@@ -701,7 +785,7 @@ async function pickupOrder(req, res) {
 
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
-        where: { id: order.id },
+        where: { orderId },
         data: {
           orderStatus: "PICKED_UP"
         }
@@ -734,9 +818,6 @@ async function pickupOrder(req, res) {
     });
   }
 }
-
-
- 
 
 /* ===============================
 
@@ -1072,7 +1153,7 @@ async function deliverOrder(req, res) {
     });
   }
 }
-
+ 
 async function cancelOrder(req, res) {
   try {
     const { orderId } = req.params;
@@ -1186,12 +1267,6 @@ async function cancelOrder(req, res) {
 }
 
 
-/*
-=============================
-
-
-=============================
-*/
 
 async function getOrdersByRider(req, res) {
   try {
