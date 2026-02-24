@@ -7,6 +7,7 @@ const { uploadToAzure } = require("../utils/azureUpload");
 const { generateTokens } = require("../utils/token");
 const { ensurePartnerId } = require("../services/partner.service");
 const prisma = require("../config/prisma");
+const { generatePartnerId } = require("../utils/generatePartnerId");
 
 
 // ============================================================
@@ -952,12 +953,10 @@ exports.completeKyc = async (req, res) => {
       });
     }
 
-   
+    // 1️⃣ Fetch onboarding
     const onboarding = await prisma.riderOnboarding.findUnique({
       where: { riderId }
     });
-
-    console.log("Onboarding status:", onboarding);
 
     if (!onboarding) {
       return res.status(404).json({
@@ -966,21 +965,22 @@ exports.completeKyc = async (req, res) => {
       });
     }
 
-    const steps = {
-      phoneVerified: onboarding.phoneVerified,
-      appPermissionDone: onboarding.appPermissionDone,
-      citySelected: onboarding.citySelected,
-      vehicleSelected: onboarding.vehicleSelected,
-      personalInfoSubmitted: onboarding.personalInfoSubmitted,
-      selfieUploaded: onboarding.selfieUploaded,
-      aadharVerified: onboarding.aadharVerified,
-      panUploaded: onboarding.panUploaded,
-      dlUploaded: onboarding.dlUploaded
-    };
+    // 2️⃣ Validate all required steps
+    const requiredSteps = [
+      "phoneVerified",
+      "appPermissionDone",
+      "citySelected",
+      "vehicleSelected",
+      "personalInfoSubmitted",
+      "selfieUploaded",
+      "aadharVerified",
+      "panUploaded",
+      "dlUploaded"
+    ];
 
-    const missingSteps = Object.entries(steps)
-      .filter(([_, value]) => !value)
-      .map(([key]) => key);
+    const missingSteps = requiredSteps.filter(
+      (step) => onboarding[step] !== true
+    );
 
     if (missingSteps.length > 0) {
       return res.status(400).json({
@@ -990,30 +990,60 @@ exports.completeKyc = async (req, res) => {
       });
     }
 
-    const [updatedOnboarding, updatedRider] =
-      await prisma.$transaction([
+    // 3️⃣ Complete KYC + update rider inside transaction
+    const result = await prisma.$transaction(async (tx) => {
 
-        prisma.riderOnboarding.update({
-          where: { riderId },
-          data: { kycCompleted: true }
-        }),
+      // Update onboarding
+      await tx.riderOnboarding.update({
+        where: { riderId },
+        data: { kycCompleted: true }
+      });
 
-        prisma.rider.update({
-          where: { id: riderId },
-          data: {
-            isFullyRegistered: true,
-            onboardingStage: "COMPLETED"
-          }
-        })
+      // Get rider
+      const rider = await tx.rider.findUnique({
+        where: { id: riderId }
+      });
 
-      ]);
+      if (!rider) {
+        throw new Error("Rider not found during transaction");
+      }
+
+      let partnerId = rider.partnerId;
+
+      // 4️⃣ Generate partnerId if not exists
+      if (!partnerId) {
+        partnerId = generatePartnerId();
+
+        // ensure uniqueness
+        const existing = await tx.rider.findUnique({
+          where: { partnerId }
+        });
+
+        if (existing) {
+          partnerId = generatePartnerId(); // regenerate once
+        }
+      }
+
+      // Update rider
+      const updatedRider = await tx.rider.update({
+        where: { id: riderId },
+        data: {
+          isFullyRegistered: true,
+          onboardingStage: "COMPLETED",
+          partnerId,
+          isPartnerActive: true
+        }
+      });
+
+      return updatedRider;
+    });
 
     return res.status(200).json({
       success: true,
-      message: "KYC completed successfully 🎉",
-      onboardingProgress: updatedOnboarding,
-      onboardingStage: updatedRider.onboardingStage,
-      isFullyRegistered: updatedRider.isFullyRegistered
+      message: "KYC completed and rider fully registered",
+      partnerId: result.partnerId,
+      onboardingStage: result.onboardingStage,
+      isFullyRegistered: result.isFullyRegistered
     });
 
   } catch (error) {
@@ -1025,7 +1055,6 @@ exports.completeKyc = async (req, res) => {
     });
   }
 };
-
 
 
 exports.refreshAccessToken = async (req, res) => {

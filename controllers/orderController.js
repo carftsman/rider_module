@@ -783,283 +783,294 @@ const isPeakSlot = (date) => {
 =============================== */
 
 async function deliverOrder(req, res) {
-
   try {
-
     const { orderId } = req.params;
+    const riderId = req.rider?.id;
 
-    const riderId = req.rider._id;
- 
     if (!riderId) {
-
-      return res.status(400).json({ success: false, message: "riderId required" });
-
+      return res.status(400).json({
+        success: false,
+        message: "riderId required"
+      });
     }
- 
-    /* 1️⃣ FETCH ORDER */
 
-    const order = await Order.findOne({ orderId });
+    /* 1️⃣ FETCH ORDER */
+    const order = await prisma.order.findUnique({
+      where: { orderId }
+    });
 
     if (!order) {
-
-      return res.status(404).json({ success: false, message: "Order not found" });
-
+      return res.status(404).json({
+        success: false,
+        message: "Order not found"
+      });
     }
- 
+
     /* 2️⃣ VALIDATE STATUS */
-
     if (order.orderStatus !== "PICKED_UP") {
-
       return res.status(400).json({
-
         success: false,
-
         message: `Invalid status: ${order.orderStatus}`
-
       });
-
     }
- 
+
     /* 3️⃣ VALIDATE RIDER */
-
-    const assignedRiderId = order.riderId._id
-
-      ? order.riderId._id.toString()
-
-      : order.riderId.toString();
- 
-    if (assignedRiderId !== riderId.toString()) {
-
+    if (order.riderId !== riderId) {
       return res.status(403).json({
-
         success: false,
-
         message: "Not assigned to this order"
-
       });
-
     }
- 
-    const rider = await Rider.findById(riderId);
 
-    if (!rider) {
-
-      return res.status(404).json({ success: false, message: "Rider not found" });
-
-    }
- 
-    /* 4️⃣ CREDIT RIDER EARNING */
-
-    if (!order.riderEarning.credited) {
-
-      const earning = Number(order.riderEarning.totalEarning || 0);
-
-      rider.wallet.balance += earning;
-
-      rider.wallet.totalEarned += earning;
- 
-      order.riderEarning.credited = true;
-
-      order.riderEarning.creditedAt = new Date();
-
-      order.settlement.riderEarningAdded = true;
-
-    }
- 
-    /* 5️⃣ HANDLE COD */
-
+    let earning = 0;
     let codCollected = 0;
 
-    if (order.payment.mode === "COD") {
+    /* =========================
+       TRANSACTION
+    ========================= */
+    await prisma.$transaction(async (tx) => {
 
-      codCollected = Number(order.pricing.totalAmount || 0);
- 
-      if (rider.cashInHand.balance + codCollected > rider.cashInHand.limit) {
+      const rider = await tx.rider.findUnique({
+        where: { id: riderId }
+      });
 
-        rider.deliveryStatus.isActive = false;
+      if (!rider) {
+        throw new Error("Rider not found");
+      }
 
-        rider.deliveryStatus.inactiveReason = "COD_LIMIT_EXCEEDED";
+      /* 4️⃣ CREDIT RIDER EARNING */
+      if (!order.riderEarningCredited) {
 
-        await rider.save();
- 
-        return res.status(400).json({
+        earning = Number(order.riderEarningTotal || 0);
 
-          success: false,
-
-          message: "COD limit exceeded"
-
+        await tx.rider.update({
+          where: { id: riderId },
+          data: {
+            walletBalance: { increment: earning },
+            walletTotalEarned: { increment: earning }
+          }
         });
 
+        await tx.order.update({
+          where: { id: order.id },
+          data: {
+            riderEarningCredited: true,
+            riderEarningCreditedAt: new Date(),
+            riderEarningAdded: true
+          }
+        });
       }
- 
-      rider.cashInHand.balance += codCollected;
 
-      rider.cashInHand.lastUpdatedAt = new Date();
+      /* 5️⃣ HANDLE COD */
+      if (order.paymentMode === "COD") {
 
-    }
- 
-    /* 6️⃣ UPDATE ORDER */
+        codCollected = Number(order.totalAmount || 0);
 
-    order.orderStatus = "DELIVERED";
+        if (rider.cashInHandBalance + codCollected > rider.cashInHandLimit) {
 
-    order.payment.status = "SUCCESS";
+          await tx.rider.update({
+            where: { id: riderId },
+            data: {
+              deliveryActive: false,
+              inactiveReason: "COD_LIMIT_EXCEEDED"
+            }
+          });
 
-    order.tracking.deliveredAt = new Date();
- 
-    /* 7️⃣ RESET RIDER STATE */
-
-    rider.orderState = "READY";
-
-    rider.currentOrderId = null;
- 
-    await Promise.all([order.save(), rider.save()]);
- 
-    /* ===============================
-
-       8️⃣ INCENTIVE PROGRESS UPDATE
-
-    =============================== */
-
-    /* ===============================
-   8️⃣ INCENTIVE PROGRESS UPDATE
-=============================== */
-
-const incentives = await Incentive.find({ status: "ACTIVE" });
-
-const dateKey = getDateKey();
-const weekKey = getWeekKey();
-const peak = isPeakSlot(order.tracking.deliveredAt);
-
-for (const incentive of incentives) {
-
-  /* 🔥 PEAK SLOT INCENTIVE */
-  if (incentive.incentiveType === "PEAK_SLOT" && peak) {
-
-    const progress = await RiderIncentiveProgress.findOneAndUpdate(
-      { riderId, incentiveId: incentive._id, date: dateKey },
-
-      {
-        $inc: { totalOrders: 1, peakOrders: 1 },
-
-        $setOnInsert: {
-          incentiveType: incentive.incentiveType
+          throw new Error("COD limit exceeded");
         }
-      },
 
-      { upsert: true, new: true, runValidators: true }
-    );
+        await tx.rider.update({
+          where: { id: riderId },
+          data: {
+            cashInHandBalance: { increment: codCollected },
+            cashInHandUpdatedAt: new Date()
+          }
+        });
+      }
 
-    const peakSlabs = incentive.slabs?.[0]?.peak || [];
-
-    const slab = peakSlabs.find(s =>
-      progress.peakOrders >= s.minOrders &&
-      progress.peakOrders <= s.maxOrders
-    );
-
-    if (slab) {
-      progress.eligible = true;
-      progress.achievedReward = slab.rewardAmount;
-      await progress.save();
-    }
-  }
-
-  /* 🔥 DAILY TARGET INCENTIVE */
-  if (incentive.incentiveType === "DAILY_TARGET") {
-
-    const progress = await RiderIncentiveProgress.findOneAndUpdate(
-      { riderId, incentiveId: incentive._id, date: dateKey },
-
-      {
-        $inc: {
-          totalOrders: 1,
-          peakOrders: peak ? 1 : 0,
-          normalOrders: peak ? 0 : 1
-        },
-
-        $setOnInsert: {
-          incentiveType: incentive.incentiveType
+      /* 6️⃣ UPDATE ORDER */
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          orderStatus: "DELIVERED",
+          paymentStatus: "SUCCESS",
+          deliveredAt: new Date()
         }
-      },
+      });
 
-      { upsert: true, new: true, runValidators: true }
-    );
-
-    if (
-      progress.peakOrders >= incentive.slotRules.minPeakSlots &&
-      progress.normalOrders >= incentive.slotRules.minNormalSlots
-    ) {
-      progress.eligible = true;
-      await progress.save();
-    }
-  }
-
-  /* 🔥 WEEKLY TARGET INCENTIVE */
-  if (incentive.incentiveType === "WEEKLY_TARGET") {
-
-    const progress = await RiderIncentiveProgress.findOneAndUpdate(
-      { riderId, incentiveId: incentive._id, week: weekKey },
-
-      {
-        $setOnInsert: {
-          incentiveType: incentive.incentiveType
+      /* 7️⃣ RESET RIDER STATE */
+      await tx.rider.update({
+        where: { id: riderId },
+        data: {
+          orderState: "READY",
+          currentOrderId: null
         }
-      },
+      });
 
-      { upsert: true, new: true, runValidators: true }
-    );
+      /* ===============================
+         8️⃣ INCENTIVE UPDATE
+      =============================== */
 
-    if (!progress.dailyOrders) {
-      progress.dailyOrders = new Map();
-    }
+      const incentives = await tx.incentive.findMany({
+        where: { status: "ACTIVE" }
+      });
 
-    progress.eligibleDays = progress.eligibleDays || 0;
+      const dateKey = getDateKey();
+      const weekKey = getWeekKey();
+      const peak = isPeakSlot(new Date());
 
-    const todayCount = progress.dailyOrders.get(dateKey) || 0;
-    progress.dailyOrders.set(dateKey, todayCount + 1);
+      for (const incentive of incentives) {
 
-    if (todayCount + 1 >= incentive.weeklyRules.minOrdersPerDay) {
-      progress.eligibleDays += 1;
-    }
+        /* PEAK SLOT */
+        if (incentive.incentiveType === "PEAK_SLOT" && peak) {
 
-    if (progress.eligibleDays >= incentive.weeklyRules.totalDaysInWeek) {
-      progress.eligible = true;
-      progress.achievedReward = incentive.maxRewardPerWeek;
-    }
+          const progress = await tx.riderIncentiveProgress.upsert({
+            where: {
+              riderId_incentiveId_date: {
+                riderId,
+                incentiveId: incentive.id,
+                date: dateKey
+              }
+            },
+            update: {
+              totalOrders: { increment: 1 },
+              peakOrders: { increment: 1 }
+            },
+            create: {
+              riderId,
+              incentiveId: incentive.id,
+              date: dateKey,
+              incentiveType: incentive.incentiveType,
+              totalOrders: 1,
+              peakOrders: 1
+            }
+          });
 
-    await progress.save();
-  }
-}
- 
-    /* 9️⃣ RESPONSE */
+          const peakSlabs = incentive.slabs?.[0]?.peak || [];
+
+          const slab = peakSlabs.find(s =>
+            progress.peakOrders >= s.minOrders &&
+            progress.peakOrders <= s.maxOrders
+          );
+
+          if (slab) {
+            await tx.riderIncentiveProgress.update({
+              where: { id: progress.id },
+              data: {
+                eligible: true,
+                achievedReward: slab.rewardAmount
+              }
+            });
+          }
+        }
+
+        /* DAILY TARGET */
+        if (incentive.incentiveType === "DAILY_TARGET") {
+
+          const progress = await tx.riderIncentiveProgress.upsert({
+            where: {
+              riderId_incentiveId_date: {
+                riderId,
+                incentiveId: incentive.id,
+                date: dateKey
+              }
+            },
+            update: {
+              totalOrders: { increment: 1 },
+              peakOrders: { increment: peak ? 1 : 0 },
+              normalOrders: { increment: peak ? 0 : 1 }
+            },
+            create: {
+              riderId,
+              incentiveId: incentive.id,
+              date: dateKey,
+              incentiveType: incentive.incentiveType,
+              totalOrders: 1,
+              peakOrders: peak ? 1 : 0,
+              normalOrders: peak ? 0 : 1
+            }
+          });
+
+          if (
+            progress.peakOrders >= incentive.minPeakSlots &&
+            progress.normalOrders >= incentive.minNormalSlots
+          ) {
+            await tx.riderIncentiveProgress.update({
+              where: { id: progress.id },
+              data: { eligible: true }
+            });
+          }
+        }
+
+        /* WEEKLY TARGET */
+        if (incentive.incentiveType === "WEEKLY_TARGET") {
+
+          const progress = await tx.riderIncentiveProgress.upsert({
+            where: {
+              riderId_incentiveId_week: {
+                riderId,
+                incentiveId: incentive.id,
+                week: weekKey
+              }
+            },
+            update: {},
+            create: {
+              riderId,
+              incentiveId: incentive.id,
+              week: weekKey,
+              incentiveType: incentive.incentiveType,
+              dailyOrders: {}
+            }
+          });
+
+          let dailyOrders = progress.dailyOrders || {};
+          const todayCount = dailyOrders[dateKey] || 0;
+          dailyOrders[dateKey] = todayCount + 1;
+
+          let eligibleDays = progress.eligibleDays || 0;
+
+          if (todayCount + 1 >= incentive.minOrdersPerDay) {
+            eligibleDays += 1;
+          }
+
+          let eligible = false;
+          let achievedReward = null;
+
+          if (eligibleDays >= incentive.totalDaysInWeek) {
+            eligible = true;
+            achievedReward = incentive.maxRewardPerWeek;
+          }
+
+          await tx.riderIncentiveProgress.update({
+            where: { id: progress.id },
+            data: {
+              dailyOrders,
+              eligibleDays,
+              eligible,
+              achievedReward
+            }
+          });
+        }
+      }
+    });
 
     return res.status(200).json({
-
       success: true,
-
       message: "Order delivered successfully",
-
-      orderId: order.orderId,
-
-      earningCredited: order.riderEarning.totalEarning,
-
+      orderId,
+      earningCredited: earning,
       codCollected
-
     });
- 
+
   } catch (err) {
 
     console.error("Deliver order error:", err);
 
     return res.status(500).json({
-
       success: false,
-
       message: err.message || "Failed to deliver order"
-
     });
-
   }
-
 }
 
 async function cancelOrder(req, res) {
