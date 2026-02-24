@@ -9,6 +9,11 @@ const { getLatLng } = require("../services/geocodeService");
 const Incentive = require("../models/IncentiveSchema");
 const RiderIncentiveProgress = require("../models/RiderIncentiveProgressSchema");
 const prisma=require('../config/prisma');
+<<<<<<< Updated upstream
+=======
+      
+
+>>>>>>> Stashed changes
 
 // 👉 Dummy transaction generator
 function generateTxn() {

@@ -57,7 +57,6 @@ exports.goOnline = async (req, res) => {
  
         update: {
           isActive: true,
-          inactiveReason: null,
           updatedAt: now
         },
  
@@ -94,7 +93,7 @@ exports.goOffline = async (req, res) => {
   try {
     const riderId = req.rider.id;
     const { reason = "MANUAL_OFF" } = req.body || {};
- 
+
     const allowedReasons = [
       "MANUAL_OFF",
       "KYC_PENDING",
@@ -102,53 +101,65 @@ exports.goOffline = async (req, res) => {
       "OUT_OF_SERVICE_AREA",
       "COD_LIMIT_EXCEEDED"
     ];
- 
+
     if (!allowedReasons.includes(reason)) {
       return res.status(400).json({
         success: false,
         message: "Invalid inactive reason"
       });
     }
- 
-    // Fetch rider with status
+
+    // ------------------------
+    // FETCH RIDER WITH RELATIONS
+    // ------------------------
     const riderData = await prisma.rider.findUnique({
       where: { id: riderId },
       include: {
-        status: true // prisma relation name
+        status: true,
+        deliveryStatus: true
       }
     });
- 
+
     if (!riderData) {
       return res.status(404).json({
         success: false,
         message: "Rider not found"
       });
     }
- 
-    // ✅ Your logic — safely guarded
-    const loginTime =
-      riderData.status && riderData.status.lastLoginAt
-        ? riderData.status.lastLoginAt
-        : null;
- 
+
     const logoutTime = new Date();
- 
+
+    // ------------------------
+    // SESSION CALCULATION
+    // ------------------------
+    const loginTime = riderData.status?.lastLoginAt;
+
     let sessionMinutes = 0;
- 
+
     if (loginTime) {
-      const diffMs = logoutTime - loginTime;
+      const diffMs = logoutTime - new Date(loginTime);
       sessionMinutes = Math.floor(diffMs / 60000);
     }
- 
-    const previousMinutes =
-      riderData.status?.totalOnlineMinutesToday || 0;
- 
+
     const updatedTotalMinutes =
-      previousMinutes + sessionMinutes;
- 
-    // Transaction update
+      (riderData.status?.totalOnlineMinutesToday || 0) +
+      sessionMinutes;
+
+    // ------------------------
+    // ATOMIC UPDATE
+    // ------------------------
     const result = await prisma.$transaction(async (tx) => {
- 
+
+      // Update main Rider table
+      await tx.rider.update({
+        where: { id: riderId },
+        data: {
+          isOnline: false,
+          isPartnerActive: false
+        }
+      });
+
+      // Update RiderStatus (NO isOnline here ❗)
       const updatedStatus = await tx.riderStatus.upsert({
         where: { riderId },
         update: {
@@ -161,46 +172,50 @@ exports.goOffline = async (req, res) => {
           totalOnlineMinutesToday: updatedTotalMinutes
         }
       });
- 
-      await tx.riderDeliveryStatus.upsert({
+
+      // Update DeliveryStatus
+      const updatedDelivery = await tx.riderDeliveryStatus.upsert({
         where: { riderId },
         update: {
           isActive: false,
           inactiveReason: reason,
-          updatedAt: logoutTime
+          updatedAt: new Date()
         },
         create: {
           riderId,
           isActive: false,
           inactiveReason: reason,
-          updatedAt: logoutTime
+          updatedAt: new Date()
         }
       });
- 
-      await tx.rider.update({
-        where: { id: riderId },
-        data: {
-          isOnline: false,
-          isPartnerActive: false
-        }
-      });
- 
-      return updatedStatus;
+
+      return { updatedStatus, updatedDelivery };
     });
- 
-    return res.status(200).json({
+
+    // ------------------------
+    // RESPONSE
+    // ------------------------
+    res.status(200).json({
       success: true,
       message: "Rider is now OFFLINE",
-      riderStatus: result
+      riderStatus: {
+        lastLoginAt: result.updatedStatus.lastLoginAt,
+        lastLogoutAt: result.updatedStatus.lastLogoutAt,
+        totalOnlineMinutesToday:
+          result.updatedStatus.totalOnlineMinutesToday
+      },
+      deliveryStatus: {
+        isActive: result.updatedDelivery.isActive,
+        inactiveReason: result.updatedDelivery.inactiveReason
+      }
     });
- 
+
   } catch (error) {
     console.error("GO OFFLINE ERROR:", error);
- 
-    return res.status(500).json({
+
+    res.status(500).json({
       success: false,
       message: error.message
     });
   }
 };
- 

@@ -126,7 +126,6 @@ exports.getDailySlotsWithStatus = async (req, res) => {
       });
     }
 
-    // Validate date format (YYYY-MM-DD)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return res.status(400).json({
         success: false,
@@ -135,11 +134,11 @@ exports.getDailySlotsWithStatus = async (req, res) => {
     }
 
     /* -----------------------------
-       Fetch slots (STRING DATE MATCH)
+       Fetch slots
     ----------------------------- */
     const slots = await prisma.slot.findMany({
       where: {
-        date: date, // string comparison
+        date: date,
         weeklySlot: {
           city,
           zone
@@ -172,9 +171,11 @@ exports.getDailySlotsWithStatus = async (req, res) => {
       const booking = slot.slotBookings?.[0];
 
       return {
-        slotId: slot.id,
+        slotId: slot.slotId,  // ✅ corrected
         startTime: slot.startTime,
         endTime: slot.endTime,
+
+        isAvailable: slot.isAvailable, // ✅ ADDED FROM SCHEMA
 
         isBooked: booking?.status === "BOOKED",
         isCancelled: booking?.status === "CANCELLED_BY_RIDER",
@@ -202,8 +203,11 @@ exports.getDailySlotsWithStatus = async (req, res) => {
     if (status === "available") {
       enriched = enriched.filter(
         s =>
-          s.bookingStatus === "NOT_BOOKED" ||
-          s.bookingStatus === "CANCELLED_BY_RIDER"
+          s.isAvailable &&   // ✅ only available slots
+          (
+            s.bookingStatus === "NOT_BOOKED" ||
+            s.bookingStatus === "CANCELLED_BY_RIDER"
+          )
       );
     }
 
