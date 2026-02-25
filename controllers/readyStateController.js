@@ -48,7 +48,7 @@ const Rider = require("../models/RiderModel");
 exports.markOrderStateReady = async (req, res) => {
   try {
     const riderId = req.rider.id; // prisma uses id not _id
-
+     console.log("ready state api : " ,riderId)
     const updatedRider = await prisma.rider.updateMany({
       where: {
         id: riderId,
@@ -59,7 +59,7 @@ exports.markOrderStateReady = async (req, res) => {
         currentOrderId: null
       }
     });
-
+console.log("ready state api count :" ,updatedRider)
     if (updatedRider.count === 0) {
       return res.status(200).json({
         success: true,
