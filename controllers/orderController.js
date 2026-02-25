@@ -1165,28 +1165,30 @@ async function deliverOrder(req, res) {
 async function cancelOrder(req, res) {
   try {
     const { orderId } = req.params;
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
     const { reasonCode, reasonText } = req.body;
- 
+
     if (!riderId) {
       return res.status(400).json({
         success: false,
         message: "riderId is required"
       });
     }
- 
+
     /* ===============================
        1️⃣ FETCH ORDER
     =============================== */
-    const order = await Order.findOne({ orderId });
- 
+    const order = await prisma.order.findUnique({
+      where: { orderId }
+    });
+
     if (!order) {
       return res.status(404).json({
         success: false,
         message: "Order not found"
       });
     }
- 
+
     /* ===============================
        2️⃣ VALIDATE STATE
     =============================== */
@@ -1196,75 +1198,86 @@ async function cancelOrder(req, res) {
         message: "Order cannot be cancelled"
       });
     }
- 
+
     if (!order.riderId) {
       return res.status(400).json({
         success: false,
         message: "Order has no assigned rider"
       });
     }
- 
+
     /* ===============================
        3️⃣ VALIDATE RIDER ASSIGNMENT
     =============================== */
-    const assignedRiderId =
-      order.riderId._id
-        ? order.riderId._id.toString()
-        : order.riderId.toString();
- 
-    if (assignedRiderId !== riderId.toString()) {
+
+
+    if (order.riderId !== riderId) {
       return res.status(403).json({
         success: false,
         message: "You are not assigned to this order"
       });
     }
- 
-    /* ===============================
-       4️⃣ UPDATE ORDER
-    =============================== */
-    order.orderStatus = "CANCELLED";
-    order.cancelIssue = {
+
+   const result = await prisma.$transaction(async (tx) => {
+  const updatedOrder = await tx.order.update({
+    where: { orderId },
+    data: { orderStatus: "CANCELLED" }
+  });
+
+  await tx.rider.updateMany({
+    where: {
+      id: riderId,
+      currentOrderId: order.id
+    },
+    data: {
+      orderState: "READY",
+      currentOrderId: null
+    }
+  });
+
+  await tx.orderCancelIssue.upsert({
+    where: { orderId: order.id }, // ✅ FIX
+    update: {
       cancelledBy: "RIDER",
       reasonCode,
-      reasonText,
-      cancelledAt: new Date()
-    };
- 
-    /* ===============================
-       5️⃣ RESET RIDER STATE → READY
-    =============================== */
-    await Rider.findOneAndUpdate(
-      { _id: riderId, currentOrderId: order._id },
-      {
-        $set: {
-          orderState: "READY",
-          currentOrderId: null
-        }
-      }
-    );
- 
-    await order.save();
- 
+      reasonText
+    },
+    create: {
+      orderId: order.id, // ✅ FIX
+      cancelledBy: "RIDER",
+      reasonCode,
+      reasonText
+    }
+  });
+
+  return updatedOrder;
+});
+
+
     /* ===============================
        6️⃣ WS NOTIFICATION
     =============================== */
-    notifyRider(riderId.toString(), {
+    notifyRider(riderId, {
       type: "ORDER_CANCELLED",
-      orderId: order.orderId,
+      orderId,
       reason: reasonCode
     });
- 
+
     /* ===============================
        7️⃣ RESPONSE
     =============================== */
     return res.status(200).json({
       success: true,
       message: "Order cancelled successfully",
-      orderStatus:order.orderStatus,
+      orderStatus: result.orderStatus,
 
-      cancelIssue: order.cancelIssue
+      cancelIssue: {
+        cancelledBy: "RIDER",
+        reasonCode,
+        reasonText
+      }
     });
- 
+
   } catch (err) {
     console.error("Cancel order error:", err);
     return res.status(500).json({
@@ -1273,6 +1286,8 @@ async function cancelOrder(req, res) {
     });
   }
 }
+
+
 
 
 
