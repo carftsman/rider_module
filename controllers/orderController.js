@@ -420,6 +420,10 @@ async function confirmOrder(req, res) {
     //////////////////////////////////////////////////////
 
     riders.forEach(rider => {
+    console.log(
+       "Riders getting popup:",
+       riders.map(r => r.id.toString())
+     );
       notifyRider(rider.id, {
         type: "ORDER_POPUP",
         orderId: order.orderId,
