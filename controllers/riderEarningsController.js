@@ -6,7 +6,6 @@ const Order = require("../models/OrderSchema");
 const prisma=require('../config/prisma');
 
 const { getISOWeekRange , getCurrentISOWeek} = require("../helpers/getWeekNumber");
-const prisma=require('../config/prisma');
 //1 Today / Week / Month cards
 exports.getEarningsSummary = async (req, res) => {
   try {
