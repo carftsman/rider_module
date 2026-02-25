@@ -2,6 +2,9 @@
 const RiderDailyEarnings = require("../models/RiderDailyEarnings");
 const RiderOrderEarnings = require("../models/RiderOrderEarnings");
 const Order = require("../models/OrderSchema");
+
+const prisma=require('../config/prisma');
+
 const { getISOWeekRange , getCurrentISOWeek} = require("../helpers/getWeekNumber");
 const prisma=require('../config/prisma');
 //1 Today / Week / Month cards
@@ -413,7 +416,8 @@ exports.getDailyEarnings = async (req, res) => {
 exports.new_getDailyEarnings = async (req, res) => {
   try {
     console.log("Hitted new daily earnings controller");
-    const riderId = req.rider._id;
+
+    const riderId = req.rider.id; // Prisma uses id (not _id)
 
     let year, month, day;
 
@@ -422,11 +426,13 @@ exports.new_getDailyEarnings = async (req, res) => {
     // -----------------------------
     if (req.query.date) {
       const parts = req.query.date.split("-").map(Number);
+
       if (parts.length !== 3) {
         return res.status(400).json({
           message: "Invalid date format. Use YYYY-MM-DD"
         });
       }
+
       [year, month, day] = parts;
     } else {
       const today = new Date();
@@ -446,22 +452,35 @@ exports.new_getDailyEarnings = async (req, res) => {
     // -----------------------------
     // FETCH ORDERS (DELIVERED ONLY)
     // -----------------------------
-    const orders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: startOfDay, $lte: endOfDay }
-    }).sort({ updatedAt: -1 });
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId: riderId,
+        orderStatus: "DELIVERED",
+        updatedAt: {
+          gte: startOfDay,
+          lte: endOfDay
+        }
+      },
+      include: {
+        OrderRiderEarning: true
+      },
+      orderBy: {
+        updatedAt: "desc"
+      }
+    });
 
     let totalEarnings = 0;
     const items = [];
 
     orders.forEach(order => {
-      const earning = order.riderEarning || {};
-      const amount = earning.totalEarning || 0;
+      const earning = order.OrderRiderEarning;
+
+      const amount = earning?.totalEarning || 0;
+      const surgePay = earning?.surgePay || 0;
 
       totalEarnings += amount;
 
-      // Delivery row
+      // DELIVERY ENTRY
       items.push({
         type: "DELIVERY",
         orderId: order.orderId,
@@ -469,26 +488,24 @@ exports.new_getDailyEarnings = async (req, res) => {
         time: order.updatedAt
       });
 
-      // Bonus row (if any incentive/peak)
-      if (earning.surgePay && earning.surgePay > 0) {
+      // BONUS ENTRY
+      if (surgePay > 0) {
         items.push({
           type: "BONUS",
           title: "Peak Hour Bonus",
-          amount: earning.surgePay,
+          amount: surgePay,
           time: order.updatedAt
         });
       }
     });
 
-    // -----------------------------
-    // RESPONSE
-    // -----------------------------
     const responseDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
     res.json({
       date: responseDate,
       totalEarnings,
-      items
+      items,
+      count:items.length
     });
 
   } catch (err) {
