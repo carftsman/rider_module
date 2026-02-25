@@ -182,7 +182,7 @@ model RiderCashInHand {
   id            String    @id @default(uuid())
   riderId       String    @unique
   balance       Float     @default(0)
-  limit         Float     @default(2500)
+  limit         Float     @default(250000)
   lastUpdatedAt DateTime?
   rider         Rider     @relation(fields: [riderId], references: [id], onDelete: Cascade)
 }
