@@ -492,41 +492,16 @@ exports.new_getDailyEarnings = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Daily earnings error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
+  console.error("Delivery earnings error:", err);
+  return res.status(500).json({
+    message: "Internal server error",
+    error: err.message   
+  });
+}
 };
 
 
 
-// 4
-
-// exports.getDeliveryEarnings = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     const { orderId } = req.params;
-
-//     const earning = await Order.findOne({ riderId, orderId });
-//     // const dummy = await Order.findOne({ riderId, orderId });
-//     console.log("dummy data:", earning); // Debugging line
-
-//     if (!earning) {
-//       return res.status(404).json({ message: "Not found" });
-//     }
-
-//     res.json({
-//     //   orderId,
-//       store: earning?.pickupAddress?.name || "Unknown Store",
-//       totalEarnings: earning?.earnings?.totalAmount || 0,
-//       breakup: earning?.earnings || {},
-//       status: "COMPLETED",
-//       time: earning?.completedAt || null
-//     });
-
-//   } catch (err) {
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
 
 exports.getDeliveryEarnings = async (req, res) => {
   try {
@@ -570,17 +545,25 @@ res.json({
 
 exports.new_getDeliveryEarnings = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
     const { orderId } = req.params;
-    console.log("Fetching earnings for Order ID:", orderId);
-    console.log("Rider ID:", riderId);
-    const order = await Order.findOne({ riderId, orderId });
-     console.log(order);
+    // console.log("Fetching earnings for Order ID:", orderId);
+    // console.log("Rider ID:", riderId);
+const order = await prisma.order.findFirst({
+  where: {
+    riderId: riderId,
+    orderId: orderId
+  },
+  include: {
+    OrderRiderEarning: true
+  }
+});     
+// console.log(order);
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    const riderEarning = order.riderEarning || {};
+    const riderEarning = order.OrderRiderEarning || {};
 
     res.json({
       orderId: order.orderId,
@@ -609,34 +592,6 @@ exports.new_getDeliveryEarnings = async (req, res) => {
 
 
 
-// 5
-// exports.getWeeklyEarnings = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-
-//     const start = new Date();
-//     start.setDate(start.getDate() - start.getDay());
-//     start.setHours(0,0,0,0);
-
-//     const data = await RiderDailyEarnings.find({
-//       riderId,
-//       date: { $gte: start }
-//     }).sort({ date: -1 });
-//     console.log("Weekly earnings data:", data); // Debugging line
-//     res.json({
-//       weekRange: "Current Week",
-//       total: data.reduce((s, d) => s + d.totalEarnings, 0),
-//       days: data.map(d => ({
-//         day: d.date.toDateString(),
-//         orders: d.ordersCount,
-//         amount: d.totalEarnings
-//       }))
-//     });
-
-//   } catch (err) {
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
 
 exports.getWeeklyEarnings = async (req, res) => {
   try {

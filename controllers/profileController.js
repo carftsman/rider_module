@@ -1261,18 +1261,7 @@ exports.getMyAssets = async (req, res) => {
       };
     });
 
-    // return res.status(200).json({
-    //   success: true,
-    //   data: {
-    //     totalAssets,
-    //     badConditionCount,
-    //     canRaiseRequest: badConditionCount > 0,
-    //     assets: formattedAssets,
-
-
-
-    //   },
-    // });
+    
 
 
     return res.status(200).json({
