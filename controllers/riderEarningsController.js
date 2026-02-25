@@ -3,6 +3,7 @@ const RiderDailyEarnings = require("../models/RiderDailyEarnings");
 const RiderOrderEarnings = require("../models/RiderOrderEarnings");
 const Order = require("../models/OrderSchema");
 const { getISOWeekRange , getCurrentISOWeek} = require("../helpers/getWeekNumber");
+const prisma=require('../config/prisma');
 //1 Today / Week / Month cards
 exports.getEarningsSummary = async (req, res) => {
   try {
@@ -66,109 +67,9 @@ exports.getEarningsSummary = async (req, res) => {
 };
 
 
-// exports.new_getEarningsSummary = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-
-//     // -----------------------------
-//     // DATE RANGES (LOCAL DAY)
-//     // -----------------------------
-//     const now = new Date();
-
-//     const todayStart = new Date(now);
-//     todayStart.setHours(0, 0, 0, 0);
-
-//     const todayEnd = new Date(now);
-//     todayEnd.setHours(23, 59, 59, 999);
-
-//     // ISO week (Mon → Sun)
-//     const current = getCurrentISOWeek();
-//     const { start: weekStart, end: weekEnd } =
-//       getISOWeekRange(current.week, current.year);
-
-//     // Month start
-//     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-//     // -----------------------------
-//     // FETCH ALL REQUIRED ORDERS
-//     // -----------------------------
-//     const orders = await Order.find({
-//       riderId,
-//       orderStatus: "DELIVERED",
-//       updatedAt: { $gte: monthStart, $lte: todayEnd }
-//     });
-
-//     // -----------------------------
-//     // CALCULATIONS
-//     // -----------------------------
-//     let todayOrders = 0;
-//     let todayTotal = 0;
-
-//     let weekTotal = 0;
-
-//     let monthBase = 0;
-//     let monthIncentives = 0;
-//     let monthTips = 0;
-//     let monthTotal = 0;
-
-//     orders.forEach(order => {
-//       const deliveredAt = new Date(order.updatedAt);
-//       const earning = order.riderEarning || {};
-
-//       const totalEarning = earning.totalEarning || 0;
-//       const basePay = earning.basePay || 0;
-//       const incentive = earning.surgePay || 0;
-//       const tips = earning.tips || 0;
-
-//       // ---- TODAY ----
-//       if (deliveredAt >= todayStart && deliveredAt <= todayEnd) {
-//         todayOrders += 1;
-//         todayTotal += totalEarning;
-//       }
-
-//       // ---- THIS WEEK ----
-//       if (deliveredAt >= weekStart && deliveredAt <= weekEnd) {
-//         weekTotal += totalEarning;
-//       }
-
-//       // ---- THIS MONTH ----
-//       monthBase += basePay;
-//       monthIncentives += incentive;
-//       monthTips += tips;
-//       monthTotal += totalEarning;
-//     });
-
-//     // -----------------------------
-//     // RESPONSE (SAME SHAPE)
-//     // -----------------------------
-//     res.json({
-//       today: {
-//         orders: todayOrders,
-//         baseEarnings: 0,            // kept for compatibility
-//         incentives: 0,
-//         tips: 0,
-//         total: todayTotal
-//       },
-//       week: {
-//         total: weekTotal
-//       },
-//       month: {
-//         baseEarnings: monthBase,
-//         incentives: monthIncentives,
-//         tips: monthTips,
-//         total: monthTotal
-//       }
-//     });
-
-//   } catch (err) {
-//     console.error("Earnings summary error:", err);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-
 exports.new_getEarningsSummary = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
 
     const now = new Date();
 
@@ -184,21 +85,33 @@ exports.new_getEarningsSummary = async (req, res) => {
 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const orders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: monthStart, $lte: todayEnd }
-    });
+    const orders = await prisma.order.findMany({
+      where:{
+        riderId: riderId,
+        orderStatus: "DELIVERED",
+        updatedAt: {
+          gte: monthStart,
+          lte: todayEnd
+        }
+      },
+    include: {
+      OrderRiderEarning: true
+    }
+  });
 
     let todayOrders = 0;
     let todayTotal = 0;
     let todayBase = 0;
     let todayIncentives = 0;
     let todayTips = 0;
-
+    
+    let weekOrders = 0;
+    let weekBase = 0;
+    let weekIncentives = 0;
+    let weekTips = 0;
     let weekTotal = 0;
 
-    let monthOrders = 0;          // ✅ ADDED
+    let monthOrders = 0;          
     let monthBase = 0;
     let monthIncentives = 0;
     let monthTips = 0;
@@ -206,14 +119,14 @@ exports.new_getEarningsSummary = async (req, res) => {
 
     orders.forEach(order => {
       const deliveredAt = new Date(order.updatedAt);
-      const earning = order.riderEarning || {};
+      const earning = order.OrderRiderEarning || {};
 
       const totalEarning = earning.totalEarning || 0;
       const basePay = earning.basePay || 0;
       const incentive = earning.surgePay || 0;
       const tips = earning.tips || 0;
-
-      // ---- TODAY ----
+      
+      //Today
       if (deliveredAt >= todayStart && deliveredAt <= todayEnd) {
         todayOrders += 1;
         todayTotal += totalEarning;
@@ -224,11 +137,15 @@ exports.new_getEarningsSummary = async (req, res) => {
 
       // ---- THIS WEEK ----
       if (deliveredAt >= weekStart && deliveredAt <= weekEnd) {
+        weekOrders += 1;
+        weekBase += basePay;
+        weekIncentives += incentive;
+        weekTips += tips;
         weekTotal += totalEarning;
       }
 
-      // ---- THIS MONTH ----
-      monthOrders += 1;           // ✅ ADDED
+      //MONTH 
+      monthOrders += 1;           
       monthBase += basePay;
       monthIncentives += incentive;
       monthTips += tips;
@@ -244,10 +161,14 @@ exports.new_getEarningsSummary = async (req, res) => {
         total: todayTotal
       },
       week: {
+        orders: weekOrders,
+        baseEarnings: weekBase,
+        incentives: weekIncentives,
+        tips: weekTips,
         total: weekTotal
       },
       month: {
-        orders: monthOrders,      // ✅ ADDED
+        orders: monthOrders,      
         baseEarnings: monthBase,
         incentives: monthIncentives,
         tips: monthTips,

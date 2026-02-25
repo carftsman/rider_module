@@ -654,9 +654,9 @@ async function getOrderDetails(req, res) {
       });
     }
 
-    // 🔥 Shape response EXACTLY like old Mongo response
+    
     const formattedOrder = {
-      _id: order.id, // match old _id style
+      _id: order.id, 
       orderId: order.orderId,
       vendorShopName: order.vendorShopName,
       orderStatus: order.orderStatus,
