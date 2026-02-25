@@ -222,17 +222,25 @@ exports.getWeeklyChart = async (req, res) => {
 
 exports.new_getWeeklyChart = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id; // ✅ Prisma id
 
     // ---- CURRENT ISO WEEK ----
     const current = getCurrentISOWeek();
     const { start, end } = getISOWeekRange(current.week, current.year);
 
-    // ---- FETCH DELIVERED ORDERS FOR WEEK ----
-    const orders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: start, $lte: end }
+    // ---- FETCH DELIVERED ORDERS ----
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId,
+        orderStatus: "DELIVERED",
+        updatedAt: {
+          gte: start,
+          lte: end
+        }
+      },
+      include: {
+        OrderRiderEarning: true // 👈 important
+      }
     });
 
     // ---- GROUP BY DAY ----
@@ -249,7 +257,7 @@ exports.new_getWeeklyChart = async (req, res) => {
       }
 
       dayMap[key].orders += 1;
-      dayMap[key].amount += order.riderEarning?.totalEarning || 0;
+      dayMap[key].amount += order.OrderRiderEarning?.totalEarning || 0;
     });
 
     // ---- BUILD WEEK (MON → SUN) ----
@@ -276,7 +284,6 @@ exports.new_getWeeklyChart = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
-
 
 
 // 3 Daily earnings list
@@ -831,7 +838,7 @@ function toISTDate(date) {
 
 exports.new_getWeeklyEarnings = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id || req.rider._id;
     let { week, year } = req.query;
 
     if (!week || !year) {
@@ -842,11 +849,21 @@ exports.new_getWeeklyEarnings = async (req, res) => {
 
     const { start, end } = getISOWeekRange(Number(week), Number(year));
 
-    const orders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: start, $lte: end }
-    }).sort({ updatedAt: -1 });
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId: String(riderId),
+        orderStatus: "DELIVERED",
+        updatedAt: { gte: start, lte: end }
+      },
+      select: {
+        orderId: true,
+        updatedAt: true,
+        OrderRiderEarning: {
+          select: { totalEarning: true }
+        }
+      },
+      orderBy: { updatedAt: "desc" }
+    });
 
     const ordersByDay = {};
 
@@ -862,7 +879,7 @@ exports.new_getWeeklyEarnings = async (req, res) => {
         };
       }
 
-      const earning = order.riderEarning?.totalEarning || 0;
+      const earning = order.OrderRiderEarning?.totalEarning || 0;
 
       ordersByDay[dayKey].ordersCount += 1;
       ordersByDay[dayKey].amount += earning;
@@ -904,14 +921,21 @@ exports.new_getWeeklyEarnings = async (req, res) => {
     const lastWeekEnd = new Date(end);
     lastWeekEnd.setDate(end.getDate() - 7);
 
-    const lastWeekOrders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: lastWeekStart, $lte: lastWeekEnd }
+    const lastWeekOrders = await prisma.order.findMany({
+      where: {
+        riderId: String(riderId),
+        orderStatus: "DELIVERED",
+        updatedAt: { gte: lastWeekStart, lte: lastWeekEnd }
+      },
+      select: {
+        OrderRiderEarning: {
+          select: { totalEarning: true }
+        }
+      }
     });
 
     const lastWeekTotal = lastWeekOrders.reduce(
-      (sum, o) => sum + (o.riderEarning?.totalEarning || 0),
+      (sum, o) => sum + (o.OrderRiderEarning?.totalEarning || 0),
       0
     );
 
@@ -931,7 +955,7 @@ exports.new_getWeeklyEarnings = async (req, res) => {
 
   } catch (err) {
     console.error("Weekly earnings error:", err);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: err.message });
   }
 };
 
