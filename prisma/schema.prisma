@@ -8,43 +8,44 @@ datasource db {
 }
 
 model Rider {
-  id                String               @id @default(uuid())
-  countryCode       String               @default("+91")
-  phoneNumber       String               @unique
-  phoneIsVerified   Boolean              @default(false)
-  otpCode           String?
-  otpExpiresAt      DateTime?
-  lastOtpVerifiedAt DateTime?
-  refreshToken      String?
-  deviceToken       String?
-  fcmToken          String?
-  onboardingStage   OnboardingStage      @default(PHONE_VERIFICATION)
-  isFullyRegistered Boolean              @default(false)
-  isOnline          Boolean              @default(false)
-  orderState        OrderState           @default(READY)
-  currentOrderId    String?
-  partnerId         String?              @unique
-  isPartnerActive   Boolean              @default(false)
-  createdAt         DateTime             @default(now())
-  updatedAt         DateTime             @updatedAt
-  Order             Order[]
-  bankDetails       RiderBankDetails?
-  cashInHand        RiderCashInHand?
-  deliveryStatus    RiderDeliveryStatus?
-  gps               RiderGps?
-  kitAddress        RiderKitAddress?
-  kyc               RiderKyc?
-  location          RiderLocation?
-  onboarding        RiderOnboarding?
-  permissions       RiderPermissions?
-  profile           RiderProfile?
-  selfie            RiderSelfie?
-  status            RiderStatus?
-  vehicle           RiderVehicle?
-  wallet            RiderWallet?
-  slotBookings      SlotBooking[]
-  slotRiders        SlotRider[]
-  rider_assets      rider_assets[]
+  id                 String               @id @default(uuid())
+  countryCode        String               @default("+91")
+  phoneNumber        String               @unique
+  phoneIsVerified    Boolean              @default(false)
+  otpCode            String?
+  otpExpiresAt       DateTime?
+  lastOtpVerifiedAt  DateTime?
+  refreshToken       String?
+  deviceToken        String?
+  fcmToken           String?
+  onboardingStage    OnboardingStage      @default(PHONE_VERIFICATION)
+  isFullyRegistered  Boolean              @default(false)
+  isOnline           Boolean              @default(false)
+  orderState         OrderState           @default(READY)
+  currentOrderId     String?
+  partnerId          String?              @unique
+  isPartnerActive    Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  Order              Order[]
+  bankDetails        RiderBankDetails?
+  cashInHand         RiderCashInHand?
+  deliveryStatus     RiderDeliveryStatus?
+  gps                RiderGps?
+  kitAddress         RiderKitAddress?
+  kyc                RiderKyc?
+  location           RiderLocation?
+  onboarding         RiderOnboarding?
+  permissions        RiderPermissions?
+  profile            RiderProfile?
+  selfie             RiderSelfie?
+  status             RiderStatus?
+  vehicle            RiderVehicle?
+  wallet             RiderWallet?
+  slotBookings       SlotBooking[]
+  slotRiders         SlotRider[]
+  rider_assets       rider_assets[]
+  orderRiderEarnings OrderRiderEarning[]
 
   @@index([phoneNumber])
   @@index([isOnline])
@@ -557,40 +558,35 @@ model OrderDeliveryAddress {
 //////////////////// RIDER EARNING ////////////////////
 
 model OrderRiderEarning {
+  id String @id @default(uuid())
 
-  id           String    @id @default(uuid())
- 
-  orderId      String    @unique
+  orderId String @unique
 
-  riderId      String
- 
-  basePay      Float     @default(0)
+  riderId String?
 
-  distancePay  Float     @default(0)
+  basePay Float @default(0)
 
-  surgePay     Float     @default(0)
+  distancePay Float @default(0)
 
-  tips         Float     @default(0)
+  surgePay Float @default(0)
 
-  totalEarning Float     @default(0)
- 
-  credited     Boolean   @default(false)
+  tips Float @default(0)
 
-  creditedAt   DateTime? // NEW FIELD
- 
-  Order        Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  totalEarning Float @default(0)
 
-  Rider        Rider     @relation(fields: [riderId], references: [id], onDelete: Cascade)
- 
-  OrderSurges  OrderSurge[]
- 
+  credited Boolean @default(false)
+
+  creditedAt DateTime? // NEW FIELD
+
+  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  Rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  OrderSurges OrderSurge[]
+
   @@index([orderId])
-
   @@index([riderId])
-
 }
-
- 
 
 model OrderSurge {
   id             String         @id @default(uuid())
