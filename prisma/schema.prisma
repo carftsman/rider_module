@@ -557,21 +557,40 @@ model OrderDeliveryAddress {
 //////////////////// RIDER EARNING ////////////////////
 
 model OrderRiderEarning {
-  id           String  @id @default(uuid())
-  orderId      String  @unique
-  basePay      Float   @default(0)
-  distancePay  Float   @default(0)
-  surgePay     Float   @default(0)
-  tips         Float   @default(0)
-  totalEarning Float   @default(0)
-  credited     Boolean @default(false)
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id           String    @id @default(uuid())
+ 
+  orderId      String    @unique
 
-  OrderSurges OrderSurge[]
+  riderId      String
+ 
+  basePay      Float     @default(0)
 
+  distancePay  Float     @default(0)
+
+  surgePay     Float     @default(0)
+
+  tips         Float     @default(0)
+
+  totalEarning Float     @default(0)
+ 
+  credited     Boolean   @default(false)
+
+  creditedAt   DateTime? // NEW FIELD
+ 
+  Order        Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  Rider        Rider     @relation(fields: [riderId], references: [id], onDelete: Cascade)
+ 
+  OrderSurges  OrderSurge[]
+ 
   @@index([orderId])
+
+  @@index([riderId])
+
 }
+
+ 
 
 model OrderSurge {
   id             String         @id @default(uuid())
