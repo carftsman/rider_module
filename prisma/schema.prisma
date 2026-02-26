@@ -580,7 +580,7 @@ model OrderRiderEarning {
 
   Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
-  Rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  Rider Rider? @relation(fields: [riderId], references: [id], onDelete: Cascade)
 
   OrderSurges OrderSurge[]
 
