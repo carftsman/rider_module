@@ -156,98 +156,320 @@ exports.sendStaticMobileOtp = async (req, res) => {
 
 
 
+// exports.verifyStaticMobileOtp = async (req, res) => {
+//   try {
+//     let { phone, otp } = req.body;
+
+//     if (!phone || !otp) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Phone & OTP required",
+//       });
+//     }
+
+//     if (!phone.startsWith("+") && phone.length === 10) {
+//       phone = `+91${phone}`;
+//     }
+
+//     const phoneNumber = phone.replace("+91", "");
+
+//     const rider = await prisma.rider.findUnique({
+//       where: { phoneNumber },
+//     });
+
+//     if (!rider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Rider not found",
+//       });
+//     }
+
+//     if (otp !== STATIC_OTP) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Incorrect OTP",
+//       });
+//     }
+
+//     // Generate tokens
+//     const accessToken = jwt.sign(
+//       { riderId: rider.id, type: "access" },
+//       process.env.JWT_ACCESS_SECRET,
+//       { expiresIn: "30d" }
+//     );
+
+//     const refreshToken = jwt.sign(
+//       { riderId: rider.id, type: "refresh" },
+//       process.env.JWT_REFRESH_SECRET,
+//       { expiresIn: "30d" }
+//     );
+
+//     // Update rider
+//     await prisma.rider.update({
+//       where: { id: rider.id },
+//       data: {
+//         phoneIsVerified: true,
+//         onboardingStage:
+//           rider.onboardingStage === "PHONE_VERIFICATION"
+//             ? "APP_PERMISSIONS"
+//             : rider.onboardingStage,
+//         refreshToken,
+//         otpCode: STATIC_OTP,
+//         lastOtpVerifiedAt: new Date(),
+//         otpExpiresAt: null,
+//       },
+//     });
+
+//     await prisma.riderOnboarding.upsert({
+//       where: { riderId: rider.id },
+//       update: {
+//         phoneVerified: true,
+//       },
+//       create: {
+//         riderId: rider.id,
+//         phoneVerified: true,
+//       },
+//     });
+
+//     res.json({
+//       success: true,
+//       message: "Static OTP verified",
+//       nextStage: "APP_PERMISSIONS",
+//       accessToken,
+//       refreshToken,
+//     });
+//   } catch (err) {
+//     console.error("Static OTP Verify Error:", err);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//     });
+//   }
+// };
+
+
 exports.verifyStaticMobileOtp = async (req, res) => {
+
   try {
+
     let { phone, otp } = req.body;
-
+ 
     if (!phone || !otp) {
+
       return res.status(400).json({
+
         success: false,
+
         message: "Phone & OTP required",
-      });
-    }
 
+      });
+
+    }
+ 
     if (!phone.startsWith("+") && phone.length === 10) {
+
       phone = `+91${phone}`;
-    }
 
+    }
+ 
     const phoneNumber = phone.replace("+91", "");
-
+ 
     const rider = await prisma.rider.findUnique({
+
       where: { phoneNumber },
-    });
 
+    });
+ 
     if (!rider) {
+
       return res.status(404).json({
+
         success: false,
+
         message: "Rider not found",
-      });
-    }
 
+      });
+
+    }
+ 
     if (otp !== STATIC_OTP) {
+
       return res.status(400).json({
+
         success: false,
+
         message: "Incorrect OTP",
+
       });
+
     }
-
-    // Generate tokens
+ 
     const accessToken = jwt.sign(
+
       { riderId: rider.id, type: "access" },
+
       process.env.JWT_ACCESS_SECRET,
-      { expiresIn: "30d" }
-    );
 
+      { expiresIn: "30d" }
+
+    );
+ 
     const refreshToken = jwt.sign(
+
       { riderId: rider.id, type: "refresh" },
+
       process.env.JWT_REFRESH_SECRET,
+
       { expiresIn: "30d" }
+
     );
+ 
+    /* ===============================
 
-    // Update rider
-    await prisma.rider.update({
-      where: { id: rider.id },
-      data: {
-        phoneIsVerified: true,
-        onboardingStage:
-          rider.onboardingStage === "PHONE_VERIFICATION"
-            ? "APP_PERMISSIONS"
-            : rider.onboardingStage,
-        refreshToken,
-        otpCode: STATIC_OTP,
-        lastOtpVerifiedAt: new Date(),
-        otpExpiresAt: null,
-      },
-    });
+       1️⃣ SMALL TRANSACTION (CRITICAL)
 
-    await prisma.riderOnboarding.upsert({
-      where: { riderId: rider.id },
-      update: {
-        phoneVerified: true,
-      },
-      create: {
-        riderId: rider.id,
-        phoneVerified: true,
-      },
-    });
+    =============================== */
 
-    res.json({
+    await prisma.$transaction([
+
+      prisma.rider.update({
+
+        where: { id: rider.id },
+
+        data: {
+
+          phoneIsVerified: true,
+
+          onboardingStage:
+
+            rider.onboardingStage === "PHONE_VERIFICATION"
+
+              ? "APP_PERMISSIONS"
+
+              : rider.onboardingStage,
+
+          refreshToken,
+
+          otpCode: STATIC_OTP,
+
+          lastOtpVerifiedAt: new Date(),
+
+          otpExpiresAt: null,
+
+        },
+
+      }),
+ 
+      prisma.riderOnboarding.upsert({
+
+        where: { riderId: rider.id },
+
+        update: { phoneVerified: true },
+
+        create: {
+
+          riderId: rider.id,
+
+          phoneVerified: true,
+
+        },
+
+      }),
+
+    ]);
+ 
+    /* ===============================
+
+       2️⃣ DEFAULT TABLES (NO TX)
+
+    =============================== */
+
+    await Promise.all([
+
+      prisma.riderWallet.upsert({
+
+        where: { riderId: rider.id },
+
+        update: {},
+
+        create: { riderId: rider.id },
+
+      }),
+ 
+      prisma.riderCashInHand.upsert({
+
+        where: { riderId: rider.id },
+
+        update: {},
+
+        create: { riderId: rider.id },
+
+      }),
+ 
+      prisma.riderDeliveryStatus.upsert({
+
+        where: { riderId: rider.id },
+
+        update: {},
+
+        create: { riderId: rider.id },
+
+      }),
+ 
+      prisma.riderStatus.upsert({
+
+        where: { riderId: rider.id },
+
+        update: {},
+
+        create: { riderId: rider.id },
+
+      }),
+ 
+      prisma.riderPermissions.upsert({
+
+        where: { riderId: rider.id },
+
+        update: {},
+
+        create: { riderId: rider.id },
+
+      }),
+
+    ]);
+ 
+    return res.json({
+
       success: true,
+
       message: "Static OTP verified",
+
       nextStage: "APP_PERMISSIONS",
+
       accessToken,
+
       refreshToken,
+
     });
+ 
   } catch (err) {
+
     console.error("Static OTP Verify Error:", err);
-    res.status(500).json({
+
+    return res.status(500).json({
+
       success: false,
+
       message: "Server error",
+
     });
+
   }
+
 };
 
-
+ 
+ 
 
 
 exports.refreshAccessToken = async (req, res) => {
