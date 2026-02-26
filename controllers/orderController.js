@@ -1163,180 +1163,324 @@ const isPeakSlot = (date) => {
 // }
 
 async function deliverOrder(req, res) {
+
   try {
+
     const { orderId } = req.params;
+
     const riderId = req.rider?.id;
  
     if (!riderId) {
+
       return res.status(400).json({
+
         success: false,
+
         message: "riderId required",
+
       });
+
     }
  
     /* 1️⃣ Fetch order */
+
     const order = await prisma.order.findUnique({
+
       where: { orderId },
+
       include: {
+
         OrderRiderEarning: true,
+
         OrderPayment: true,
+
         OrderPricing: true,
-        OrderSettlement: true,
+
       },
+
     });
  
     if (!order) {
+
       return res.status(404).json({
+
         success: false,
+
         message: "Order not found",
+
       });
+
     }
  
-    /* 2️⃣ Validate */
+    /* 2️⃣ Validations */
+
     if (order.orderStatus !== "PICKED_UP") {
+
       return res.status(400).json({
+
         success: false,
+
         message: `Invalid status: ${order.orderStatus}`,
+
       });
+
     }
  
     if (order.riderId !== riderId) {
+
       return res.status(403).json({
+
         success: false,
+
         message: "Not assigned to this order",
+
       });
+
     }
  
     const earning = Number(order.OrderRiderEarning?.totalEarning || 0);
+
     let codCollected = 0;
+
     const creditedAt = new Date();
  
     /* 🚀 TRANSACTION */
+
     await prisma.$transaction(async (tx) => {
  
       /* 3️⃣ Ensure Wallet Exists */
+
       await tx.riderWallet.upsert({
+
         where: { riderId },
+
         update: {},
+
         create: { riderId },
+
       });
  
-      /* 4️⃣ Credit Rider Earning (IDEMPOTENT) */
+      /* 4️⃣ Credit Rider Earning (SAFE & IDEMPOTENT) */
+
       if (!order.OrderRiderEarning?.credited && earning > 0) {
  
         await tx.riderWallet.update({
+
           where: { riderId },
+
           data: {
+
             balance: { increment: earning },
+
             totalEarned: { increment: earning },
+
           },
+
         });
  
+        // ✅ FIXED UPSERT (NO riderId DIRECTLY)
+
         await tx.orderRiderEarning.upsert({
+
           where: { orderId },
+ 
           update: {
+
             credited: true,
+
             creditedAt,
+
+            Rider: {
+
+              connect: { id: riderId },
+
+            },
+
           },
+ 
           create: {
+
             orderId,
-            riderId,
+
             totalEarning: earning,
+
             credited: true,
+
             creditedAt,
+
+            Rider: {
+
+              connect: { id: riderId },
+
+            },
+
           },
+
         });
  
         await tx.orderSettlement.upsert({
+
           where: { orderId },
-          update: { riderEarningAdded: true },
-          create: { orderId, riderEarningAdded: true },
+
+          update: {
+
+            riderEarningAdded: true,
+
+          },
+
+          create: {
+
+            orderId,
+
+            riderEarningAdded: true,
+
+          },
+
         });
+
       }
  
-      /* 5️⃣ Handle COD (SAFE) */
-      if (
-        order.OrderPayment?.mode === "COD" &&
-        !order.OrderSettlement?.riderEarningAdded
-      ) {
+      /* 5️⃣ Handle COD */
+
+      if (order.OrderPayment?.mode === "COD") {
+ 
         codCollected = Number(order.OrderPricing?.totalAmount || 0);
  
         const cash = await tx.riderCashInHand.upsert({
+
           where: { riderId },
+
           update: {},
+
           create: { riderId },
+
         });
  
-        const limit = cash.limit ?? 0;
+        if (cash.balance + codCollected > cash.limit) {
  
-        if (cash.balance + codCollected > limit) {
           await tx.riderDeliveryStatus.upsert({
+
             where: { riderId },
+
             update: {
+
               isActive: false,
+
               inactiveReason: "COD_LIMIT_EXCEEDED",
+
+              updatedAt: new Date(),
+
             },
+
             create: {
+
               riderId,
+
               isActive: false,
+
               inactiveReason: "COD_LIMIT_EXCEEDED",
+
+              updatedAt: new Date(),
+
             },
+
           });
  
           throw new Error("COD limit exceeded");
+
         }
  
         await tx.riderCashInHand.update({
+
           where: { riderId },
+
           data: {
+
             balance: { increment: codCollected },
+
             lastUpdatedAt: new Date(),
+
           },
+
         });
+
       }
  
       /* 6️⃣ Update Order */
+
       await tx.order.update({
+
         where: { orderId },
-        data: { orderStatus: "DELIVERED" },
+
+        data: {
+
+          orderStatus: "DELIVERED",
+
+        },
+
       });
  
-      await tx.orderPayment.upsert({
+      await tx.orderPayment.update({
+
         where: { orderId },
-        update: { status: "SUCCESS" },
-        create: {
-          orderId,
-          mode: order.OrderPayment?.mode || "ONLINE",
+
+        data: {
+
           status: "SUCCESS",
+
         },
+
       });
  
       /* 7️⃣ Reset Rider State */
+
       await tx.rider.update({
+
         where: { id: riderId },
+
         data: {
+
           orderState: "READY",
+
           currentOrderId: null,
+
         },
+
       });
+
     });
  
     return res.status(200).json({
+
       success: true,
+
       message: "Order delivered successfully",
+
       orderId,
+
       earningCredited: earning,
+
       codCollected,
+
     });
  
   } catch (err) {
+
     console.error("Deliver order error:", err);
+
     return res.status(500).json({
+
       success: false,
+
       message: err.message || "Failed to deliver order",
+
     });
+
   }
+
 }
+
+ 
 
  
 
