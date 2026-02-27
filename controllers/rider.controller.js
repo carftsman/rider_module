@@ -471,17 +471,32 @@ exports.getSlotHistory = async (req, res) => {
 // };
 exports.getCashInHand = async (req, res) => {
   try {
-    const riderId = req.rider?._id;
+    const riderId = req.rider?.id;
+
     if (!riderId) {
-      return res.status(401).json({ success: false, message: "Unauthorized rider" });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized rider",
+      });
     }
 
-    const orders = await Order.find({
-      riderId,
-      "payment.mode": "COD",
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId,
+        OrderPayment: {
+          mode: "COD", // ✅ relation filter (correct way)
+        },
+      },
+      include: {
+        OrderPayment: true,
+        OrderPricing: true,
+        OrderCod: true,
+        OrderDeliveryAddress: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
     let pendingOrdersCount = 0;
     let pendingAmount = 0;
@@ -493,15 +508,16 @@ exports.getCashInHand = async (req, res) => {
     for (const order of orders) {
       // ✅ SAFE TOTAL AMOUNT
       const totalAmount =
-        Number(order.cod?.amount) ||
-        Number(order.pricing?.totalAmount) ||
+        Number(order.OrderCod?.amount) ||
+        Number(order.OrderPricing?.totalAmount) ||
         0;
 
-      const depositedAmount = Number(order.cod?.depositedAmount || 0);
+      const depositedAmount = Number(
+        order.OrderCod?.depositedAmount || 0
+      );
 
       // ✅ SAFE PENDING
-      let pending =
-        Number(order.cod?.pendingAmount);
+      let pending = Number(order.OrderCod?.pendingAmount);
 
       if (isNaN(pending)) {
         pending = Math.max(totalAmount - depositedAmount, 0);
@@ -513,16 +529,18 @@ exports.getCashInHand = async (req, res) => {
       }
 
       if (
-        order.cod?.depositedAt &&
-        (!latestDepositAt || order.cod.depositedAt > latestDepositAt)
+        order.OrderCod?.depositedAt &&
+        (!latestDepositAt ||
+          order.OrderCod.depositedAt > latestDepositAt)
       ) {
-        latestDepositAt = order.cod.depositedAt;
+        latestDepositAt = order.OrderCod.depositedAt;
         latestDeposit = depositedAmount;
       }
 
       cashOrderHistory.push({
         orderId: order.orderId,
-        customerName: order.deliveryAddress?.name || "Customer",
+        customerName:
+          order.OrderDeliveryAddress?.name || "Customer",
         totalAmount,
         depositedAmount,
         pendingAmount: pending,
@@ -532,8 +550,8 @@ exports.getCashInHand = async (req, res) => {
             : depositedAmount > 0
             ? "PARTIAL_DEPOSITED"
             : "PENDING",
-        collectedAt: order.cod?.collectedAt || null,
-        depositedAt: order.cod?.depositedAt || null,
+        collectedAt: order.OrderCod?.collectedAt || null,
+        depositedAt: order.OrderCod?.depositedAt || null,
       });
     }
 
@@ -543,7 +561,7 @@ exports.getCashInHand = async (req, res) => {
       success: true,
       data: {
         cashSummary: {
-          totalCashCollected: pendingAmount, // ✅ WILL MATCH DB (2100)
+          totalCashCollected: pendingAmount,
           currency: "INR",
           toDeposit: pendingAmount,
           depositRequired: pendingAmount > 0,
@@ -572,7 +590,6 @@ exports.getCashInHand = async (req, res) => {
     });
   }
 };
-
 
 exports.getWallet = async (req, res) => {
   try {

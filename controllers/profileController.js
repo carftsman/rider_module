@@ -452,13 +452,13 @@ exports.getMyAssetsSummary = async (req, res) => {
 // };
 exports.getWalletDetails = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id; // Prisma uses id (not _id)
 
-    const rider = await Rider.findById(riderId)
-      .select("wallet")
-      .lean();
+    const wallet = await prisma.riderWallet.findUnique({
+      where: { riderId }
+    });
 
-    if (!rider) {
+    if (!wallet) {
       return res.status(404).json({
         success: false,
         message: "Rider not found"
@@ -468,7 +468,7 @@ exports.getWalletDetails = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Wallet details fetched successfully",
-      data: rider.wallet || {}
+      data: wallet || {}
     });
 
   } catch (err) {
@@ -479,7 +479,6 @@ exports.getWalletDetails = async (req, res) => {
     });
   }
 };
-
 // exports.updateDocuments = async (req, res) => {
 //   try {
 //     const riderId = req.rider?._id;
