@@ -114,17 +114,9 @@ exports.getProfile = async (req, res) => {
 
 exports.getAllDocuments = async (req, res) => {
   try {
+    const riderId = req.rider.id;
 
-    const riderId = req.rider.id; // Prisma uses id, not _id
-
-    // Fetch KYC
-    const kyc = await prisma.riderKyc.findUnique({
-      where: {
-        riderId: riderId,
-      },
-    });
-
-    // Check rider exists (optional but recommended)
+    // Check rider exists
     const riderExists = await prisma.rider.findUnique({
       where: { id: riderId },
       select: { id: true },
@@ -137,21 +129,51 @@ exports.getAllDocuments = async (req, res) => {
       });
     }
 
+    // Fetch KYC details
+    const kyc = await prisma.riderKyc.findUnique({
+      where: { riderId },
+    });
+
+    if (!kyc) {
+      return res.status(200).json({
+        success: true,
+        message: "Documents fetched successfully",
+        data: {},
+      });
+    }
+
+    // Transform PostgreSQL data into required response structure
+    const formattedResponse = {
+      aadhar: {
+        isVerified: kyc.aadharStatus === "approved",
+        status: kyc.aadharStatus,
+      },
+      pan: {
+        number: kyc.panNumber,
+        image: kyc.panImage,
+        status: kyc.panStatus,
+      },
+      drivingLicense: {
+        number: kyc.dlNumber,
+        frontImage: kyc.dlFrontImage,
+        backImage: kyc.dlBackImage,
+        status: kyc.dlStatus,
+      },
+    };
+
     return res.status(200).json({
       success: true,
       message: "Documents fetched successfully",
-      data: kyc || {}, // SAME as MongoDB response
+      data: formattedResponse,
     });
 
   } catch (err) {
-
     console.error("Get Documents Error:", err);
 
     return res.status(500).json({
       success: false,
       message: "Server error",
     });
-
   }
 };
 
