@@ -631,34 +631,48 @@ exports.getWalletDetails = async (req, res) => {
 // };
 exports.updateDocuments = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
 
     /* =====================================================
-       PAN – IMAGE UPLOAD
-       ===================================================== */
+       ENSURE KYC ROW EXISTS
+    ===================================================== */
+    await prisma.riderKyc.upsert({
+      where: { riderId },
+      update: {},
+      create: { riderId }
+    });
+
+    /* =====================================================
+       PAN IMAGE UPLOAD
+    ===================================================== */
     if (req.files?.panImage?.length) {
       const panFile = req.files.panImage[0];
 
       let text = null;
       try {
-        text = await extractTextFromImage(panFile);
+        text = await extractTextFromImage(panFile.buffer);
       } catch { }
 
       const panNumber = text ? extractPAN(text) : null;
 
+      const kyc = await prisma.riderKyc.findUnique({
+        where: { riderId }
+      });
+
       // ❌ OCR FAILED
       if (!panNumber) {
-        const rider = await Rider.findByIdAndUpdate(
-          riderId,
-          { $inc: { "kyc.pan.ocrAttempts": 1 } },
-          { new: true }
-        );
+        const updated = await prisma.riderKyc.update({
+          where: { riderId },
+          data: { panOcrAttempts: { increment: 1 } }
+        });
 
-        const attempts = rider.kyc.pan.ocrAttempts;
+        const attempts = updated.panOcrAttempts;
 
-        if (attempts >= 2 && !rider.kyc.pan.allowManual) {
-          rider.kyc.pan.allowManual = true;
-          await rider.save();
+        if (attempts >= 2 && !updated.panAllowManual) {
+          await prisma.riderKyc.update({
+            where: { riderId },
+            data: { panAllowManual: true }
+          });
         }
 
         return res.status(400).json({
@@ -670,94 +684,89 @@ exports.updateDocuments = async (req, res) => {
           allowManual: attempts >= 2
         });
       }
+
       const panImageUrl = await uploadToAzure(panFile, "pan");
 
-      // ✅ OCR SUCCESS
-      await Rider.findByIdAndUpdate(
-        riderId,
-        {
-          $set: {
-            "kyc.pan.number": panNumber,
-            "kyc.pan.image": panImageUrl,
-            "kyc.pan.status": "pending",
-            "kyc.pan.isVerified": false,
-            "kyc.pan.ocrAttempts": 0,
-            "kyc.pan.allowManual": false,
-            "kyc.pan.updatedAt": new Date()
-          }
-        },
-      );
+      await prisma.riderKyc.update({
+        where: { riderId },
+        data: {
+          panNumber,
+          panImage: panImageUrl,
+          panStatus: "pending",
+          panOcrAttempts: 0,
+          panAllowManual: false
+        }
+      });
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         message: "PAN uploaded successfully",
-        data: {
-          pan: { number: panNumber },
-
-          image: panImageUrl
-
-
-        }
+        data: { panNumber, panImageUrl }
       });
     }
 
     /* =====================================================
        PAN – MANUAL UPDATE
-       ===================================================== */
+    ===================================================== */
     if (req.body.panNumber) {
-      const rider = await Rider.findById(riderId);
+      const kyc = await prisma.riderKyc.findUnique({
+        where: { riderId }
+      });
 
-      if (!rider.kyc?.pan?.allowManual) {
+      if (!kyc.panAllowManual) {
         return res.status(403).json({
           success: false,
-          message: "Manual PAN update not allowed yet"
+          message: "Manual PAN not allowed yet"
         });
       }
 
-      rider.kyc.pan.number = req.body.panNumber;
-      rider.kyc.pan.status = "pending";
-      rider.kyc.pan.isVerified = false;
-      rider.kyc.pan.allowManual = false;
-      rider.kyc.pan.updatedAt = new Date();
-
-      await rider.save();
-
-      return res.status(200).json({
-        success: true,
-        message: "PAN updated manually",
+      await prisma.riderKyc.update({
+        where: { riderId },
         data: {
-          pan: rider.kyc.pan
+          panNumber: req.body.panNumber,
+          panStatus: "pending",
+          panAllowManual: false
         }
+      });
+
+      return res.json({
+        success: true,
+        message: "PAN updated manually"
       });
     }
 
     /* =====================================================
-       DRIVING LICENSE – IMAGE UPLOAD
-       ===================================================== */
+        DRIVING LICENSE – IMAGE UPLOAD
+    ===================================================== */
     if (req.files?.dlFrontImage?.length) {
       const dlFile = req.files.dlFrontImage[0];
 
       let text = null;
       try {
-        text = await extractTextFromImage(dlFile);
+        text = await extractTextFromImage(dlFile.buffer);
       } catch { }
 
       const dlNumber = text ? extractDL(text) : null;
       const expiryDate = text ? extractDLExpiry(text) : null;
 
+      const kyc = await prisma.riderKyc.findUnique({
+        where: { riderId }
+      });
+
       // ❌ OCR FAILED
       if (!dlNumber) {
-        const rider = await Rider.findByIdAndUpdate(
-          riderId,
-          { $inc: { "kyc.drivingLicense.ocrAttempts": 1 } },
-          { new: true }
-        );
+        const updated = await prisma.riderKyc.update({
+          where: { riderId },
+          data: { dlOcrAttempts: { increment: 1 } }
+        });
 
-        const attempts = rider.kyc.drivingLicense.ocrAttempts;
+        const attempts = updated.dlOcrAttempts;
 
-        if (attempts >= 2 && !rider.kyc.drivingLicense.allowManual) {
-          rider.kyc.drivingLicense.allowManual = true;
-          await rider.save();
+        if (attempts >= 2 && !updated.dlAllowManual) {
+          await prisma.riderKyc.update({
+            where: { riderId },
+            data: { dlAllowManual: true }
+          });
         }
 
         return res.status(400).json({
@@ -770,80 +779,70 @@ exports.updateDocuments = async (req, res) => {
         });
       }
 
-      // ✅ OCR SUCCESS
-      await Rider.findByIdAndUpdate(
-        riderId,
-        {
-          $set: {
-            "kyc.drivingLicense.number": dlNumber,
-            "kyc.drivingLicense.frontImage": await uploadToAzure(dlFile, "dl-front"),
-            "kyc.drivingLicense.backImage": req.files?.dlBackImage?.length
-              ? await uploadToAzure(req.files.dlBackImage[0], "dl-back")
-              : null,
-            "kyc.drivingLicense.expiryDate": expiryDate,
-            "kyc.drivingLicense.expiryAlert": expiryDate
-              ? isExpiringWithinOneMonth(expiryDate)
-              : false,
-            "kyc.drivingLicense.status": "pending",
-            "kyc.drivingLicense.isVerified": false,
-            "kyc.drivingLicense.ocrAttempts": 0,
-            "kyc.drivingLicense.allowManual": false,
-            "kyc.drivingLicense.updatedAt": new Date()
-          }
-        },
-        { new: true }
-      );
+      const frontUrl = await uploadToAzure(dlFile, "dl-front");
+      const backUrl = req.files?.dlBackImage?.length
+        ? await uploadToAzure(req.files.dlBackImage[0], "dl-back")
+        : null;
 
-      return res.status(200).json({
-        success: true,
-        message: "Driving License uploaded successfully",
+      await prisma.riderKyc.update({
+        where: { riderId },
         data: {
-          drivingLicense: { number: dlNumber }
+          dlNumber,
+          dlFrontImage: frontUrl,
+          dlBackImage: backUrl,
+          dlStatus: "pending",
+          dlOcrAttempts: 0,
+          dlAllowManual: false
         }
+      });
+
+      return res.json({
+        success: true,
+        message: "Driving License uploaded",
+        data: { dlNumber }
       });
     }
 
     /* =====================================================
-       DRIVING LICENSE – MANUAL UPDATE
-       ===================================================== */
+       DL MANUAL UPDATE
+    ===================================================== */
     if (req.body.dlNumber) {
-      const rider = await Rider.findById(riderId);
+      const kyc = await prisma.riderKyc.findUnique({
+        where: { riderId }
+      });
 
-      if (!rider.kyc?.drivingLicense?.allowManual) {
+      if (!kyc.dlAllowManual) {
         return res.status(403).json({
           success: false,
-          message: "Manual Driving License update not allowed yet"
+          message: "Manual DL not allowed"
         });
       }
 
-      rider.kyc.drivingLicense.number = req.body.dlNumber;
-      rider.kyc.drivingLicense.expiryDate = req.body.expiryDate || null;
-      rider.kyc.drivingLicense.status = "pending";
-      rider.kyc.drivingLicense.isVerified = false;
-      rider.kyc.drivingLicense.allowManual = false;
-      rider.kyc.drivingLicense.updatedAt = new Date();
-
-      await rider.save();
-
-      return res.status(200).json({
-        success: true,
-        message: "Driving License updated manually",
+      await prisma.riderKyc.update({
+        where: { riderId },
         data: {
-          drivingLicense: rider.kyc.drivingLicense
+          dlNumber: req.body.dlNumber,
+          dlStatus: "pending",
+          dlAllowManual: false
         }
+      });
+
+      return res.json({
+        success: true,
+        message: "Driving License updated manually"
       });
     }
 
     /* =====================================================
        NO VALID INPUT
-       ===================================================== */
+    ===================================================== */
     return res.status(400).json({
       success: false,
       message: "No valid input"
     });
 
   } catch (err) {
-    console.error("Update Documents Error:", err);
+    console.error("KYC Error:", err);
     return res.status(500).json({
       success: false,
       message: "Server error"
