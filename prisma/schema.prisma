@@ -460,7 +460,7 @@ model OrderItem {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -476,7 +476,7 @@ model OrderPricing {
   platformCommission Float?
   totalAmount        Float?
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -494,7 +494,7 @@ model OrderPayment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   @@index([orderId])
   @@index([mode])
@@ -517,7 +517,7 @@ model OrderCod {
   collectedAt DateTime?
   depositedAt DateTime?
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   @@index([orderId])
   @@index([status])
@@ -536,7 +536,7 @@ model OrderPickupAddress {
   latitude      Float?
   longitude     Float?
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -550,7 +550,7 @@ model OrderDeliveryAddress {
   latitude      Float?
   longitude     Float?
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -578,7 +578,7 @@ model OrderRiderEarning {
 
   creditedAt DateTime? // NEW FIELD
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   Rider Rider? @relation(fields: [riderId], references: [id], onDelete: Cascade)
 
@@ -610,7 +610,7 @@ model OrderSlotInfo {
   slotStartAt   DateTime?
   slotEndAt     DateTime?
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -626,7 +626,7 @@ model OrderTracking {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -639,7 +639,7 @@ model OrderAllocation {
   assignedAt DateTime?
   expiresAt  DateTime?
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
 
   OrderCandidateRiders OrderCandidateRider[]
 
@@ -665,7 +665,7 @@ model OrderCancelIssue {
   reasonCode  String?
   reasonText  String?
 
-  Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  Order Order @relation(fields: [orderId], references: [riderId], onDelete: Cascade)
 
   @@index([orderId])
 }
