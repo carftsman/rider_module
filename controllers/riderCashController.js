@@ -1,6 +1,9 @@
 const Rider = require("../models/RiderModel");
 const Order = require("../models/OrderSchema");
 const jwt = require("jsonwebtoken");
+const prisma=require('../config/prisma');
+
+
 
 
 // exports.handoverCodCash = async (req, res) => {
@@ -77,102 +80,111 @@ const jwt = require("jsonwebtoken");
 //     return res.status(500).json({ success: false, message: "Something went wrong" });
 //   }
 // };
+
+
 exports.handoverCodCash = async (req, res) => {
   try {
-    const riderId = req.rider?._id;
-    if (!riderId) {
-      return res.status(401).json({ success: false, message: "Unauthorized rider" });
-    }
-
+    const riderId = req.rider?.id;
     const { amount } = req.body;
-    if (!amount || Number(amount) <= 0) {
-      return res.status(400).json({
+
+    if (!riderId) {
+      return res.status(401).json({
         success: false,
-        message: "Invalid handover amount",
+        message: "Unauthorized rider",
       });
     }
 
-    const rider = await Rider.findById(riderId);
-    if (!rider) {
-      return res.status(404).json({ success: false, message: "Rider not found" });
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid deposit amount",
+      });
     }
 
-    // ✅ SOURCE OF TRUTH
-    const walletBalance = Number(rider.cashInHand?.balance || 0);
+    /* ✅ FETCH DELIVERED COD ORDERS (NOT FULLY DEPOSITED) */
+    const codOrders = await prisma.order.findMany({
+      where: {
+        riderId,
+        orderStatus: "DELIVERED",
+        OrderPayment: {
+          mode: "COD",
+        },
+        OrderCod: {
+          status: {
+            in: ["PENDING", "PARTIAL_DEPOSITED"],
+          },
+        },
+      },
+      include: {
+        OrderCod: true,
+      },
+      orderBy: {
+        createdAt: "asc",
+      },
+    });
 
-    if (walletBalance === 0) {
+
+    if (!codOrders.length) {
       return res.status(400).json({
         success: false,
         message: "No pending COD amount to deposit",
       });
     }
 
-    // ❌ BLOCK PARTIAL / MISMATCH DEPOSIT
-    if (Number(amount) !== walletBalance) {
+    /* ✅ CALCULATE TOTAL PENDING */
+    let totalPending = 0;
+
+    for (const order of codOrders) {
+      const codAmount = order.OrderCod?.pendingAmount || 0;
+      const depositedAmount = order.OrderCod?.depositedAmount || 0;
+
+      totalPending += codAmount - depositedAmount;
+      console.log("----> totalPending : ",totalPending)
+    }
+
+    if (totalPending <= 0) {
       return res.status(400).json({
         success: false,
-        message: `Partial deposit not allowed. Deposit full amount ₹${walletBalance}`,
+        message: "No pending COD amount to deposit",
       });
     }
 
-    // ✅ ONLY COLLECTED COD ORDERS
-    const codOrders = await Order.find({
-      riderId,
-      "payment.mode": "COD",
-      "cod.collectedAt": { $ne: null },
-    }).sort({ "cod.collectedAt": 1, createdAt: 1 });
-
-    let remainingToSettle = walletBalance;
-    const depositedAt = new Date();
-
-    // ✅ FIFO SETTLEMENT
-    for (const order of codOrders) {
-      if (remainingToSettle <= 0) break;
-
-      const totalAmount =
-        Number(order.cod?.amount) ||
-        Number(order.pricing?.totalAmount) ||
-        0;
-
-      const alreadyDeposited = Number(order.cod?.depositedAmount || 0);
-      const pending = totalAmount - alreadyDeposited;
-
-      if (pending <= 0) continue;
-
-      order.cod.depositedAmount = totalAmount;
-      order.cod.pendingAmount = 0;
-      order.cod.status = "DEPOSITED";
-      order.cod.depositedAt = depositedAt;
-
-      order.markModified("cod");
-      await order.save();
-
-      remainingToSettle -= pending;
+    /* ❌ NO PARTIAL DEPOSIT ALLOWED */
+    if (Number(amount) !== totalPending) {
+      return res.status(400).json({
+        success: false,
+        message: `Partial deposit not allowed. Deposit full amount ₹${totalPending}`,
+      });
     }
 
-    // ✅ RESET WALLET
-    rider.cashInHand.balance = 0;
-    await rider.save();
+    /* ✅ UPDATE ALL ORDERS TO DEPOSITED */
+    await prisma.$transaction(
+  codOrders.map((order) =>
+    prisma.orderCod.update({
+      where: { id: order.OrderCod.id },   // ✅ FIXED HERE
+      data: {
+        status: "DEPOSITED",
+        depositedAmount: order.OrderCod.pendingAmount,
+        depositedAt: new Date(),
+      },
+    })
+  )
+);
 
     return res.status(200).json({
       success: true,
-      message: "COD cash deposited successfully",
-      data: {
-        depositedAmount: walletBalance,
-        remainingCashBalance: 0,
-        currency: "INR",
-      },
+      message: `COD amount ₹${amount} handed over successfully`,
     });
 
   } catch (error) {
-    console.error("handoverCodCash error:", error);
+    console.error("🔥 handoverCodCash error:", error);
+
     return res.status(500).json({
       success: false,
-      message: "Failed to handover COD cash",
+      message: error.message,
     });
   }
 };
-
 exports.withdrawFromWallet = async (req, res) => {
   try {
     // ✅ Safely resolve riderId
