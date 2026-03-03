@@ -61,9 +61,12 @@ exports.getProfile = async (req, res) => {
       },
 
       location: {
-        area: rider.location?.area || null,
-        city: rider.location?.city || null,
-      },
+  streetAddress: rider.location?.streetAddress || null,
+  area: rider.location?.area || null,
+  city: rider.location?.city || null,
+  state: rider.location?.state || null,
+  pincode: rider.location?.pincode || null,
+},
 
       isPartnerActive: rider.isPartnerActive,
 
@@ -240,7 +243,7 @@ exports.updateProfile = async (req, res) => {
       }
 
       // Rider root fields
-      else if (["countryCode", "phoneNumber"].includes(key)) {
+      else if (["countryCode"].includes(key)) {
         riderFields[key] = updateData[key];
       }
     });
