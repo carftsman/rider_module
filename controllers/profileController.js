@@ -2,8 +2,8 @@ const Rider = require("../models/RiderModel");
 const Order = require("../models/OrderSchema");
 const RiderAssets = require("../models/RiderAsset");
 
-const mongoose=require('mongoose')
-const prisma=require("../config/prisma");
+const mongoose = require('mongoose')
+const prisma = require("../config/prisma");
 
 const { extractTextFromImage } = require("../utils/ocr");
 const {
@@ -312,7 +312,7 @@ exports.getBankDetails_profile = async (req, res) => {
 
   try {
     const riderId = req.rider.id; // ✅ FIXED
-  
+
 
     const bankDetails = await prisma.riderBankDetails.findUnique({
       where: { riderId }
@@ -864,52 +864,48 @@ exports.getSlotHistory = async (req, res) => {
     const { filter, date, month, year } = req.query;
 
     let dateFilter = {};
-    const todayStr = new Date().toISOString().slice(0, 10);
 
     if (filter === "daily") {
-      dateFilter.date = normalizeDate(date) || todayStr;
+      const start = new Date();
+      start.setHours(0, 0, 0, 0);
+
+      const end = new Date();
+      end.setHours(23, 59, 59, 999);
+
+      dateFilter.slotStartAt = {
+        gte: start,
+        lte: end
+      };
     }
 
     else if (filter === "weekly") {
+      const start = new Date();
+      start.setDate(start.getDate() - 6);
+      start.setHours(0, 0, 0, 0);
 
-      const today = new Date();
-      const day = today.getDay() || 7;
-
-      const start = new Date(today);
-      start.setDate(today.getDate() - day + 1);
-
-      const weekDates = [];
-
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(start);
-        d.setDate(start.getDate() + i);
-        weekDates.push(d.toISOString().slice(0, 10));
-      }
-
-      dateFilter.date = { in: weekDates };
+      dateFilter.slotStartAt = {
+        gte: start,
+        lte: new Date()
+      };
     }
 
     else if (filter === "monthly") {
-
       const y = Number(year) || new Date().getFullYear();
-      const m = Number(month) || new Date().getMonth() + 1;
-      const days = new Date(y, m, 0).getDate();
+      const m = Number(month) - 1 || new Date().getMonth(); // IMPORTANT: month index fix
 
-      const monthDates = [];
+      const start = new Date(y, m, 1);
+      const end = new Date(y, m + 1, 0, 23, 59, 59);
 
-      for (let i = 1; i <= days; i++) {
-        monthDates.push(
-          `${y}-${String(m).padStart(2, "0")}-${String(i).padStart(2, "0")}`
-        );
-      }
-
-      dateFilter.date = { in: monthDates };
+      dateFilter.slotStartAt = {
+        gte: start,
+        lte: end
+      };
     }
     const bookings = await prisma.slotBooking.findMany({
-    where: {
-      riderId,
-      ...dateFilter
-    }
+      where: {
+        riderId,
+        ...dateFilter
+      }
     });
 
     if (!bookings.length) {
@@ -928,13 +924,13 @@ exports.getSlotHistory = async (req, res) => {
 
     const allOrders = await prisma.order.findMany({
       where: {
-      riderId,
-      createdAt: { gte: dayStart, lte: dayEnd }
-    },
-    include: {
-      OrderRiderEarning: true
-    }
-  });
+        riderId,
+        createdAt: { gte: dayStart, lte: dayEnd }
+      },
+      include: {
+        OrderRiderEarning: true
+      }
+    });
 
     const ordersByDate = {};
 
@@ -956,18 +952,24 @@ exports.getSlotHistory = async (req, res) => {
 
     for (const booking of bookings) {
 
-      const orders = ordersByDate[booking.date] || [];
+      // const orders = ordersByDate[booking.date] || [];
+      const slotStart = booking.slotStartAt;
+      const slotEnd = booking.slotEndAt;
 
-      const completed = orders.filter(
+      const slotOrders = allOrders.filter(order => {
+        const orderTime = order.createdAt;
+        return orderTime >= slotStart && orderTime <= slotEnd;
+      });
+      const completed = slotOrders.filter(
         o => o.orderStatus?.toUpperCase() === "DELIVERED"
       );
 
-      const canceled = orders.filter(
-        o => o.orderStatus?.toUpperCase() === "CANCELED"
+      const canceled = slotOrders.filter(
+        o => o.orderStatus?.toUpperCase() === "CANCELLED"
       );
 
       const slotEarnings = completed.reduce(
-        (sum, o) => sum + Number(o.OrderRiderEarning?.totalEarning || 0 ),
+        (sum, o) => sum + Number(o.OrderRiderEarning?.totalEarning || 0),
         0
       );
 
@@ -975,16 +977,14 @@ exports.getSlotHistory = async (req, res) => {
 
       let slotStatus = "ACTIVE";
 
-      if (booking.status === "CANCELED") {
-        slotStatus = "CANCELED";
-      } else {
-
-        const slotEnd = new Date(`${booking.date}T${booking.endTime}:00`);
-        const now = new Date();
-
-        if (slotEnd < now) {
-          slotStatus = "COMPLETED";
-        }
+      if (
+        booking.status === "CANCELLED_BY_RIDER" ||
+        booking.status === "CANCELLED_BY_SYSTEM"
+      ) {
+        slotStatus = "CANCELLED";
+      }
+      else if (booking.slotEndAt < new Date()) {
+        slotStatus = "COMPLETED";
       }
 
       data.push({
@@ -993,10 +993,10 @@ exports.getSlotHistory = async (req, res) => {
         startTime: booking.startTime,
         endTime: booking.endTime,
         slotStatus,
-        totalOrders: orders.length,
+        totalOrders: slotOrders.length,
         completedOrders: completed.length,
         canceledOrders: canceled.length,
-        slotEarnings
+        slotEarnings: Number(slotEarnings.toFixed(2))
       });
     }
 
@@ -1065,21 +1065,26 @@ exports.getRiderOrderHistory = async (req, res) => {
     // ---------- FETCH ORDERS ----------
     const orders = await prisma.order.findMany({
       where: {
-      riderId,
-      orderStatus: "DELIVERED",
-      ...(filter !== "all" && { createdAt: dateFilter })
-    },
-    include: {
-      OrderItems: true,
-      OrderPricing: true,
-      OrderPayment: true,
-      OrderTracking: true,
-      OrderPickupAddress: true,
-      OrderDeliveryAddress: true
-    },
-     orderBy: {
-         createdAt: "desc"
-     }
+        riderId,
+        orderStatus: "DELIVERED",
+        ...(filter !== "all" && { createdAt: dateFilter })
+      },
+      include: {
+        OrderItems: true,
+        OrderPricing: true,
+        OrderPayment: true,
+        OrderTracking: true,
+        OrderPickupAddress: true,
+        OrderDeliveryAddress: true
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+    orders.forEach(order => {
+      if (!order.OrderPricing) {
+        console.warn("Delivered order missing pricing:", order.orderId);
+      }
     });
     // ---------- TOTALS ----------
     const totalOrders = orders.length;
@@ -1089,9 +1094,10 @@ exports.getRiderOrderHistory = async (req, res) => {
       0
     );
 
-    const totalDistance = orders.reduce(
-      (sum, o) => sum + (o.OrderTracking?.distanceInKm || 0),
-      0
+    const totalDistance = Number(
+      orders.reduce((sum, o) => sum + (o.OrderTracking?.distanceInKm || 0),
+        0
+      ).toFixed(2)
     );
 
     const ratings = orders
@@ -1107,8 +1113,8 @@ exports.getRiderOrderHistory = async (req, res) => {
     const data = orders.map(order => ({
       orderId: order.orderId,
 
-      items: order.items?.map(item => ({
-        itemName: item.name,
+      items: order.OrderItems?.map(item => ({
+        itemName: item.itemName,
         quantity: item.quantity,
         price: item.price,
         total: item.total
@@ -1116,23 +1122,23 @@ exports.getRiderOrderHistory = async (req, res) => {
 
       pricing: {
         itemTotal: order.OrderPricing?.itemTotal || 0,
-        deliveryFee: order.OrderPricing.deliveryFee || 0,
-        tax: order.OrderPricing.tax || 0,
+        deliveryFee: order.OrderPricing?.deliveryFee || 0,
+        tax: order.OrderPricing?.tax || 0,
         platformCommission: order.OrderPricing?.platformCommission || 0,
         totalAmount: order.OrderPricing?.totalAmount || 0
       },
 
-      customerTip: order.OrderPayment.tip || 0,
+      customerTip: 0,
 
       distanceTravelled: order.OrderTracking?.distanceInKm || 0,
 
       durationInMin: order.OrderTracking?.durationInMin || 0,
-      pickupAddress: order.PickupAddress?.addressLine || "",
+      pickupAddress: order.OrderPickupAddress?.addressLine || "",
 
-      rating: order.rating || null,
+      rating: null,
 
       deliveredAddress: order.OrderDeliveryAddress?.addressLine || "",
-      deliveredAt: order.deliveredAt || order.updatedAt || null
+      deliveredAt: order.updatedAt || null
 
     }));
 
@@ -1286,7 +1292,7 @@ exports.getMyAssets = async (req, res) => {
       };
     });
 
-    
+
 
 
     return res.status(200).json({
