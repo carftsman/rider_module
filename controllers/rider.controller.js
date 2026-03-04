@@ -1,5 +1,6 @@
 const Order = require("../models/OrderSchema");
 const Rider = require("../models/RiderModel");
+const prisma=require('../config/prisma');
 // const CashDeposit = require("../models/CashDeposit");
 // const WalletTransaction = require("../models/WalletTransaction");
 
