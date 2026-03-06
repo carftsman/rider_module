@@ -85,6 +85,9 @@ model Rider {
 
   orderRiderEarnings OrderRiderEarning[]
 
+  progress  RiderIncentiveProgress[]
+  payouts   IncentivePayout[]
+
   @@index([phoneNumber])
   @@index([isOnline])
   @@index([orderState])
@@ -1580,13 +1583,3 @@ enum PayoutStatus {
   CREDITED
 }
  
-/////////////////////////////////////////////////////
-// Rider Model (Reference Example)
-/////////////////////////////////////////////////////
- 
-model Rider {
-  id        String   @id @default(uuid())
- 
-  progress  RiderIncentiveProgress[]
-  payouts   IncentivePayout[]
-}
