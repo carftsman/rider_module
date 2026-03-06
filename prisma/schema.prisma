@@ -1374,3 +1374,219 @@ enum SurgeType {
 
   HIGH_DEMAND
 }
+
+
+
+/////////////////////////////////////////////////////
+// Rider Incentive Progress
+/////////////////////////////////////////////////////
+ 
+model RiderIncentiveProgress {
+  id            String   @id @default(uuid())
+  riderId       String
+  incentiveId   String
+  incentiveType IncentiveProgressType
+ 
+  // Time scope
+  date          String?
+  week          String?
+ 
+  // Order tracking
+  totalOrders   Int      @default(0)
+  peakOrders    Int      @default(0)
+  normalOrders  Int      @default(0)
+ 
+  orderIds      String[]
+ 
+  // Slot tracking
+  slotName      String?
+  slotStart     String?
+  slotEnd       String?
+  slotCompleted Boolean  @default(false)
+ 
+  // Weekly tracking
+  eligibleDays  Int      @default(0)
+  dailyOrderMap Json?
+ 
+  // Result
+  achievedSlabOrders Int  @default(0)
+  achievedReward     Float @default(0)
+  baseEarning        Float @default(0)
+ 
+  eligible     Boolean @default(false)
+  status       IncentiveProgressStatus @default(IN_PROGRESS)
+ 
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+ 
+  rider        Rider    @relation(fields: [riderId], references: [id])
+  incentive    Incentive @relation(fields: [incentiveId], references: [id])
+  payouts      IncentivePayout[]
+ 
+  @@index([riderId, date])
+  @@index([riderId, week])
+  @@index([incentiveId])
+  @@unique([riderId, incentiveId, date])
+}
+ 
+/////////////////////////////////////////////////////
+// Incentive Master
+/////////////////////////////////////////////////////
+ 
+model Incentive {
+  id            String   @id @default(uuid())
+  title         String
+  description   String?
+ 
+  incentiveType IncentiveType
+ 
+  validFrom     DateTime?
+  validTill     DateTime?
+ 
+  applicableCities String[]
+  applicableZones  String[]
+ 
+  // Rider Filters
+  minRating            Float?
+  vehicleType          String?
+  minCompletedOrders   Int?
+ 
+  // Slot config
+  peakSlotEnabled   Boolean @default(false)
+  normalSlotEnabled Boolean @default(false)
+ 
+  minPeakSlots      Int?
+  minNormalSlots    Int?
+ 
+  payoutTiming      PayoutTiming @default(POST_SLOT)
+ 
+  maxRewardPerDay   Float?
+  maxRewardPerWeek  Float?
+ 
+  maxUsagePerRider  Int?
+ 
+  priority          Int @default(1)
+ 
+  // Weekly rules
+  totalDaysInWeek   Int @default(7)
+  minOrdersPerDay   Int?
+  allowPartialDays  Boolean @default(true)
+ 
+  status            IncentiveStatus @default(ACTIVE)
+ 
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+ 
+  slabs             IncentiveSlab[]
+  progress          RiderIncentiveProgress[]
+  payouts           IncentivePayout[]
+ 
+  @@index([status])
+  @@index([incentiveType])
+}
+ 
+/////////////////////////////////////////////////////
+// Incentive Slabs
+/////////////////////////////////////////////////////
+ 
+model IncentiveSlab {
+  id           String   @id @default(uuid())
+ 
+  incentiveId  String
+  slotType     SlotType
+ 
+  minOrders    Int
+  maxOrders    Int
+  rewardAmount Float
+ 
+  incentive    Incentive @relation(fields: [incentiveId], references: [id])
+ 
+  @@index([incentiveId])
+}
+ 
+/////////////////////////////////////////////////////
+// Incentive Payout
+/////////////////////////////////////////////////////
+ 
+model IncentivePayout {
+  id              String   @id @default(uuid())
+ 
+  incentiveId     String
+  riderId         String
+  progressId      String?
+ 
+  earnedAmount    Float
+ 
+  payoutStatus    PayoutStatus @default(PENDING)
+ 
+  payoutReferenceId   String?
+  walletTransactionId String?
+ 
+  payoutDate      DateTime?
+  creditedAt      DateTime?
+ 
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+ 
+  incentive       Incentive @relation(fields: [incentiveId], references: [id])
+  rider           Rider     @relation(fields: [riderId], references: [id])
+  progress        RiderIncentiveProgress? @relation(fields: [progressId], references: [id])
+ 
+  @@index([riderId])
+  @@index([payoutStatus])
+}
+ 
+/////////////////////////////////////////////////////
+// ENUMS
+/////////////////////////////////////////////////////
+ 
+enum IncentiveType {
+  PEAK_SLOT
+  DAILY_TARGET
+  WEEKLY_TARGET
+}
+ 
+enum IncentiveProgressType {
+  PEAK
+  DAILY_TARGET
+  WEEKLY_TARGET
+}
+ 
+enum IncentiveStatus {
+  ACTIVE
+  INACTIVE
+}
+ 
+enum IncentiveProgressStatus {
+  IN_PROGRESS
+  ACHIEVED
+  PAID
+}
+ 
+enum SlotType {
+  PEAK
+  NORMAL
+}
+ 
+enum PayoutTiming {
+  INSTANT
+  POST_SLOT
+  DAILY
+  WEEKLY
+}
+ 
+enum PayoutStatus {
+  PENDING
+  CREDITED
+}
+ 
+/////////////////////////////////////////////////////
+// Rider Model (Reference Example)
+/////////////////////////////////////////////////////
+ 
+model Rider {
+  id        String   @id @default(uuid())
+ 
+  progress  RiderIncentiveProgress[]
+  payouts   IncentivePayout[]
+}
