@@ -131,7 +131,7 @@ exports.requestAsset = async (req, res) => {
       ? 0
       : asset.price * Number(quantity);
 
-    // 🔥 REMOVE price and isFree from DB insert
+    // REMOVE price and isFree from DB insert
     const request = await prisma.assetRequest.create({
       data: {
         riderId: req.rider.id,
@@ -145,8 +145,8 @@ exports.requestAsset = async (req, res) => {
       success: true,
       message: "Asset request created successfully",
       data: request,
-      price: calculatedPrice,   // ✅ send in response only
-      isFree                    // ✅ send in response only
+      price: calculatedPrice,   
+      isFree                    
     });
 
   } catch (error) {
@@ -159,56 +159,6 @@ exports.requestAsset = async (req, res) => {
     });
   }
 };
-// exports.approveRequest = async (req, res) => {
-//   try {
-//     const { riderId } = req.body;
-
-//     console.log("Incoming riderId:", riderId);
-
-//     if (!riderId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "riderId is required"
-//       });
-//     }
-
-//     const existingRequest = await prisma.assetRequest.findFirst({
-//       where: {
-//         riderId: riderId
-//       }
-//     });
-
-//     console.log("Found request:", existingRequest);
-
-//     if (!existingRequest) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Asset request not found"
-//       });
-//     }
-
-//     const updatedRequest = await prisma.assetRequest.update({
-//       where: { id: existingRequest.id },
-//       data: {
-//         status: "READY_FOR_DISPATCH"
-//       }
-//     });
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Request approved successfully",
-//       data: updatedRequest
-//     });
-
-//   } catch (error) {
-//     console.error("Approve Request Error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Something went wrong",
-//       error: error.message
-//     });
-//   }
-// };
 
 exports.approveRequest = async (req, res) => {
   try {
@@ -282,129 +232,7 @@ console.log("All requests for this rider:", allRequests);
     console.error("Approve Error:", error);
     return res.status(500).json({ success: false, message: error.message || "Approval failed" });
   }
-};// exports.makePayment = async (req, res) => {
-//   try {
-
-//     const riderId = req.rider?.id;
-
-//     if (!riderId) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "Unauthorized"
-//       });
-//     }
-    
-//     const { paymentMode, paymentType, months } = req.body;
-
-//     if (!paymentMode || !paymentType) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "paymentMode and paymentType are required"
-//       });
-//     }
-
-   
-//     // Find latest pending request for rider
-//     const request = await prisma.assetRequest.findFirst({
-//       where: {
-//         riderId,
-//         status: "READY_FOR_DISPATCH"
-//       },
-//       orderBy: {
-//         createdAt: "desc"
-//       }
-//     });
-    
-//     if (!request) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "No pending payment request found"
-//       });
-//     }
-//      // ✅ Prevent duplicate payment
-// const existingPayment = await prisma.payment.findUnique({
-//   where: {
-//     assetRequestId: request.id
-//   }
-// });
-
-// if (existingPayment) {
-//   return res.status(400).json({
-//     success: false,
-//     message: "Payment already completed for this request"
-//   });
-// }
-//     // 🔹 Get asset price from AssetMaster
-//     const asset = await prisma.assetMaster.findFirst({
-//       where: { assetType: request.assetType }
-//     });
-
-//     if (!asset) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Asset not found in master"
-//       });
-//     }
-
-//     const totalAmount = asset.price * request.quantity;
-
-//     // 🔥 Use transaction for safety
-//     const result = await prisma.$transaction(async (tx) => {
-
-//       const payment = await tx.payment.create({
-//         data: {
-//           assetRequestId: request.id,
-//           amount: totalAmount,
-//           paymentMode,
-//           paymentType,
-//           status: "SUCCESS"
-//         }
-//       });
-
-//       if (paymentType === "EMI") {
-
-//         if (!months || months <= 0) {
-//           throw new Error("Valid months required for EMI");
-//         }
-
-//         const monthly = totalAmount / months;
-
-//         await tx.emiPlan.create({
-//           data: {
-//             paymentId: payment.id,
-//             totalAmount,
-//             interestRate: 10,
-//             months,
-//             monthlyAmount: monthly,
-//             remainingAmount: totalAmount,
-//             nextDueDate: new Date()
-//           }
-//         });
-//       }
-
-//       await tx.assetRequest.update({
-//         where: { id: request.id },
-//         data: { status: "READY_FOR_DISPATCH" }
-//       });
-
-//       return payment;
-//     });
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Payment successful",
-//       data: result
-//     });
-
-//   } catch (error) {
-//     console.error("Payment Error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message || "Something went wrong during payment"
-//     });
-//   }
-// };
+};
 
 exports.makePayment = async (req, res) => {
   try {
@@ -506,7 +334,7 @@ exports.dispatchAsset = async (req, res) => {
   try {
     const { requestId, courierName, trackingId } = req.body;
 
-    // ✅ Validate input
+    // Validate input
     if (!requestId || !courierName || !trackingId) {
       return res.status(400).json({
         success: false,
@@ -514,7 +342,7 @@ exports.dispatchAsset = async (req, res) => {
       });
     }
 
-    // ✅ Check if asset request exists
+    // Check if asset request exists
     const request = await prisma.assetRequest.findUnique({
       where: { id: requestId }
     });
@@ -526,7 +354,7 @@ exports.dispatchAsset = async (req, res) => {
       });
     }
 
-    // ✅ Ensure payment completed before dispatch
+    // Ensure payment completed before dispatch
     if (![RequestStatus.READY_FOR_DISPATCH, RequestStatus.DISPATCHED].includes(request.status)) {
   return res.status(400).json({
     success: false,
@@ -534,7 +362,7 @@ exports.dispatchAsset = async (req, res) => {
   });
 }
 
-    // ✅ Prevent duplicate shipment
+    // Prevent duplicate shipment
     const existingShipment = await prisma.shipment.findUnique({
       where: { assetRequestId: requestId }
     });
@@ -546,7 +374,7 @@ exports.dispatchAsset = async (req, res) => {
       });
     }
 
-    // 🔥 Use transaction for consistency
+    //  Use transaction for consistency
     const result = await prisma.$transaction(async (tx) => {
 
       const shipment = await tx.shipment.create({
@@ -584,7 +412,7 @@ exports.dispatchAsset = async (req, res) => {
 };
 exports.raiseIssue = async (req, res) => {
   try {
-    // 🔐 Get rider from token
+    //  Get rider from token
     const riderId = req.rider?.id;
 
     if (!riderId) {
@@ -611,7 +439,7 @@ console.log("Request riderAssetsId:", riderAssetsId);
     const riderAsset = await prisma.rider_assets.findFirst({
       where: {
         id: riderAssetsId,
-        riderId: riderId   // 🔐 token validation here
+        riderId: riderId   //  token validation here
       }
       
     });

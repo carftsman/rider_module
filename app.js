@@ -30,7 +30,6 @@ const riderEarningsRoutes = require('./routes/riderEarningsRoutes')
 
 
 
-const insuranceRoutes = require("./routes/insuranceRoutes");
 const issueRouter =  require("./routes/issueRoutes")
 
 const pricingConfigRoutes = require("./routes/pricingConfigRoutes");
@@ -101,24 +100,25 @@ app.use("/api/rider/assets", require("./routes/riderAssetsRoutes"));
 app.use('/api/profile',profileRoutes)
 
 app.use("/api/home", incentiveRoutes);
-app.use("/api/profile/insurance", insuranceRoutes);
+
+
 app.use("/api/rider/incentives", riderIncentiveRoutes);
 
 app.use("/api/issues", issueRouter);
 app.use("/api/raw", rawPayloadRoutes);
 
 
-//new earnings routes 
-
-app.use('/api/rider/earnings',riderEarningsRoutes)  // this is the new earnings route
 
 
-//order routes
+app.use('/api/rider/earnings',riderEarningsRoutes)  
+
+
+
 
 app.use("/api/orders", require("./routes/orderRoutes"));
 
 
-//liveTracking\
+
 
 app.use("/api/aerial",require("./routes/gpsRoutes"))
 app.use("/api/web",webIncentiveRoutes)
