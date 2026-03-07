@@ -27,7 +27,7 @@ async function createOrder(req, res) {
     const body = req.body;
 
     //////////////////////////////////////////////////////
-    // 1️⃣ GET LAT LNG
+    // 1️ GET LAT LNG
     //////////////////////////////////////////////////////
 
     const pickupGeo = await getLatLng(
@@ -39,7 +39,7 @@ async function createOrder(req, res) {
     );
 
     //////////////////////////////////////////////////////
-    // 2️⃣ PAYMENT LOGIC
+    // 2️ PAYMENT LOGIC
     //////////////////////////////////////////////////////
 
     let paymentData = {
@@ -62,7 +62,7 @@ async function createOrder(req, res) {
     }
 
     //////////////////////////////////////////////////////
-    // 3️⃣ CALCULATE ITEM TOTAL
+    // 3️ CALCULATE ITEM TOTAL
     //////////////////////////////////////////////////////
 
     let itemTotal = body.items.reduce(
@@ -176,7 +176,7 @@ async function createOrder(req, res) {
 });
 
     //////////////////////////////////////////////////////
-    // 5️⃣ RESPONSE (same Swagger)
+    // 5️ RESPONSE (same Swagger)
     //////////////////////////////////////////////////////
 
     return res.status(201).json({
@@ -278,183 +278,6 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
 
 ================================ */
 
-
-
-// async function confirmOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
-
-//     //////////////////////////////////////////////////////
-//     // 1️⃣ FETCH ORDER
-//     //////////////////////////////////////////////////////
-
-//     const order = await prisma.order.findFirst({
-//       where: { orderId },
-//       include: {
-//         OrderPickupAddress: true,
-//         OrderDeliveryAddress: true
-//       }
-//     });
-
-//     if (!order) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Order not found"
-//       });
-//     }
-
-//     if (order.orderStatus !== "CREATED") {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Order already processed"
-//       });
-//     }
-
-//     //////////////////////////////////////////////////////
-//     // 2️⃣ FETCH ELIGIBLE RIDERS
-//     //////////////////////////////////////////////////////
-
-//     const now = new Date();
-
-//     const riders = await prisma.rider.findMany({
-//       where: {
-//         orderState: "READY",
-//         isOnline: true,
-//         slotBookings: {
-//           some: {
-//             status: "BOOKED",
-//             slotEndAt: { gte: now }
-//           }
-//         }
-//       },
-//       take: 10,
-//       select: { id: true }
-//     });
-
-//     if (!riders.length) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "No riders available"
-//       });
-//     }
-
-//     //////////////////////////////////////////////////////
-//     // 3️⃣ UPDATE ORDER STATUS
-//     //////////////////////////////////////////////////////
-
-//     await prisma.order.update({
-//       where: { orderId:orderId },
-//       data: { orderStatus: "CONFIRMED" }
-//     });
-
-//     //////////////////////////////////////////////////////
-//     // 4️⃣ CREATE ORDER ALLOCATION
-//     //////////////////////////////////////////////////////
-
-//     const allocation = await prisma.orderAllocation.create({
-//       data: {
-//         orderId: order.orderId,
-//         expiresAt: new Date(Date.now() + 120 * 1000),
-//         OrderCandidateRiders: {
-//           create: riders.map(r => ({
-//             riderId: r.id,
-//             status: "PENDING",
-//             notifiedAt: new Date()
-//           }))
-//         }
-//       }
-//     });
-// console.log(allocation)
-//     //////////////////////////////////////////////////////
-//     // 5️⃣ DISTANCE + ETA
-//     //////////////////////////////////////////////////////
-
-//     const routeInfo = await getRouteInfo(
-//       order.OrderPickupAddress,
-//       order.OrderDeliveryAddress
-//     );
-
-//     //////////////////////////////////////////////////////
-//     // 6️⃣ RIDER EARNING CALCULATION (simplified)
-//     //////////////////////////////////////////////////////
-
-//     const basePay = 40;
-//     const distancePay = routeInfo.distanceKm * 5;
-//     const surgePay = 0;
-
-//     const totalEarning = basePay + distancePay + surgePay;
-
-//     //////////////////////////////////////////////////////
-//     // 7️⃣ SAVE RIDER EARNING SNAPSHOT
-//     //////////////////////////////////////////////////////
-
-//     await prisma.orderRiderEarning.create({
-//       data: {
-//         orderId: order.orderId,
-//         basePay,
-//         distancePay,
-//         surgePay,
-//         totalEarning,
-//         credited: false
-//       }
-//     });
-
-//     console.log(
-//        "Riders getting popup:",
-//        riders.map(r => r.id.toString())
-//      );
-//     //////////////////////////////////////////////////////
-//     // 8️⃣ SAVE TRACKING SNAPSHOT
-//     //////////////////////////////////////////////////////
-
-//     await prisma.orderTracking.create({
-//       data: {
-//         orderId: order.orderId,
-//         distanceInKm: routeInfo.distanceKm,
-//         durationInMin: routeInfo.etaMinutes
-//       }
-//     });
-
-//     //////////////////////////////////////////////////////
-//     // 9️⃣ NOTIFY RIDERS (WebSocket)
-//     //////////////////////////////////////////////////////
-
-//     riders.forEach(rider => {
-//     console.log(
-//        "Riders getting popup:",
-//        riders.map(r => r.id.toString())
-//      );
-//       notifyRider(rider.id, {
-//         type: "ORDER_POPUP",
-//         orderId: order.orderId,
-//         vendorShopName: order.vendorShopName,
-//         pickupLocation: order.OrderPickupAddress,
-//         dropLocation: order.OrderDeliveryAddress,
-//         distanceKm: routeInfo.distanceKm,
-//         etaMinutes: routeInfo.etaMinutes,
-//         estimatedEarning: totalEarning
-//       });
-//     });
-
-//     //////////////////////////////////////////////////////
-//     // 🔟 RESPONSE
-//     //////////////////////////////////////////////////////
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Order confirmed and sent to riders",
-//       estimatedEarning: totalEarning,
-//       notifiedRiders: riders.length
-//     });
-
-//   } catch (err) {
-//     console.error("Confirm order error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message || "Failed to confirm order"
-//     });
-//   }
-// }
 async function confirmOrder(req, res) {
   try {
     const { orderId } = req.params;
@@ -505,13 +328,13 @@ async function confirmOrder(req, res) {
 
     await prisma.$transaction(async (tx) => {
 
-      // ✅ Update order
+      // Update order
       await tx.order.update({
         where: { id: order.id },   // use UUID
         data: { orderStatus: "CONFIRMED" }
       });
 
-      // ✅ Create allocation
+      //  Create allocation
       await tx.orderAllocation.create({
         data: {
           orderId: order.orderId,   // use UUID
@@ -526,7 +349,7 @@ async function confirmOrder(req, res) {
         }
       });
 
-      // ✅ Create earning snapshot
+      //  Create earning snapshot
       await tx.orderRiderEarning.create({
         data: {
           orderId: order.orderId,
@@ -538,7 +361,7 @@ async function confirmOrder(req, res) {
         }
       });
 
-      // ✅ Create tracking snapshot
+      //  Create tracking snapshot
       await tx.orderTracking.create({
         data: {
           orderId: order.orderId,
@@ -578,107 +401,8 @@ async function confirmOrder(req, res) {
     });
   }
 }
-// async function acceptOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
-//     const riderId = req.rider.id;
 
-//     // 1️⃣ Find order with allocation
-//     const order = await prisma.order.findUnique({
-//       where: { orderId },
-//       include: {
-//         OrderAllocation: true
-//       }
-//     });
 
-//     if (!order) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Order not found"
-//       });
-//     }
-//     console.log("Allocation:", order.OrderAllocation);
-//     if (!order.OrderAllocation) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Order not allocated"
-//       });
-//     }
-
-//     if (order.orderStatus !== "CONFIRMED") {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Order not available"
-//       });
-//     }
-
-//     await prisma.$transaction(async (tx) => {
-
-//       // Assign order
-//       await tx.order.update({
-//         where: { id: order.id },
-//         data: {
-//           riderId: riderId,
-//           orderStatus: "ASSIGNED"
-//         }
-//       });
-
-//       // Accept this rider
-//       await tx.orderCandidateRider.updateMany({
-//         where: {
-//           allocationId: order.OrderAllocation.id,
-//           riderId: riderId,
-//           status: "PENDING"
-//         },
-//         data: {
-//           status: "ACCEPTED"
-//         }
-//       });
-
-//       // Reject others
-//       await tx.orderCandidateRider.updateMany({
-//         where: {
-//           allocationId: order.OrderAllocation.id,
-//           riderId: { not: riderId },
-//           status: "PENDING"
-//         },
-//         data: {
-//           status: "REJECTED"
-//         }
-//       });
-
-//       // Mark allocation assigned time
-//       await tx.orderAllocation.update({
-//         where: { id: order.OrderAllocation.id },
-//         data: {
-//           assignedAt: new Date()
-//         }
-//       });
-
-//       // Make rider busy
-//       await tx.rider.update({
-//         where: { id: riderId },
-//         data: {
-//           orderState: "BUSY",
-//           currentOrderId: order.id
-//         }
-//       });
-
-//     });
-
-//     return res.json({
-//       success: true,
-//       message: "Order accepted successfully"
-//     });
-
-//   } catch (err) {
-//     console.error("Accept order error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to accept order"
-//     });
-//   }
-// }
 async function acceptOrder(req, res) {
   try {
     const { orderId } = req.params;
@@ -697,7 +421,7 @@ async function acceptOrder(req, res) {
 
     await prisma.$transaction(async (tx) => {
 
-      // ✅ ATOMIC STATUS UPDATE (prevents race condition)
+      //  ATOMIC STATUS UPDATE (prevents race condition)
       const updated = await tx.order.updateMany({
         where: {
           orderId:orderId,
@@ -771,7 +495,7 @@ async function rejectOrder(req, res) {
     const { orderId } = req.params;
     const riderId = req.rider.id;
 
-    // 1️⃣ Find order with allocation
+    // 1️ Find order with allocation
     const order = await prisma.order.findUnique({
       where: { orderId },
       include: {
@@ -793,7 +517,7 @@ async function rejectOrder(req, res) {
       });
     }
 
-    // 2️⃣ Reject rider inside allocation
+    // 2️ Reject rider inside allocation
     const result = await prisma.orderCandidateRider.updateMany({
       where: {
         allocationId: order.OrderAllocation.id,
@@ -1077,297 +801,6 @@ const isPeakSlot = (date) => {
 
 =============================== */
 
-// async function deliverOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
-//     const riderId = req.rider?.id;
-
-//     if (!riderId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "riderId required"
-//       });
-//     }
-
-//     /* 1️⃣ FETCH ORDER */
-//     const order = await prisma.order.findUnique({
-//       where: { orderId }
-//     });
-
-//     if (!order) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Order not found"
-//       });
-//     }
-
-//     /* 2️⃣ VALIDATE STATUS */
-//     if (order.orderStatus !== "PICKED_UP") {
-//       return res.status(400).json({
-//         success: false,
-//         message: `Invalid status: ${order.orderStatus}`
-//       });
-//     }
-
-//     /* 3️⃣ VALIDATE RIDER */
-//     if (order.riderId !== riderId) {
-//       return res.status(403).json({
-//         success: false,
-//         message: "Not assigned to this order"
-//       });
-//     }
-
-//     let earning = 0;
-//     let codCollected = 0;
-
-//     /* =========================
-//        TRANSACTION
-//     ========================= */
-//     await prisma.$transaction(async (tx) => {
-
-//       const rider = await tx.rider.findUnique({
-//         where: { id: riderId }
-//       });
-
-//       if (!rider) {
-//         throw new Error("Rider not found");
-//       }
-
-//       /* 4️⃣ CREDIT RIDER EARNING */
-//       if (!order.riderEarningCredited) {
-
-//         earning = Number(order.riderEarningTotal || 0);
-
-//         await tx.rider.update({
-//           where: { id: riderId },
-//           data: {
-//             walletBalance: { increment: earning },
-//             walletTotalEarned: { increment: earning }
-//           }
-//         });
-
-//         await tx.order.update({
-//           where: { id: order.id },
-//           data: {
-//             riderEarningCredited: true,
-//             riderEarningCreditedAt: new Date(),
-//             riderEarningAdded: true
-//           }
-//         });
-//       }
-
-//       /* 5️⃣ HANDLE COD */
-//       if (order.paymentMode === "COD") {
-
-//         codCollected = Number(order.totalAmount || 0);
-
-//         if (rider.cashInHandBalance + codCollected > rider.cashInHandLimit) {
-
-//           await tx.rider.update({
-//             where: { id: riderId },
-//             data: {
-//               deliveryActive: false,
-//               inactiveReason: "COD_LIMIT_EXCEEDED"
-//             }
-//           });
-
-//           throw new Error("COD limit exceeded");
-//         }
-
-//         await tx.rider.update({
-//           where: { id: riderId },
-//           data: {
-//             cashInHandBalance: { increment: codCollected },
-//             cashInHandUpdatedAt: new Date()
-//           }
-//         });
-//       }
-
-//       /* 6️⃣ UPDATE ORDER */
-//       await tx.order.update({
-//         where: { id: order.id },
-//         data: {
-//           orderStatus: "DELIVERED",
-//           paymentStatus: "SUCCESS",
-//           deliveredAt: new Date()
-//         }
-//       });
-
-//       /* 7️⃣ RESET RIDER STATE */
-//       await tx.rider.update({
-//         where: { id: riderId },
-//         data: {
-//           orderState: "READY",
-//           currentOrderId: null
-//         }
-//       });
-
-//       /* ===============================
-//          8️⃣ INCENTIVE UPDATE
-//       =============================== */
-
-//       const incentives = await tx.incentive.findMany({
-//         where: { status: "ACTIVE" }
-//       });
-
-//       const dateKey = getDateKey();
-//       const weekKey = getWeekKey();
-//       const peak = isPeakSlot(new Date());
-
-//       for (const incentive of incentives) {
-
-//         /* PEAK SLOT */
-//         if (incentive.incentiveType === "PEAK_SLOT" && peak) {
-
-//           const progress = await tx.riderIncentiveProgress.upsert({
-//             where: {
-//               riderId_incentiveId_date: {
-//                 riderId,
-//                 incentiveId: incentive.id,
-//                 date: dateKey
-//               }
-//             },
-//             update: {
-//               totalOrders: { increment: 1 },
-//               peakOrders: { increment: 1 }
-//             },
-//             create: {
-//               riderId,
-//               incentiveId: incentive.id,
-//               date: dateKey,
-//               incentiveType: incentive.incentiveType,
-//               totalOrders: 1,
-//               peakOrders: 1
-//             }
-//           });
-
-//           const peakSlabs = incentive.slabs?.[0]?.peak || [];
-
-//           const slab = peakSlabs.find(s =>
-//             progress.peakOrders >= s.minOrders &&
-//             progress.peakOrders <= s.maxOrders
-//           );
-
-//           if (slab) {
-//             await tx.riderIncentiveProgress.update({
-//               where: { id: progress.id },
-//               data: {
-//                 eligible: true,
-//                 achievedReward: slab.rewardAmount
-//               }
-//             });
-//           }
-//         }
-
-//         /* DAILY TARGET */
-//         if (incentive.incentiveType === "DAILY_TARGET") {
-
-//           const progress = await tx.riderIncentiveProgress.upsert({
-//             where: {
-//               riderId_incentiveId_date: {
-//                 riderId,
-//                 incentiveId: incentive.id,
-//                 date: dateKey
-//               }
-//             },
-//             update: {
-//               totalOrders: { increment: 1 },
-//               peakOrders: { increment: peak ? 1 : 0 },
-//               normalOrders: { increment: peak ? 0 : 1 }
-//             },
-//             create: {
-//               riderId,
-//               incentiveId: incentive.id,
-//               date: dateKey,
-//               incentiveType: incentive.incentiveType,
-//               totalOrders: 1,
-//               peakOrders: peak ? 1 : 0,
-//               normalOrders: peak ? 0 : 1
-//             }
-//           });
-
-//           if (
-//             progress.peakOrders >= incentive.minPeakSlots &&
-//             progress.normalOrders >= incentive.minNormalSlots
-//           ) {
-//             await tx.riderIncentiveProgress.update({
-//               where: { id: progress.id },
-//               data: { eligible: true }
-//             });
-//           }
-//         }
-
-//         /* WEEKLY TARGET */
-//         if (incentive.incentiveType === "WEEKLY_TARGET") {
-
-//           const progress = await tx.riderIncentiveProgress.upsert({
-//             where: {
-//               riderId_incentiveId_week: {
-//                 riderId,
-//                 incentiveId: incentive.id,
-//                 week: weekKey
-//               }
-//             },
-//             update: {},
-//             create: {
-//               riderId,
-//               incentiveId: incentive.id,
-//               week: weekKey,
-//               incentiveType: incentive.incentiveType,
-//               dailyOrders: {}
-//             }
-//           });
-
-//           let dailyOrders = progress.dailyOrders || {};
-//           const todayCount = dailyOrders[dateKey] || 0;
-//           dailyOrders[dateKey] = todayCount + 1;
-
-//           let eligibleDays = progress.eligibleDays || 0;
-
-//           if (todayCount + 1 >= incentive.minOrdersPerDay) {
-//             eligibleDays += 1;
-//           }
-
-//           let eligible = false;
-//           let achievedReward = null;
-
-//           if (eligibleDays >= incentive.totalDaysInWeek) {
-//             eligible = true;
-//             achievedReward = incentive.maxRewardPerWeek;
-//           }
-
-//           await tx.riderIncentiveProgress.update({
-//             where: { id: progress.id },
-//             data: {
-//               dailyOrders,
-//               eligibleDays,
-//               eligible,
-//               achievedReward
-//             }
-//           });
-//         }
-//       }
-//     });
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Order delivered successfully",
-//       orderId,
-//       earningCredited: earning,
-//       codCollected
-//     });
-
-//   } catch (err) {
-
-//     console.error("Deliver order error:", err);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message || "Failed to deliver order"
-//     });
-//   }
-// }
-
 async function deliverOrder(req, res) {
   try {
     const { orderId } = req.params;
@@ -1380,7 +813,7 @@ async function deliverOrder(req, res) {
       });
     }
 
-    // 🔹 Fetch order outside transaction
+    // Fetch order outside transaction
     const order = await prisma.order.findUnique({
       where: { orderId },
       include: {
@@ -1411,7 +844,7 @@ async function deliverOrder(req, res) {
       });
     }
 
-    // 🚨 IMPORTANT: Ensure payment record exists BEFORE transaction
+    //  IMPORTANT: Ensure payment record exists BEFORE transaction
     if (!order.OrderPayment) {
       return res.status(400).json({
         success: false,
@@ -1425,14 +858,14 @@ async function deliverOrder(req, res) {
     await prisma.$transaction(
       async (tx) => {
 
-        // ✅ Ensure wallet exists
+        //  Ensure wallet exists
         await tx.riderWallet.upsert({
           where: { riderId },
           update: {},
           create: { riderId },
         });
 
-        // ✅ Credit earning safely
+        //  Credit earning safely
         if (!order.OrderRiderEarning?.credited && earning > 0) {
           await tx.riderWallet.update({
             where: { riderId },
@@ -1460,7 +893,7 @@ async function deliverOrder(req, res) {
           });
         }
 
-        // ✅ Handle COD
+        //  Handle COD
         if (order.OrderPayment.mode === "COD") {
           codCollected = Number(order.OrderPricing?.totalAmount || 0);
 
@@ -1483,19 +916,19 @@ async function deliverOrder(req, res) {
           });
         }
 
-        // ✅ Update order
+        //  Update order
         await tx.order.update({
           where: { orderId },
           data: { orderStatus: "DELIVERED" },
         });
 
-        // ✅ SAFER: use updateMany instead of update
+        //  SAFER: use updateMany instead of update
         await tx.orderPayment.updateMany({
           where: { orderId },
           data: { status: "SUCCESS" },
         });
 
-        // ✅ Reset rider state
+        //  Reset rider state
         await tx.rider.update({
           where: { id: riderId },
           data: {
@@ -1549,7 +982,7 @@ async function cancelOrder(req, res) {
     }
 
     /* ===============================
-       1️⃣ FETCH ORDER
+       1️  FETCH ORDER
     =============================== */
     const order = await prisma.order.findUnique({
       where: { orderId }
@@ -1563,7 +996,7 @@ async function cancelOrder(req, res) {
     }
 
     /* ===============================
-       2️⃣ VALIDATE STATE
+       2️  VALIDATE STATE
     =============================== */
     if (["DELIVERED", "CANCELLED"].includes(order.orderStatus)) {
       return res.status(400).json({
@@ -1580,7 +1013,7 @@ async function cancelOrder(req, res) {
     }
 
     /* ===============================
-       3️⃣ VALIDATE RIDER ASSIGNMENT
+       3️ VALIDATE RIDER ASSIGNMENT
     =============================== */
 
 
@@ -1609,14 +1042,14 @@ async function cancelOrder(req, res) {
   });
 
   await tx.orderCancelIssue.upsert({
-    where: { orderId: order.id }, // ✅ FIX
+    where: { orderId: order.id }, 
     update: {
       cancelledBy: "RIDER",
       reasonCode,
       reasonText
     },
     create: {
-      orderId: order.id, // ✅ FIX
+      orderId: order.id, 
       cancelledBy: "RIDER",
       reasonCode,
       reasonText
@@ -1628,7 +1061,7 @@ async function cancelOrder(req, res) {
 
 
     /* ===============================
-       6️⃣ WS NOTIFICATION
+       6️ WS NOTIFICATION
     =============================== */
     notifyRider(riderId, {
       type: "ORDER_CANCELLED",
@@ -1637,7 +1070,7 @@ async function cancelOrder(req, res) {
     });
 
     /* ===============================
-       7️⃣ RESPONSE
+       7️  RESPONSE
     =============================== */
     return res.status(200).json({
       success: true,
