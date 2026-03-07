@@ -1,9 +1,4 @@
-const Slot = require("../models/SlotModel");
 const { getWeekNumber } = require("../helpers/getWeekNumber");
-
-const SlotBooking = require("../models/SlotBookingModel");
-const Rider = require("../models/RiderModel");
-// FCM Notification
 const fcmService = require("../helpers/fcmService");
 
 const prisma=require("../config/prisma");
@@ -115,10 +110,6 @@ exports.getDailySlotsWithStatus = async (req, res) => {
   try {
     const riderId = req.rider?.id;
     const { date, city, zone, status = "all" } = req.query;
-
-    /* -----------------------------
-       Validate inputs
-    ----------------------------- */
     if (!date || !city || !zone) {
       return res.status(400).json({
         success: false,
@@ -132,10 +123,6 @@ exports.getDailySlotsWithStatus = async (req, res) => {
         message: "Invalid date format (YYYY-MM-DD required)"
       });
     }
-
-    /* -----------------------------
-       Fetch slots
-    ----------------------------- */
     const slots = await prisma.slot.findMany({
       where: {
         date: date,
@@ -164,18 +151,15 @@ exports.getDailySlotsWithStatus = async (req, res) => {
       });
     }
 
-    /* -----------------------------
-       Enrich slot data
-    ----------------------------- */
     let enriched = slots.map(slot => {
       const booking = slot.slotBookings?.[0];
 
       return {
-        slotId: slot.slotId,  // ✅ corrected
+        slotId: slot.slotId,  
         startTime: slot.startTime,
         endTime: slot.endTime,
 
-        isAvailable: slot.isAvailable, // ✅ ADDED FROM SCHEMA
+        isAvailable: slot.isAvailable, 
 
         isBooked: booking?.status === "BOOKED",
         isCancelled: booking?.status === "CANCELLED_BY_RIDER",
@@ -185,9 +169,6 @@ exports.getDailySlotsWithStatus = async (req, res) => {
       };
     });
 
-    /* -----------------------------
-       Apply filters
-    ----------------------------- */
     if (status === "booked") {
       enriched = enriched.filter(
         s => s.bookingStatus === "BOOKED"
@@ -203,17 +184,13 @@ exports.getDailySlotsWithStatus = async (req, res) => {
     if (status === "available") {
       enriched = enriched.filter(
         s =>
-          s.isAvailable &&   // ✅ only available slots
+          s.isAvailable &&   
           (
             s.bookingStatus === "NOT_BOOKED" ||
             s.bookingStatus === "CANCELLED_BY_RIDER"
           )
       );
     }
-
-    /* -----------------------------
-       Response
-    ----------------------------- */
     return res.status(200).json({
       success: true,
       message: "Daily slots fetched",
@@ -314,12 +291,6 @@ exports.bookSlot = async (req, res) => {
       });
 
     }
- 
-    //////////////////////////////////////////////////////
-
-    // 1. Fetch Rider
-
-    //////////////////////////////////////////////////////
 
     const rider = await prisma.rider.findUnique({
 
@@ -350,12 +321,6 @@ exports.bookSlot = async (req, res) => {
       });
 
     }
- 
-    //////////////////////////////////////////////////////
-
-    // 2. Fetch Slots
-
-    //////////////////////////////////////////////////////
 
     const slots = await prisma.slot.findMany({
 
@@ -388,12 +353,6 @@ exports.bookSlot = async (req, res) => {
       });
 
     }
- 
-    //////////////////////////////////////////////////////
-
-    // 3. Validate Slots
-
-    //////////////////////////////////////////////////////
 
     const validSlots = [];
 
@@ -463,11 +422,6 @@ exports.bookSlot = async (req, res) => {
 
     }
  
-    //////////////////////////////////////////////////////
-
-    // 4. Date helpers
-
-    //////////////////////////////////////////////////////
 
     const jsDate = new Date(date);
 
@@ -477,11 +431,6 @@ exports.bookSlot = async (req, res) => {
 
     const dayNumber = jsDate.getUTCDay() === 0 ? 7 : jsDate.getUTCDay();
  
-    //////////////////////////////////////////////////////
-
-    // 5. Create Bookings (Transaction Safe)
-
-    //////////////////////////////////////////////////////
 
     const createdBookings = [];
  
@@ -614,12 +563,6 @@ exports.bookSlot = async (req, res) => {
       }
 
     });
- 
-    //////////////////////////////////////////////////////
-
-    // 6. FCM Notification
-
-    //////////////////////////////////////////////////////
 
     if (rider.fcmToken) {
 
@@ -642,12 +585,6 @@ exports.bookSlot = async (req, res) => {
       });
 
     }
- 
-    //////////////////////////////////////////////////////
-
-    // 7. Response
-
-    //////////////////////////////////////////////////////
 
     return res.json({
 
@@ -686,10 +623,6 @@ exports.cancelSlot = async (req, res) => {
     const riderId = req.rider.id;
     const { bookingId } = req.params;
 
-    //////////////////////////////////////////////////////
-    // 1️⃣ Validate input
-    //////////////////////////////////////////////////////
-
     if (!bookingId) {
       return res.status(400).json({
         success: false,
@@ -697,9 +630,6 @@ exports.cancelSlot = async (req, res) => {
       });
     }
 
-    //////////////////////////////////////////////////////
-    // 2️⃣ Find booking
-    //////////////////////////////////////////////////////
 
     const booking = await prisma.slotBooking.findUnique({
       where: { id: bookingId },
@@ -712,9 +642,7 @@ exports.cancelSlot = async (req, res) => {
       });
     }
 
-    //////////////////////////////////////////////////////
-    // 3️⃣ Verify ownership
-    //////////////////////////////////////////////////////
+
 
     if (booking.riderId !== riderId) {
       return res.status(403).json({
@@ -723,10 +651,6 @@ exports.cancelSlot = async (req, res) => {
       });
     }
 
-    //////////////////////////////////////////////////////
-    // 4️⃣ Prevent invalid cancel
-    //////////////////////////////////////////////////////
-
     if (booking.status !== "BOOKED") {
       return res.status(400).json({
         success: false,
@@ -734,9 +658,6 @@ exports.cancelSlot = async (req, res) => {
       });
     }
 
-    //////////////////////////////////////////////////////
-    // 5️⃣ Transaction (Atomic Operation)
-    //////////////////////////////////////////////////////
 
     const result = await prisma.$transaction(async (tx) => {
       
@@ -749,7 +670,6 @@ exports.cancelSlot = async (req, res) => {
         },
       });
 
-      // Decrement Slot bookedRiders safely
       await tx.slot.update({
         where: { slotId: booking.slotId },
         data: {
@@ -759,7 +679,6 @@ exports.cancelSlot = async (req, res) => {
         },
       });
 
-      // Update SlotRider status
       await tx.slotRider.updateMany({
         where: {
           slotId: booking.slotId,
@@ -774,12 +693,9 @@ exports.cancelSlot = async (req, res) => {
       return updatedBooking;
     });
 
-    //////////////////////////////////////////////////////
-    // 6️⃣ Send Notification (FIXED HERE)
-    //////////////////////////////////////////////////////
 
     const rider = await prisma.rider.findUnique({
-      where: { id: riderId }, // ✅ FIXED (was wrongly using slotId)
+      where: { id: riderId }, 
       select: { fcmToken: true },
     });
 
@@ -798,10 +714,6 @@ exports.cancelSlot = async (req, res) => {
         },
       });
     }
-
-    //////////////////////////////////////////////////////
-    // 7️⃣ Final Response
-    //////////////////////////////////////////////////////
 
     return res.json({
       success: true,
@@ -825,10 +737,6 @@ exports.getCurrentSlot = async (req, res) => {
 
     const riderId = req.rider.id;
 
-    //////////////////////////////////////////////////////
-    // 1️⃣ Fetch rider location
-    //////////////////////////////////////////////////////
-
     const rider = await prisma.rider.findUnique({
       where: { id: riderId },
       include: { location: true }
@@ -844,10 +752,6 @@ exports.getCurrentSlot = async (req, res) => {
     const { city, area } = rider.location;
     const zone = area;
 
-    //////////////////////////////////////////////////////
-    // 2️⃣ Get IST time
-    //////////////////////////////////////////////////////
-
     const now = new Date(
       new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
     );
@@ -855,13 +759,9 @@ exports.getCurrentSlot = async (req, res) => {
     const today = now.toISOString().split("T")[0];
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
-    //////////////////////////////////////////////////////
-    // 3️⃣ Get today's slots (FIXED)
-    //////////////////////////////////////////////////////
-
     const slots = await prisma.slot.findMany({
       where: {
-        date: today, // ✅ FIXED (was DateTime filter)
+        date: today, 
         status: "ACTIVE",
         weeklySlot: {
           city,
@@ -880,9 +780,6 @@ exports.getCurrentSlot = async (req, res) => {
       });
     }
 
-    //////////////////////////////////////////////////////
-    // 4️⃣ Find current & next slot
-    //////////////////////////////////////////////////////
 
     let currentSlot = null;
     let nextSlot = null;
@@ -919,10 +816,6 @@ exports.getCurrentSlot = async (req, res) => {
       });
     }
 
-    //////////////////////////////////////////////////////
-    // 5️⃣ Calculate delay
-    //////////////////////////////////////////////////////
-
     let delayMinutes = 0;
 
     if (currentSlot) {
@@ -931,23 +824,18 @@ exports.getCurrentSlot = async (req, res) => {
       delayMinutes = Math.max(0, currentMinutes - slotStartMinutes);
     }
 
-    //////////////////////////////////////////////////////
-    // 6️⃣ Check booking (FIXED slotId)
-    //////////////////////////////////////////////////////
 
     const booking = await prisma.slotBooking.findUnique({
       where: {
         riderId_date_slotId: {
           riderId,
           date: today,
-          slotId: selectedSlot.slotId // ✅ FIXED (was selectedSlot.id)
+          slotId: selectedSlot.slotId 
         }
       }
     });
 
-    //////////////////////////////////////////////////////
-    // 7️⃣ Response
-    //////////////////////////////////////////////////////
+
 
     return res.json({
       success: true,
@@ -958,7 +846,7 @@ exports.getCurrentSlot = async (req, res) => {
       data: {
         daySlotId: selectedSlot.weeklySlotId,
         slot: {
-          slotId: selectedSlot.slotId, // ✅ FIXED
+          slotId: selectedSlot.slotId, 
           startTime: selectedSlot.startTime,
           endTime: selectedSlot.endTime,
           durationInHours: selectedSlot.durationMinutes / 60,
@@ -1000,9 +888,7 @@ exports.getSlotHistory = async (req, res) => {
     year = Number(year) || currentYear;
     weekNumber = Number(weekNumber);
  
-    /* ---------------------------------------
-       1. Fetch bookings
-    --------------------------------------- */
+
     const bookings = await prisma.slotBooking.findMany({
       where: {
         riderId,
@@ -1014,10 +900,7 @@ exports.getSlotHistory = async (req, res) => {
         { startTime: "asc" }
       ]
     });
- 
-    /* ---------------------------------------
-       2. Derive runtime status (MISSED logic)
-    --------------------------------------- */
+
     const now = new Date();
  
     const enrichedBookings = bookings.map(b => {
@@ -1025,7 +908,6 @@ exports.getSlotHistory = async (req, res) => {
  
       const slotDateTime = new Date(`${b.date}T${b.startTime}`);
  
-      // If slot is past and still booked → MISSED
       if (
         b.status === "BOOKED" &&
         slotDateTime < now
@@ -1039,9 +921,7 @@ exports.getSlotHistory = async (req, res) => {
       };
     });
  
-    /* ---------------------------------------
-       3. Weekly Summary
-    --------------------------------------- */
+
     const summary = {
       totalSlots: enrichedBookings.length,
       completed: enrichedBookings.filter(b => b.derivedStatus === "COMPLETED").length,
@@ -1050,9 +930,7 @@ exports.getSlotHistory = async (req, res) => {
       booked: enrichedBookings.filter(b => b.derivedStatus === "BOOKED").length
     };
  
-    /* ---------------------------------------
-       4. ISO week generator
-    --------------------------------------- */
+
     function getISOWeekStart(week, year) {
       const jan4 = new Date(year, 0, 4);
       const day = jan4.getDay() || 7;
@@ -1075,10 +953,6 @@ exports.getSlotHistory = async (req, res) => {
       d.setDate(d.getDate() + i);
       weekDates.push(d.toISOString().slice(0, 10));
     }
- 
-    /* ---------------------------------------
-       5. Map days
-    --------------------------------------- */
     const daysMap = {};
  
     weekDates.forEach(date => {
@@ -1134,7 +1008,7 @@ exports.getCurrentAndNextSlot = async (req, res) => {
 
     const now = new Date();
 
-    // Fetch today's booked slots
+ 
     let todaySlots = await prisma.slotBooking.findMany({
       where: {
         riderId,
@@ -1188,9 +1062,6 @@ exports.getCurrentAndNextSlot = async (req, res) => {
     });
   }
 };
-
-
-// get riders 
 
 
 
