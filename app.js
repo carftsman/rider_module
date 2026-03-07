@@ -15,7 +15,6 @@ const adminRoutes = require("./routes/adminRoutes");
 const staticRouter = require("./routes/staticMobileOtpRoute");
 const profileRoutes = require("./routes/profileRoutes");
 const incentiveRoutes = require("./routes/incentiveRoutes");
-const earningsRoutes = require("./routes/earningsRoutes");
 const adminRouterIncentives = require("./routes/adminInccentiveRoutes");
 const riderIncentiveRoutes = require("./routes/incentiveRiderRoutes");
 const webIncentiveRoutes = require("./routes/order.routes");
@@ -102,8 +101,6 @@ app.use("/api/rider/assets", require("./routes/riderAssetsRoutes"));
 app.use('/api/profile',profileRoutes)
 
 app.use("/api/home", incentiveRoutes);
-// app.use("/api/earnings", earningsRoutes);
-app.use("/api/rider/earnings", earningsRoutes);
 app.use("/api/profile/insurance", insuranceRoutes);
 app.use("/api/rider/incentives", riderIncentiveRoutes);
 
@@ -115,9 +112,6 @@ app.use("/api/raw", rawPayloadRoutes);
 
 app.use('/api/rider/earnings',riderEarningsRoutes)  // this is the new earnings route
 
-
-
-app.use("/api/earnings", require("./routes/earningsRoutes"));
 
 //order routes
 
