@@ -1,8 +1,8 @@
-const Rider = require("../models/RiderModel");
-const Order = require("../models/OrderSchema");
-const RiderAssets = require("../models/RiderAsset");
 
-const mongoose = require("mongoose");
+
+
+
+
 const prisma = require("../config/prisma");
 
 const { extractTextFromImage } = require("../utils/ocr");

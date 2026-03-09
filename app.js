@@ -2,8 +2,7 @@ const express = require("express");
 const { swaggerSetup } = require("./docs/swagger");
 const helmet = require("helmet");
 const morgan = require("morgan");
-const cors = require('cors')
-
+const cors = require("cors");
 
 const riderRouter = require("./routes/riderRoute");
 const locationRouter = require("./routes/locationRoute");
@@ -21,16 +20,11 @@ const webIncentiveRoutes = require("./routes/order.routes");
 const riderIncentiveProgressRoutes = require("./routes/riderIncentiveProgress.routes");
 const kitRoutes = require("./routes/kitSelectionRoutes");
 
-
-
-
 // const webRiderRoutes = require("./routes/rider.routes");
 
-const riderEarningsRoutes = require('./routes/riderEarningsRoutes')
+const riderEarningsRoutes = require("./routes/riderEarningsRoutes");
 
-
-
-const issueRouter =  require("./routes/issueRoutes")
+const issueRouter = require("./routes/issueRoutes");
 
 const pricingConfigRoutes = require("./routes/pricingConfigRoutes");
 
@@ -38,14 +32,10 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const fcmTokenRoutes = require("./routes/fcmTokenRoutes");
 const riderStatusRoutes = require("./routes/riderStatus.routes");
 const riderCashRoutes = require("./routes/riderCashRoutes");
-const orderStateReady=require('./routes/readyStateRouter')
+const orderStateReady = require("./routes/readyStateRouter");
 const rawPayloadRoutes = require("./routes/rawPayloadRoutes");
 
-
-
 // const offlineStoreRoute = require("./routes/offlineStoreRoute");
-
-
 
 const app = express();
 
@@ -61,10 +51,10 @@ app.use(
       "X-Requested-With",
       "Origin",
       "Content-Length",
-      "Content-Disposition"
+      "Content-Disposition",
     ],
-    credentials: false // change to true ONLY if using cookies
-  })
+    credentials: false, // change to true ONLY if using cookies
+  }),
 );
 
 app.use(express.json());
@@ -83,11 +73,10 @@ app.use("/api/location", locationRouter);
 app.use("/aadhar", aadharRoute);
 app.use("/api/bank", bankDetailsRoutes);
 
-
-app.use("/api/mobile",staticRouter);
+app.use("/api/mobile", staticRouter);
 
 app.use("/api/admin", adminRoutes);
-app.use("/api/admin/incentives",adminRouterIncentives);
+app.use("/api/admin/incentives", adminRouterIncentives);
 
 app.use("/api/rider", kitRouter);
 app.use("/api/slots", slotRouter);
@@ -97,42 +86,26 @@ app.use("/api/rider/assets", require("./routes/riderAssetsRoutes"));
 
 // app.use("/api/admin/offline-stores", offlineStoreRoute);
 
-app.use('/api/profile',profileRoutes)
+app.use("/api/profile", profileRoutes);
 
 app.use("/api/home", incentiveRoutes);
-
 
 app.use("/api/rider/incentives", riderIncentiveRoutes);
 
 app.use("/api/issues", issueRouter);
 app.use("/api/raw", rawPayloadRoutes);
 
-
-
-
-app.use('/api/rider/earnings',riderEarningsRoutes)  
-
-
-
+app.use("/api/rider/earnings", riderEarningsRoutes);
 
 app.use("/api/orders", require("./routes/orderRoutes"));
 
-
-
-
-app.use("/api/aerial",require("./routes/gpsRoutes"))
-app.use("/api/web",webIncentiveRoutes)
+app.use("/api/aerial", require("./routes/gpsRoutes"));
+app.use("/api/web", webIncentiveRoutes);
 // app.use("/api/web",webRiderRoutes)
-
 
 app.use("/api", pricingConfigRoutes);
 
-app.use(
-  "/api/rider/incentives",
-  riderIncentiveProgressRoutes
-);
-
-
+app.use("/api/rider/incentives", riderIncentiveProgressRoutes);
 
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/rider/notifications", fcmTokenRoutes);
@@ -141,16 +114,10 @@ app.use("/api/rider/status", riderStatusRoutes);
 app.use("/api", riderCashRoutes);
 
 //orderState Ready
-app.use('/api',orderStateReady)
+app.use("/api", orderStateReady);
 app.use("/api/rider-incentives", riderIncentiveProgressRoutes);
 app.use("/api/rider", require("./routes/availableRidersRoutes"));
 app.use("/api/kit", kitRoutes);
-
-
-
-
-
-
 
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");

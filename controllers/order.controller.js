@@ -1,5 +1,4 @@
-const mongoose = require("mongoose");
-const Order = require("../models/OrderSchema");
+
 const { emitRiderDashboard } = require("../sockets/socket");
 const { getCurrentSlot } = require("../utils/slot.helper");
 
