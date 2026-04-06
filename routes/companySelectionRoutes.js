@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 
 const { selectRiderType } = require("../controllers/companySelectionController");
-const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleWare");
+const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 
 router.post("/rider/type", riderAuthMiddleWare, selectRiderType);
 
