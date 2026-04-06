@@ -1,5 +1,5 @@
 
-const { emitRiderDashboard } = require("../sockets/socket");
+// const { emitRiderDashboard } = require("../sockets/socket");
 const { getCurrentSlot } = require("../utils/slot.helper");
 
 exports.markOrderDelivered = async (req, res) => {

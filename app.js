@@ -34,6 +34,7 @@ const riderStatusRoutes = require("./routes/riderStatus.routes");
 const riderCashRoutes = require("./routes/riderCashRoutes");
 const orderStateReady = require("./routes/readyStateRouter");
 const rawPayloadRoutes = require("./routes/rawPayloadRoutes");
+const companySelectionRoutes = require("./routes/companySelectionRoutes");
 
 // const offlineStoreRoute = require("./routes/offlineStoreRoute");
 
@@ -118,6 +119,7 @@ app.use("/api", orderStateReady);
 app.use("/api/rider-incentives", riderIncentiveProgressRoutes);
 app.use("/api/rider", require("./routes/availableRidersRoutes"));
 app.use("/api/kit", kitRoutes);
+app.use("/api/company", companySelectionRoutes);
 
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");
