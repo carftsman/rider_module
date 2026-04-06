@@ -657,126 +657,172 @@ exports.uploadDL = async (req, res) => {
   }
 };
 
-exports.savePermissions = async (req, res) => {
-  try {
-    const riderId = req.rider.id; // Prisma uses id (String UUID)
+// exports.savePermissions = async (req, res) => {
+//   try {
+//     const riderId = req.rider.id; // Prisma uses id (String UUID)
 
+
+//     if (!riderId) {
+//       return res.status(401).json({ message: "Unauthorized" });
+//     }
+
+//     const { camera, foregroundLocation, backgroundLocation } = req.body;
+
+//     // Validate input
+//     const isBoolean = (v) => typeof v === "boolean";
+
+//     if (!isBoolean(camera) || !isBoolean(foregroundLocation) || !isBoolean(backgroundLocation)) {
+//       return res.status(400).json({
+//         message: "camera, foregroundLocation, backgroundLocation must be boolean values",
+//       });
+//     }
+
+//     // Check rider exists with onboarding
+//     const rider = await prisma.rider.findUnique({
+//       where: { id: riderId },
+//       include: {
+//         onboarding: true,
+//         permissions: true,
+//       },
+//     });
+
+    
+//     if (!rider) {
+//       return res.status(404).json({ message: "Rider not found" });
+//     }
+
+//     // Phone verification check
+//     if (!rider.onboarding?.phoneVerified) {
+//       return res.status(400).json({
+//         message: "Phone verification required before permissions",
+//       });
+//     }
+
+//     // Calculate all granted
+//     const allGranted = camera && foregroundLocation && backgroundLocation;
+
+//     // UPSERT permissions
+//     const permissions = await prisma.riderPermissions.upsert({
+//       where: { riderId },
+//       update: {
+//         camera,
+//         foregroundLocation,
+//         backgroundLocation,
+//       },
+//       create: {
+//         riderId,
+//         camera,
+//         foregroundLocation,
+//         backgroundLocation,
+//       },
+//     });
+
+//     // Update onboarding progress
+//     const onboarding = await prisma.riderOnboarding.update({
+//       where: { riderId },
+//       data: {
+//         appPermissionDone: allGranted,
+//       },
+//     });
+
+//     // Update onboarding stage if all granted
+//     let updatedStage = rider.onboardingStage;
+
+//     if (allGranted && rider.onboardingStage === "APP_PERMISSIONS") {
+//       const updatedRider = await prisma.rider.update({
+//         where: { id: riderId },
+//         data: {
+//           onboardingStage: "SELECT_LOCATION",
+//         },
+//       });
+
+//       updatedStage = updatedRider.onboardingStage;
+//     }
+
+//     // Response SAME as Swagger
+//     return res.json({
+//       success: true,
+//       message: "Permissions saved successfully",
+//       allPermissionsGranted: allGranted,
+//       data: {
+//         permissions: {
+//           camera: permissions.camera,
+//           foregroundLocation: permissions.foregroundLocation,
+//           backgroundLocation: permissions.backgroundLocation,
+//         },
+//         onboardingProgress: {
+//           phoneVerified: onboarding.phoneVerified,
+//           appPermissionDone: onboarding.appPermissionDone,
+//           citySelected: onboarding.citySelected,
+//           vehicleSelected: onboarding.vehicleSelected,
+//           personalInfoSubmitted: onboarding.personalInfoSubmitted,
+//           selfieUploaded: onboarding.selfieUploaded,
+//           aadharVerified: onboarding.aadharVerified,
+//           panUploaded: onboarding.panUploaded,
+//           dlUploaded: onboarding.dlUploaded,
+//           kycCompleted: onboarding.kycCompleted,
+//         },
+//         onboardingStage: updatedStage,
+//       },
+//     });
+
+//   } catch (error) {
+//     console.error("Permission API Error:", error);
+//     res.status(500).json({
+//       message: "Server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
+// ------------------ PROFILE -------------------
+
+exports.saveAppPermissions = async (req, res) => {
+  try {
+    const riderId = req.rider?.id; // ✅ FIXED
 
     if (!riderId) {
-      return res.status(401).json({ message: "Unauthorized" });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized"
+      });
     }
 
     const { camera, foregroundLocation, backgroundLocation } = req.body;
 
-    // Validate input
-    const isBoolean = (v) => typeof v === "boolean";
-
-    if (!isBoolean(camera) || !isBoolean(foregroundLocation) || !isBoolean(backgroundLocation)) {
+    if (
+      typeof camera !== "boolean" ||
+      typeof foregroundLocation !== "boolean" ||
+      typeof backgroundLocation !== "boolean"
+    ) {
       return res.status(400).json({
-        message: "camera, foregroundLocation, backgroundLocation must be boolean values",
+        success: false,
+        message: "Invalid input"
       });
     }
 
-    // Check rider exists with onboarding
-    const rider = await prisma.rider.findUnique({
-      where: { id: riderId },
-      include: {
-        onboarding: true,
-        permissions: true,
-      },
-    });
-
-    
-    if (!rider) {
-      return res.status(404).json({ message: "Rider not found" });
-    }
-
-    // Phone verification check
-    if (!rider.onboarding?.phoneVerified) {
-      return res.status(400).json({
-        message: "Phone verification required before permissions",
-      });
-    }
-
-    // Calculate all granted
-    const allGranted = camera && foregroundLocation && backgroundLocation;
-
-    // UPSERT permissions
-    const permissions = await prisma.riderPermissions.upsert({
+    await prisma.riderPermissions.upsert({
       where: { riderId },
-      update: {
-        camera,
-        foregroundLocation,
-        backgroundLocation,
-      },
-      create: {
-        riderId,
-        camera,
-        foregroundLocation,
-        backgroundLocation,
-      },
+      update: { camera, foregroundLocation, backgroundLocation },
+      create: { riderId, camera, foregroundLocation, backgroundLocation }
     });
 
-    // Update onboarding progress
-    const onboarding = await prisma.riderOnboarding.update({
-      where: { riderId },
-      data: {
-        appPermissionDone: allGranted,
-      },
-    });
-
-    // Update onboarding stage if all granted
-    let updatedStage = rider.onboardingStage;
-
-    if (allGranted && rider.onboardingStage === "APP_PERMISSIONS") {
-      const updatedRider = await prisma.rider.update({
-        where: { id: riderId },
-        data: {
-          onboardingStage: "SELECT_LOCATION",
-        },
-      });
-
-      updatedStage = updatedRider.onboardingStage;
-    }
-
-    // Response SAME as Swagger
-    return res.json({
+    return res.status(200).json({
       success: true,
-      message: "Permissions saved successfully",
-      allPermissionsGranted: allGranted,
-      data: {
-        permissions: {
-          camera: permissions.camera,
-          foregroundLocation: permissions.foregroundLocation,
-          backgroundLocation: permissions.backgroundLocation,
-        },
-        onboardingProgress: {
-          phoneVerified: onboarding.phoneVerified,
-          appPermissionDone: onboarding.appPermissionDone,
-          citySelected: onboarding.citySelected,
-          vehicleSelected: onboarding.vehicleSelected,
-          personalInfoSubmitted: onboarding.personalInfoSubmitted,
-          selfieUploaded: onboarding.selfieUploaded,
-          aadharVerified: onboarding.aadharVerified,
-          panUploaded: onboarding.panUploaded,
-          dlUploaded: onboarding.dlUploaded,
-          kycCompleted: onboarding.kycCompleted,
-        },
-        onboardingStage: updatedStage,
-      },
+      message: "Permissions granted",
+      nextStage: "EMPLOYEE_DETAILS"
     });
 
   } catch (error) {
-    console.error("Permission API Error:", error);
-    res.status(500).json({
-      message: "Server error",
-      error: error.message,
+    console.error(error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
     });
   }
 };
-
-
-// ------------------ PROFILE -------------------
 
 exports.getProfile = async (req, res) => {
   try {

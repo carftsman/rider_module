@@ -12,7 +12,7 @@ const {
   uploadPan,
   uploadDL,
   getProfile,
-  savePermissions,
+  saveAppPermissions,
   logoutOrDelete,
   onboardingStatus,
   completeKyc,
@@ -594,11 +594,10 @@ riderRouter.post(
 );
 /**
  * @swagger
- * /api/rider/permissions:
+ * /api/rider/app-permissions:
  *   post:
- *     tags: [Rider]
- *     summary: Save app permissions (camera, foreground, background)
- *     description: Moved to next stage after permissions are granted. Requires Bearer token.
+ *     summary: Save Rider App Permissions
+ *     tags: [Rider Onboarding]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -607,6 +606,10 @@ riderRouter.post(
  *         application/json:
  *           schema:
  *             type: object
+ *             required:
+ *               - camera
+ *               - foregroundLocation
+ *               - backgroundLocation
  *             properties:
  *               camera:
  *                 type: boolean
@@ -616,22 +619,27 @@ riderRouter.post(
  *                 example: true
  *               backgroundLocation:
  *                 type: boolean
- *                 example: false
+ *                 example: true
  *     responses:
  *       200:
- *         description: Permissions saved successfully
+ *         description: Permissions granted successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Permissions granted
+ *               nextStage: EMPLOYEE_DETAILS
  *       400:
- *         description: Invalid or missing boolean values
+ *         description: Invalid input
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized (missing/invalid token)
  *       500:
- *         description: Server error
+ *         description: Internal server error
  */
-
 riderRouter.post(
-  "/rider/permissions",
+  "/rider/app-permissions",
   riderAuthMiddleWare,
-  savePermissions
+  saveAppPermissions
 );
 
 
