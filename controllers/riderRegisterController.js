@@ -824,9 +824,9 @@ exports.uploadDL = async (req, res) => {
 //   }
 // };
 
-exports.savePermissions = async (req, res) => {
-  try {
-    const riderId = req.rider?.id;
+// exports.savePermissions = async (req, res) => {
+//   try {
+//     const riderId = req.rider?.id;
 
 //     if (!riderId) {
 //       return res.status(401).json({ message: "Unauthorized" });
@@ -1488,6 +1488,7 @@ exports.updateGPS = async (req, res) => {
     const riderId = req.rider._id;
     const { isEnabled, lat, lng } = req.body;
 
+    // Validate isEnabled
     if (typeof isEnabled !== "boolean") {
       return res.status(400).json({
         success: false,
@@ -1495,7 +1496,7 @@ exports.updateGPS = async (req, res) => {
       });
     }
 
-    // EDGE CASE: GPS DISABLED manually from phone settings
+    // If GPS disabled
     if (!isEnabled) {
       await Rider.findByIdAndUpdate(riderId, {
         $set: {
@@ -1504,7 +1505,7 @@ exports.updateGPS = async (req, res) => {
         }
       });
 
-      return res.json({
+      return res.status(200).json({
         success: true,
         message: "GPS disabled",
         data: {
@@ -1514,8 +1515,8 @@ exports.updateGPS = async (req, res) => {
       });
     }
 
-    // If enabled → lat/lng REQUIRED
-    if (isEnabled && (!lat || !lng)) {
+    // Validate lat/lng properly (allow 0 values)
+    if (isEnabled && (lat === undefined || lng === undefined)) {
       return res.status(400).json({
         success: false,
         message: "Latitude and longitude required when GPS is enabled"
@@ -1533,7 +1534,7 @@ exports.updateGPS = async (req, res) => {
       }
     });
 
-    return res.json({
+    return res.status(200).json({
       success: true,
       message: "GPS updated successfully",
       data: {
@@ -1548,5 +1549,4 @@ exports.updateGPS = async (req, res) => {
       success: false,
       message: "Server error"
     });
-  }
-};
+  }}
