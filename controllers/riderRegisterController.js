@@ -778,48 +778,156 @@ exports.uploadDL = async (req, res) => {
 
 // ------------------ PROFILE -------------------
 
-exports.saveAppPermissions = async (req, res) => {
+// exports.saveAppPermissions = async (req, res) => {
+//   try {
+//     const riderId = req.rider?.id; // ✅ FIXED
+
+//     if (!riderId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized"
+//       });
+//     }
+
+//     const { camera, foregroundLocation, backgroundLocation } = req.body;
+
+//     if (
+//       typeof camera !== "boolean" ||
+//       typeof foregroundLocation !== "boolean" ||
+//       typeof backgroundLocation !== "boolean"
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid input"
+//       });
+//     }
+
+//     await prisma.riderPermissions.upsert({
+//       where: { riderId },
+//       update: { camera, foregroundLocation, backgroundLocation },
+//       create: { riderId, camera, foregroundLocation, backgroundLocation }
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Permissions granted",
+//       nextStage: "EMPLOYEE_DETAILS"
+//     });
+
+//   } catch (error) {
+//     console.error(error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error"
+//     });
+//   }
+// };
+
+exports.savePermissions = async (req, res) => {
   try {
-    const riderId = req.rider?.id; // ✅ FIXED
+    const riderId = req.rider?.id;
 
     if (!riderId) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized"
+        message: "Unauthorized",
       });
     }
 
     const { camera, foregroundLocation, backgroundLocation } = req.body;
 
+    const isBoolean = (v) => typeof v === "boolean";
+
     if (
-      typeof camera !== "boolean" ||
-      typeof foregroundLocation !== "boolean" ||
-      typeof backgroundLocation !== "boolean"
+      !isBoolean(camera) ||
+      !isBoolean(foregroundLocation) ||
+      !isBoolean(backgroundLocation)
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid input"
+        message:
+          "camera, foregroundLocation, backgroundLocation must be boolean values",
       });
     }
 
-    await prisma.riderPermissions.upsert({
-      where: { riderId },
-      update: { camera, foregroundLocation, backgroundLocation },
-      create: { riderId, camera, foregroundLocation, backgroundLocation }
+    const rider = await prisma.rider.findUnique({
+      where: { id: riderId },
+      include: {
+        onboarding: true,
+      },
     });
 
+    if (!rider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    if (!rider.onboarding?.phoneVerified) {
+      return res.status(400).json({
+        success: false,
+        message: "Phone verification required before permissions",
+      });
+    }
+
+    const allGranted =
+      camera && foregroundLocation && backgroundLocation;
+
+    await prisma.riderPermissions.upsert({
+      where: { riderId },
+      update: {
+        camera,
+        foregroundLocation,
+        backgroundLocation,
+      },
+      create: {
+        riderId,
+        camera,
+        foregroundLocation,
+        backgroundLocation,
+      },
+    });
+
+    await prisma.riderOnboarding.update({
+      where: { riderId },
+      data: {
+        appPermissionDone: allGranted,
+      },
+    });
+
+    let updatedStage = rider.onboardingStage;
+
+    // 🔥 CHANGED STAGE HERE
+    if (
+      allGranted &&
+      rider.onboardingStage === "APP_PERMISSIONS"
+    ) {
+      const updatedRider = await prisma.rider.update({
+        where: { id: riderId },
+        data: {
+          onboardingStage: "EMPLOYEE_TYPE", // 👈 changed
+        },
+      });
+
+      updatedStage = updatedRider.onboardingStage;
+    }
+
+    // ✅ FINAL CLEAN RESPONSE (ONLY 4 FIELDS)
     return res.status(200).json({
       success: true,
-      message: "Permissions granted",
-      nextStage: "EMPLOYEE_DETAILS"
+      message: "Permissions saved successfully",
+      allPermissionsGranted: allGranted,
+      nextStage: updatedStage,
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Permission API Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: "Internal server error"
+      message: "Server error",
     });
   }
 };
