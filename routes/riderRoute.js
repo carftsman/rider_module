@@ -12,7 +12,7 @@ const {
   uploadPan,
   uploadDL,
   getProfile,
-  savePermissions,
+  saveAppPermissions,
   logoutOrDelete,
   onboardingStatus,
   completeKyc,
@@ -622,16 +622,27 @@ riderRouter.post(
  *                 example: true
  *     responses:
  *       200:
+<<<<<<< Updated upstream
  *         description: Permissions saved successfully
+=======
+ *         description: Permissions granted successfully
+>>>>>>> Stashed changes
  *         content:
  *           application/json:
  *             example:
  *               success: true
+<<<<<<< Updated upstream
  *               message: Permissions saved successfully
  *               allPermissionsGranted: true
  *               nextStage: EMPLOYEE_TYPE
  *       400:
  *         description: Invalid input or onboarding restriction
+=======
+ *               message: Permissions granted
+ *               nextStage: EMPLOYEE_DETAILS
+ *       400:
+ *         description: Invalid input
+>>>>>>> Stashed changes
  *       401:
  *         description: Unauthorized (missing/invalid token)
  *       500:
@@ -640,7 +651,7 @@ riderRouter.post(
 riderRouter.post(
   "/rider/app-permissions",
   riderAuthMiddleWare,
-  savePermissions
+  saveAppPermissions
 );
 
 
