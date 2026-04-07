@@ -63,7 +63,9 @@ model Rider {
 model RiderOnboarding {
   id                    String  @id @default(uuid())
   riderId               String  @unique
+  
   phoneVerified         Boolean @default(false)
+  riderType             Boolean @default(false)
   appPermissionDone     Boolean @default(false)
   citySelected          Boolean @default(false)
   vehicleSelected       Boolean @default(false)
@@ -72,6 +74,10 @@ model RiderOnboarding {
   aadharVerified        Boolean @default(false)
   panUploaded           Boolean @default(false)
   dlUploaded            Boolean @default(false)
+  employeeDetailsSubmitted  Boolean @default(false)
+  documentDetailsSubmitted  Boolean @default(false)
+  employeeKycVerified       Boolean @default(false)
+
   kycCompleted          Boolean @default(false)
   rider                 Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
 }
@@ -705,8 +711,13 @@ model IncentivePayout {
 }
 
 enum OnboardingStage {
+  WELCOME_PAGE
   PHONE_VERIFICATION
+  EMPLOYEE_TYPE
   APP_PERMISSIONS
+  EMPLOYEE_DETAILS
+  DOCUMENT_DETAILS
+ EMPLOYEEKYC_VERIFICATION
   SELECT_LOCATION
   SELECT_VEHICLE
   PERSONAL_INFO
