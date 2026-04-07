@@ -6,17 +6,13 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
-enum RiderType { 
-  INDIVIDUAL_EMPLOYEE 
-  COMPANY_EMPLOYEE 
-} 
+
 model Rider {
   id                 String               @id @default(uuid())
   countryCode        String               @default("+91")
   phoneNumber        String               @unique
   phoneIsVerified    Boolean              @default(false)
   otpCode            String?
-  riderType          RiderType            @default(INDIVIDUAL_EMPLOYEE)
   otpExpiresAt       DateTime?
   lastOtpVerifiedAt  DateTime?
   refreshToken       String?
@@ -35,6 +31,7 @@ model Rider {
   dob                DateTime?
   email              String?
   empId              String?              @unique
+  riderType          RiderType            @default(INDIVIDUAL_EMPLOYEE)
   Order              Order[]
   orderRiderEarnings OrderRiderEarning[]
   bankDetails        RiderBankDetails?
@@ -61,25 +58,23 @@ model Rider {
 }
 
 model RiderOnboarding {
-  id                    String  @id @default(uuid())
-  riderId               String  @unique
-  
-  phoneVerified         Boolean @default(false)
-  riderType             Boolean @default(false)
-  appPermissionDone     Boolean @default(false)
-  citySelected          Boolean @default(false)
-  vehicleSelected       Boolean @default(false)
-  personalInfoSubmitted Boolean @default(false)
-  selfieUploaded        Boolean @default(false)
-  aadharVerified        Boolean @default(false)
-  panUploaded           Boolean @default(false)
-  dlUploaded            Boolean @default(false)
-  employeeDetailsSubmitted  Boolean @default(false)
-  documentDetailsSubmitted  Boolean @default(false)
-  employeeKycVerified       Boolean @default(false)
-
-  kycCompleted          Boolean @default(false)
-  rider                 Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  id                       String  @id @default(uuid())
+  riderId                  String  @unique
+  phoneVerified            Boolean @default(false)
+  appPermissionDone        Boolean @default(false)
+  citySelected             Boolean @default(false)
+  vehicleSelected          Boolean @default(false)
+  personalInfoSubmitted    Boolean @default(false)
+  selfieUploaded           Boolean @default(false)
+  aadharVerified           Boolean @default(false)
+  panUploaded              Boolean @default(false)
+  dlUploaded               Boolean @default(false)
+  kycCompleted             Boolean @default(false)
+  documentDetailsSubmitted Boolean @default(false)
+  employeeDetailsSubmitted Boolean @default(false)
+  employeeKycVerified      Boolean @default(false)
+  riderType                Boolean @default(false)
+  rider                    Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
 }
 
 model RiderPermissions {
@@ -710,14 +705,14 @@ model IncentivePayout {
   @@index([payoutStatus])
 }
 
+enum RiderType {
+  INDIVIDUAL_EMPLOYEE
+  COMPANY_EMPLOYEE
+}
+
 enum OnboardingStage {
-  WELCOME_PAGE
   PHONE_VERIFICATION
-  EMPLOYEE_TYPE
   APP_PERMISSIONS
-  EMPLOYEE_DETAILS
-  DOCUMENT_DETAILS
- EMPLOYEEKYC_VERIFICATION
   SELECT_LOCATION
   SELECT_VEHICLE
   PERSONAL_INFO
@@ -731,6 +726,11 @@ enum OnboardingStage {
   COMPLETED
   COMPANY_DETAILS
   VEHICLE_DETAILS
+  WELCOME_PAGE
+  EMPLOYEE_TYPE
+  EMPLOYEE_DETAILS
+  DOCUMENT_DETAILS
+  EMPLOYEEKYC_VERIFICATION
 }
 
 enum Gender {
