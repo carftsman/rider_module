@@ -1207,9 +1207,126 @@ exports.onboardingStatus = async (req, res) => {
 //   }
 // };
 
+
+
+// exports.completeKyc = async (req, res) => {
+//   try {
+//     const riderId = req.rider.id;
+
+//     if (!riderId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized rider"
+//       });
+//     }
+
+//     // 1️⃣ Fetch onboarding
+//     const onboarding = await prisma.riderOnboarding.findUnique({
+//       where: { riderId }
+//     });
+
+//     if (!onboarding) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Onboarding record not found"
+//       });
+//     }
+
+//     // 2️⃣ Validate all required steps
+//     const requiredSteps = [
+//       "phoneVerified",
+//       "appPermissionDone",
+//       "citySelected",
+//       "vehicleSelected",
+//       "personalInfoSubmitted",
+//       "selfieUploaded",
+//       "aadharVerified",
+//       "panUploaded",
+//       "dlUploaded"
+//     ];
+
+//     const missingSteps = requiredSteps.filter(
+//       (step) => onboarding[step] !== true
+//     );
+
+//     if (missingSteps.length > 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Onboarding steps not completed",
+//         missingSteps
+//       });
+//     }
+
+//     // 3️⃣ Complete KYC + update rider inside transaction
+//     const result = await prisma.$transaction(async (tx) => {
+
+//       // Update onboarding
+//       await tx.riderOnboarding.update({
+//         where: { riderId },
+//         data: { kycCompleted: true }
+//       });
+
+//       // Get rider
+//       const rider = await tx.rider.findUnique({
+//         where: { id: riderId }
+//       });
+
+//       if (!rider) {
+//         throw new Error("Rider not found during transaction");
+//       }
+
+//       let partnerId = rider.partnerId;
+
+//       // 4️⃣ Generate partnerId if not exists
+//       if (!partnerId) {
+//         partnerId = generatePartnerId();
+
+//         // ensure uniqueness
+//         const existing = await tx.rider.findUnique({
+//           where: { partnerId }
+//         });
+
+//         if (existing) {
+//           partnerId = generatePartnerId(); // regenerate once
+//         }
+//       }
+
+//       // Update rider
+//       const updatedRider = await tx.rider.update({
+//         where: { id: riderId },
+//         data: {
+//           isFullyRegistered: true,
+//           onboardingStage: "COMPLETED",
+//           partnerId,
+//           isPartnerActive: true
+//         }
+//       });
+
+//       return updatedRider;
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "KYC completed and rider fully registered",
+//       partnerId: result.partnerId,
+//       onboardingStage: result.onboardingStage,
+//       isFullyRegistered: result.isFullyRegistered
+//     });
+
+//   } catch (error) {
+//     console.error("CompleteKyc Error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error while completing KYC"
+//     });
+//   }
+// };
+
+
 exports.completeKyc = async (req, res) => {
   try {
-    const riderId = req.rider.id;
+    const riderId = req.rider?.id;
 
     if (!riderId) {
       return res.status(401).json({
@@ -1218,31 +1335,49 @@ exports.completeKyc = async (req, res) => {
       });
     }
 
-    // 1️⃣ Fetch onboarding
-    const onboarding = await prisma.riderOnboarding.findUnique({
-      where: { riderId }
+    // Fetch rider + onboarding together (optimized)
+    const riderData = await prisma.rider.findUnique({
+      where: { id: riderId },
+      include: { onboarding: true }
     });
 
-    if (!onboarding) {
+    if (!riderData || !riderData.onboarding) {
       return res.status(404).json({
         success: false,
-        message: "Onboarding record not found"
+        message: "Rider or onboarding not found"
       });
     }
 
-    // 2️⃣ Validate all required steps
-    const requiredSteps = [
-      "phoneVerified",
-      "appPermissionDone",
-      "citySelected",
-      "vehicleSelected",
-      "personalInfoSubmitted",
-      "selfieUploaded",
-      "aadharVerified",
-      "panUploaded",
-      "dlUploaded"
-    ];
+    const { onboarding, riderType } = riderData;
 
+    // Define required steps dynamically
+    let requiredSteps = [];
+
+    if (riderType === "INDIVIDUAL_EMPLOYEE") {
+      requiredSteps = [
+        "phoneVerified",
+        "appPermissionDone",
+        "citySelected",
+        "vehicleSelected",
+        "personalInfoSubmitted",
+        "selfieUploaded",
+        "aadharVerified",
+        "panUploaded",
+        "dlUploaded"
+      ];
+    }
+
+    if (riderType === "COMPANY_EMPLOYEE") {
+      requiredSteps = [
+        "phoneVerified",
+        "appPermissionDone",
+        "employeeDetailsSubmitted",
+        "documentDetailsSubmitted",
+        // "employeeKycVerified"
+      ];
+    }
+
+    //Validate steps
     const missingSteps = requiredSteps.filter(
       (step) => onboarding[step] !== true
     );
@@ -1250,62 +1385,71 @@ exports.completeKyc = async (req, res) => {
     if (missingSteps.length > 0) {
       return res.status(400).json({
         success: false,
-        message: "Onboarding steps not completed",
+        message: "Required onboarding steps not completed",
         missingSteps
       });
     }
 
-    // 3️⃣ Complete KYC + update rider inside transaction
-    const result = await prisma.$transaction(async (tx) => {
+const result = await prisma.$transaction(async (tx) => {
 
-      // Update onboarding
-      await tx.riderOnboarding.update({
-        where: { riderId },
-        data: { kycCompleted: true }
+  const onboardingUpdateData = {
+    kycCompleted: true
+  };
+
+  console.log("Rider Type:", riderType);
+
+  // Force update for company employee
+  if (riderType === "COMPANY_EMPLOYEE") {
+    onboardingUpdateData.employeeKycVerified = true;
+  }
+
+  const updatedOnboarding = await tx.riderOnboarding.update({
+    where: { riderId },
+    data: onboardingUpdateData
+  });
+
+  console.log("Updated Onboarding: ", updatedOnboarding);
+
+  // Partner ID logic
+  let partnerId = riderData.partnerId;
+
+  if (!partnerId) {
+    let isUnique = false;
+
+    while (!isUnique) {
+      const newId = generatePartnerId();
+
+      const exists = await tx.rider.findUnique({
+        where: { partnerId: newId }
       });
 
-      // Get rider
-      const rider = await tx.rider.findUnique({
-        where: { id: riderId }
-      });
-
-      if (!rider) {
-        throw new Error("Rider not found during transaction");
+      if (!exists) {
+        partnerId = newId;
+        isUnique = true;
       }
+    }
+  }
 
-      let partnerId = rider.partnerId;
+  const updatedRider = await tx.rider.update({
+    where: { id: riderId },
+    data: {
+      isFullyRegistered: true,
+      onboardingStage: "COMPLETED",
+      partnerId,
+      isPartnerActive: true
+    }
+  });
 
-      // 4️⃣ Generate partnerId if not exists
-      if (!partnerId) {
-        partnerId = generatePartnerId();
+  return updatedRider;
+});
 
-        // ensure uniqueness
-        const existing = await tx.rider.findUnique({
-          where: { partnerId }
-        });
-
-        if (existing) {
-          partnerId = generatePartnerId(); // regenerate once
-        }
-      }
-
-      // Update rider
-      const updatedRider = await tx.rider.update({
-        where: { id: riderId },
-        data: {
-          isFullyRegistered: true,
-          onboardingStage: "COMPLETED",
-          partnerId,
-          isPartnerActive: true
-        }
-      });
-
-      return updatedRider;
-    });
-
+    //Response
     return res.status(200).json({
       success: true,
-      message: "KYC completed and rider fully registered",
+      message:
+        riderType === "COMPANY_EMPLOYEE"
+          ? "Company employee onboarding completed"
+          : "KYC completed and rider fully registered",
       partnerId: result.partnerId,
       onboardingStage: result.onboardingStage,
       isFullyRegistered: result.isFullyRegistered
