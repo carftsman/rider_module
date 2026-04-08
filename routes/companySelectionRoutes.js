@@ -196,10 +196,9 @@ router.post("/rider/employee", riderAuthMiddleWare, employeeDetails);
  * @swagger
  * /api/company/rider/document:
  *   post:
- *     summary: Upload company rider document details
- *     description: Uploads rider selfie image, saves DL number, PAN number, vehicle type, and updates onboarding to employee KYC verification stage.
+ *     summary: Upload rider document details and selfie
  *     tags:
- *       - Company Rider Onboarding
+ *       - Rider Onboarding
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -216,87 +215,31 @@ router.post("/rider/employee", riderAuthMiddleWare, employeeDetails);
  *             properties:
  *               dlNumber:
  *                 type: string
- *                 example: DL0420110149646
- *                 description: Rider driving license number
+ *                 example: TS09AB12345678901
  *               panNumber:
  *                 type: string
  *                 example: ABCDE1234F
- *                 description: Rider PAN number
  *               type:
  *                 type: string
  *                 enum: [ev, bike, scooty]
  *                 example: bike
- *                 description: Rider vehicle type
  *               selfie:
  *                 type: string
  *                 format: binary
- *                 description: Rider selfie image file
  *     responses:
  *       200:
  *         description: Documents uploaded successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Documents uploaded
- *                 selfieUrl:
- *                   type: string
- *                   example: https://yourstorageaccount.blob.core.windows.net/container/selfies/1712578123456.jpg
- *                 nextStage:
- *                   type: string
- *                   example: EMPLOYEEKYC_VERIFICATION
- *
- *       400:
- *         description: Missing fields, missing file, or invalid vehicle type
- *         content:
- *           application/json:
- *             examples:
- *               missingFields:
- *                 summary: Required fields missing
- *                 value:
- *                   success: false
- *                   message: dlNumber, panNumber, type, selfie(file) are required
- *               invalidVehicleType:
- *                 summary: Invalid vehicle type
- *                 value:
- *                   success: false
- *                   message: Invalid vehicle type
- *
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Unauthorized
- *
- *       404:
- *         description: Rider not found
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Rider not found
- *
- *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Internal server error
  */
 router.post(
   "/rider/document",
   riderAuthMiddleWare,
-  upload.single("selfieUrl"), // 👈 important
+  upload.single("selfie"),
   documentDetails
 );
-
+// router.post(
+//   "/rider/document",
+//   riderAuthMiddleWare,
+//   upload.single("selfie"),
+//   documentDetails
+// );
 module.exports = router;
