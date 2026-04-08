@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 
+
 exports.selectRiderType = async (req, res) => {
   try {
     const riderId = req.rider?.id;
