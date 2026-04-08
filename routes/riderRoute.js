@@ -622,7 +622,7 @@ riderRouter.post(
  *                 example: true
  *     responses:
  *       200:
- *         description: Permissions saved successfully
+ *         description: Permissions granted successfully
  *         content:
  *           application/json:
  *             example:
