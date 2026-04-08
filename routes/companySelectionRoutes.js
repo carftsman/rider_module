@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
-
-const { selectRiderType } = require("../controllers/companySelectionController");
+const { upload } = require("../utils/azureUpload");
+const { selectRiderType,employeeDetails,documentDetails } = require("../controllers/companySelectionController");
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 /**
  * @swagger
@@ -94,190 +94,209 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 router.post("/rider/type", riderAuthMiddleWare, selectRiderType);
 
 
-// /**
-//  * @swagger
-//  * /api/company/rider/employee:
-//  *   post:
-//  *     summary: Submit Employee Details (Company Rider)
-//  *     description: >
-//  *       This API collects employee details for a company rider during onboarding.
-//  *       It updates Rider, RiderProfile, and RiderOnboarding tables
-//  *       and moves onboarding stage to DOCUMENT_DETAILS.
-//  *     tags:
-//  *       - Rider Onboarding
-//  *     security:
-//  *       - bearerAuth: []
-//  *     requestBody:
-//  *       required: true
-//  *       content:
-//  *         application/json:
-//  *           schema:
-//  *             type: object
-//  *             required:
-//  *               - companyName
-//  *               - empId
-//  *               - fullName
-//  *             properties:
-//  *               companyName:
-//  *                 type: string
-//  *                 example: Swiggy
-//  *               empId:
-//  *                 type: string
-//  *                 example: EMP123
-//  *               fullName:
-//  *                 type: string
-//  *                 example: Ramu Kumar
-//  *               dob:
-//  *                 type: string
-//  *                 format: date
-//  *                 example: 1995-05-21
-//  *               gender:
-//  *                 type: string
-//  *                 enum: [male, female, other]
-//  *                 example: male
-//  *               secondaryPhone:
-//  *                 type: string
-//  *                 example: "9123456780"
-//  *               email:
-//  *                 type: string
-//  *                 format: email
-//  *                 example: ramu@example.com
-//  *     responses:
-//  *       200:
-//  *         description: Employee details submitted successfully
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 success:
-//  *                   type: boolean
-//  *                   example: true
-//  *                 message:
-//  *                   type: string
-//  *                   example: Employee details submitted
-//  *                 nextStage:
-//  *                   type: string
-//  *                   example: DOCUMENT_DETAILS
-//  *       400:
-//  *         description: Validation error
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 success:
-//  *                   type: boolean
-//  *                   example: false
-//  *                 message:
-//  *                   type: string
-//  *                   example: companyName, empId, fullName are required
-//  *       404:
-//  *         description: Rider not found
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 success:
-//  *                   type: boolean
-//  *                   example: false
-//  *                 message:
-//  *                   type: string
-//  *                   example: Rider not found
-//  *       500:
-//  *         description: Internal server error
-//  */
-// router.post("/rider/employee", riderAuthMiddleWare, employeeDetails);
+/**
+ * @swagger
+ * /api/company/rider/employee:
+ *   post:
+ *     summary: Submit Employee Details (Company Rider)
+ *     description: >
+ *       This API collects employee details for a company rider during onboarding.
+ *       It updates Rider, RiderProfile, and RiderOnboarding tables
+ *       and moves onboarding stage to DOCUMENT_DETAILS.
+ *     tags:
+ *       - Rider Onboarding
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - companyName
+ *               - empId
+ *               - fullName
+ *             properties:
+ *               companyName:
+ *                 type: string
+ *                 example: Swiggy
+ *               empId:
+ *                 type: string
+ *                 example: EMP123
+ *               fullName:
+ *                 type: string
+ *                 example: Ramu Kumar
+ *               dob:
+ *                 type: string
+ *                 format: date
+ *                 example: 1995-05-21
+ *               gender:
+ *                 type: string
+ *                 enum: [male, female, other]
+ *                 example: male
+ *               secondaryPhone:
+ *                 type: string
+ *                 example: "9123456780"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: ramu@example.com
+ *     responses:
+ *       200:
+ *         description: Employee details submitted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Employee details submitted
+ *                 nextStage:
+ *                   type: string
+ *                   example: DOCUMENT_DETAILS
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: companyName, empId, fullName are required
+ *       404:
+ *         description: Rider not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Rider not found
+ *       500:
+ *         description: Internal server error
+ */
+router.post("/rider/employee", riderAuthMiddleWare, employeeDetails);
 
 
 
-// /**
-//  * @swagger
-//  * /api/company/rider/document:
-//  *   post:
-//  *     summary: Upload Rider Documents (Company Flow)
-//  *     description: >
-//  *       This API uploads rider documents including DL number, PAN number,
-//  *       vehicle type, and selfie. It updates RiderKyc, RiderVehicle,
-//  *       RiderSelfie, and RiderOnboarding tables and moves onboarding stage
-//  *       to EMPLOYEEKYC_VERIFICATION.
-//  *     tags:
-//  *       - Rider Onboarding
-//  *     security:
-//  *       - bearerAuth: []
-//  *     requestBody:
-//  *       required: true
-//  *       content:
-//  *         application/json:
-//  *           schema:
-//  *             type: object
-//  *             required:
-//  *               - dlNumber
-//  *               - panNumber
-//  *               - type
-//  *               - selfieUrl
-//  *             properties:
-//  *               dlNumber:
-//  *                 type: string
-//  *                 example: DL-0420110149646
-//  *               panNumber:
-//  *                 type: string
-//  *                 example: ABCDE1234F
-//  *               type:
-//  *                 type: string
-//  *                 enum: [ev, bike, scooty]
-//  *                 example: bike
-//  *               selfieUrl:
-//  *                 type: string
-//  *                 example: https://image-url.com/selfie.jpg
-//  *     responses:
-//  *       200:
-//  *         description: Documents uploaded successfully
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 success:
-//  *                   type: boolean
-//  *                   example: true
-//  *                 message:
-//  *                   type: string
-//  *                   example: Documents uploaded
-//  *                 nextStage:
-//  *                   type: string
-//  *                   example: EMPLOYEEKYC_VERIFICATION
-//  *       400:
-//  *         description: Validation error
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 success:
-//  *                   type: boolean
-//  *                   example: false
-//  *                 message:
-//  *                   type: string
-//  *                   example: dlNumber, panNumber, type, selfieUrl are required
-//  *       404:
-//  *         description: Rider not found
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 success:
-//  *                   type: boolean
-//  *                   example: false
-//  *                 message:
-//  *                   type: string
-//  *                   example: Rider not found
-//  *       500:
-//  *         description: Internal server error
-//  */
-// router.post("/rider/document", riderAuthMiddleWare, documentDetails);
-
+/**
+ * @swagger
+ * /api/company/rider/document:
+ *   post:
+ *     summary: Upload company rider document details
+ *     description: Uploads rider selfie image, saves DL number, PAN number, vehicle type, and updates onboarding to employee KYC verification stage.
+ *     tags:
+ *       - Company Rider Onboarding
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - dlNumber
+ *               - panNumber
+ *               - type
+ *               - selfie
+ *             properties:
+ *               dlNumber:
+ *                 type: string
+ *                 example: DL0420110149646
+ *                 description: Rider driving license number
+ *               panNumber:
+ *                 type: string
+ *                 example: ABCDE1234F
+ *                 description: Rider PAN number
+ *               type:
+ *                 type: string
+ *                 enum: [ev, bike, scooty]
+ *                 example: bike
+ *                 description: Rider vehicle type
+ *               selfie:
+ *                 type: string
+ *                 format: binary
+ *                 description: Rider selfie image file
+ *     responses:
+ *       200:
+ *         description: Documents uploaded successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Documents uploaded
+ *                 selfieUrl:
+ *                   type: string
+ *                   example: https://yourstorageaccount.blob.core.windows.net/container/selfies/1712578123456.jpg
+ *                 nextStage:
+ *                   type: string
+ *                   example: EMPLOYEEKYC_VERIFICATION
+ *
+ *       400:
+ *         description: Missing fields, missing file, or invalid vehicle type
+ *         content:
+ *           application/json:
+ *             examples:
+ *               missingFields:
+ *                 summary: Required fields missing
+ *                 value:
+ *                   success: false
+ *                   message: dlNumber, panNumber, type, selfie(file) are required
+ *               invalidVehicleType:
+ *                 summary: Invalid vehicle type
+ *                 value:
+ *                   success: false
+ *                   message: Invalid vehicle type
+ *
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Unauthorized
+ *
+ *       404:
+ *         description: Rider not found
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Rider not found
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Internal server error
+ */
+router.post(
+  "/rider/document",
+  riderAuthMiddleWare,
+  upload.single("selfieUrl"), // 👈 important
+  documentDetails
+);
 
 module.exports = router;
