@@ -399,7 +399,7 @@ exports.documentDetails = async (req, res) => {
     await prisma.rider.update({
       where: { id: riderId },
       data: {
-        onboardingStage: OnboardingStage.EMPLOYEEKYC_VERIFICATION
+        onboardingStage: OnboardingStage.KYC_APPROVAL_PENDING
       }
     });
 
@@ -407,7 +407,7 @@ exports.documentDetails = async (req, res) => {
       success: true,
       message: "Documents uploaded",
       selfieUrl,
-      nextStage: OnboardingStage.EMPLOYEEKYC_VERIFICATION
+      nextStage: OnboardingStage.KYC_APPROVAL_PENDING
     });
 
   } catch (error) {
