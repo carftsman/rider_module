@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const { upload } = require("../utils/azureUpload");
-const { selectRiderType,employeeDetails,documentDetails } = require("../controllers/companySelectionController");
+const { selectRiderType,employeeDetails,documentDetails,onboardingStatus } = require("../controllers/companySelectionController");
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 /**
  * @swagger
@@ -236,6 +236,10 @@ router.post(
   upload.single("selfie"),
   documentDetails
 );
+
+router.get("/rider/onboarding", riderAuthMiddleWare, onboardingStatus);
+
+
 // router.post(
 //   "/rider/document",
 //   riderAuthMiddleWare,

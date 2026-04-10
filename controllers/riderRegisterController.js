@@ -9,6 +9,7 @@ const { ensurePartnerId } = require("../services/partner.service");
 const prisma = require("../config/prisma");
 const { generatePartnerId } = require("../utils/generatePartnerId");
 
+const { RiderType } = require("@prisma/client");
 
 // ============================================================
 // SEND OTP
@@ -1096,6 +1097,50 @@ exports.logoutOrDelete = async (req, res) => {
 };
 
 //onboardingstatus
+// exports.onboardingStatus = async (req, res) => {
+//   try {
+//     if (!req.rider?.id) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized: Rider token invalid",
+//       });
+//     }
+
+//     const rider = await prisma.rider.findUnique({
+//       where: { id: req.rider.id },
+//       select: {
+//         onboardingStage: true,
+//         isFullyRegistered: true,
+//         onboarding: true,
+//       },
+//     });
+
+//     if (!rider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Rider not found",
+//       });
+//     }
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Onboarding status fetched successfully",
+//       onboardingStage: rider.onboardingStage,
+//       onboardingProgress: rider.onboarding,
+//       isFullyRegistered: rider.isFullyRegistered,
+//     });
+
+//   } catch (error) {
+//     console.error("OnboardingStatus Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error while fetching onboarding status",
+//     });
+//   }
+// };
+
+
+
 exports.onboardingStatus = async (req, res) => {
   try {
     if (!req.rider?.id) {
@@ -1110,6 +1155,7 @@ exports.onboardingStatus = async (req, res) => {
       select: {
         onboardingStage: true,
         isFullyRegistered: true,
+        riderType: true,
         onboarding: true,
       },
     });
@@ -1121,11 +1167,47 @@ exports.onboardingStatus = async (req, res) => {
       });
     }
 
+    const onboarding = rider.onboarding;
+
+    let filteredProgress = {};
+
+    // ✅ INDIVIDUAL RIDER RESPONSE
+    if (rider.riderType === RiderType.INDIVIDUAL_EMPLOYEE) {
+      filteredProgress = {
+        riderId: onboarding.riderId,
+        phoneVerified: onboarding.phoneVerified,
+        appPermissionDone: onboarding.appPermissionDone,
+        citySelected: onboarding.citySelected,
+        vehicleSelected: onboarding.vehicleSelected,
+        personalInfoSubmitted: onboarding.personalInfoSubmitted,
+        selfieUploaded: onboarding.selfieUploaded,
+        aadharVerified: onboarding.aadharVerified,
+        panUploaded: onboarding.panUploaded,
+        dlUploaded: onboarding.dlUploaded,
+        kycCompleted: onboarding.kycCompleted,
+        riderType: onboarding.riderType
+      };
+    }
+
+    // ✅ COMPANY EMPLOYEE RESPONSE
+    if (rider.riderType === RiderType.COMPANY_EMPLOYEE) {
+      filteredProgress = {
+        riderId: onboarding.riderId,
+        phoneVerified: onboarding.phoneVerified,
+        appPermissionDone: onboarding.appPermissionDone,
+        employeeDetailsSubmitted: onboarding.employeeDetailsSubmitted,
+        documentDetailsSubmitted: onboarding.documentDetailsSubmitted,
+        employeeKycVerified: onboarding.employeeKycVerified,
+        kycCompleted: onboarding.kycCompleted,
+        riderType: onboarding.riderType
+      };
+    }
+
     return res.status(200).json({
       success: true,
       message: "Onboarding status fetched successfully",
       onboardingStage: rider.onboardingStage,
-      onboardingProgress: rider.onboarding,
+      onboardingProgress: filteredProgress,
       isFullyRegistered: rider.isFullyRegistered,
     });
 
@@ -1137,7 +1219,6 @@ exports.onboardingStatus = async (req, res) => {
     });
   }
 };
-
 
 
 

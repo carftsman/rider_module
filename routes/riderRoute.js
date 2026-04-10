@@ -770,6 +770,117 @@ riderRouter.delete("/rider/logout", riderAuthMiddleWare,logoutOrDelete)
  *         description: Server error while fetching onboarding status
  */
 
+
+
+// /**
+//  * @swagger
+//  * /api/rider/onboarding-status:
+//  *   get:
+//  *     summary: Get Rider Onboarding Status
+//  *     description: Returns onboarding stage and progress based on rider type (INDIVIDUAL or COMPANY)
+//  *     tags:
+//  *       - Rider Onboarding
+//  *     security:
+//  *       - bearerAuth: []
+//  *
+//  *     responses:
+//  *       200:
+//  *         description: Onboarding status fetched successfully
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 success:
+//  *                   type: boolean
+//  *                   example: true
+//  *                 message:
+//  *                   type: string
+//  *                   example: Onboarding status fetched successfully
+//  *                 onboardingStage:
+//  *                   type: string
+//  *                   example: EMPLOYEE_DETAILS
+//  *                 onboardingProgress:
+//  *                   type: object
+//  *                   description: Dynamic response based on riderType
+//  *                   oneOf:
+//  *                     - type: object
+//  *                       description: Individual Rider Flow
+//  *                       properties:
+//  *                         riderId:
+//  *                           type: string
+//  *                         phoneVerified:
+//  *                           type: boolean
+//  *                         appPermissionDone:
+//  *                           type: boolean
+//  *                         citySelected:
+//  *                           type: boolean
+//  *                         vehicleSelected:
+//  *                           type: boolean
+//  *                         personalInfoSubmitted:
+//  *                           type: boolean
+//  *                         selfieUploaded:
+//  *                           type: boolean
+//  *                         aadharVerified:
+//  *                           type: boolean
+//  *                         panUploaded:
+//  *                           type: boolean
+//  *                         dlUploaded:
+//  *                           type: boolean
+//  *                         kycCompleted:
+//  *                           type: boolean
+//  *                         riderType:
+//  *                           type: boolean
+//  *
+//  *                     - type: object
+//  *                       description: Company Employee Flow
+//  *                       properties:
+//  *                         riderId:
+//  *                           type: string
+//  *                         phoneVerified:
+//  *                           type: boolean
+//  *                         appPermissionDone:
+//  *                           type: boolean
+//  *                         employeeDetailsSubmitted:
+//  *                           type: boolean
+//  *                         documentDetailsSubmitted:
+//  *                           type: boolean
+//  *                         employeeKycVerified:
+//  *                           type: boolean
+//  *                         kycCompleted:
+//  *                           type: boolean
+//  *                         riderType:
+//  *                           type: boolean
+//  *
+//  *                 isFullyRegistered:
+//  *                   type: boolean
+//  *                   example: false
+//  *
+//  *       401:
+//  *         description: Unauthorized
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: false
+//  *               message: Unauthorized: Rider token invalid
+//  *
+//  *       404:
+//  *         description: Rider not found
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: false
+//  *               message: Rider not found
+//  *
+//  *       500:
+//  *         description: Internal server error
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: false
+//  *               message: Server error while fetching onboarding status
+//  */
+
 riderRouter.get("/rider/onboarding-status", riderAuthMiddleWare,onboardingStatus)
 
 
