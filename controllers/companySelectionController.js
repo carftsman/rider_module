@@ -1,5 +1,6 @@
 const prisma = require("../config/prisma");
 const { RiderType, OnboardingStage } = require("@prisma/client");
+const { uploadToAzure } = require("../utils/azureUpload");
 
 exports.selectRiderType = async (req, res) => {
   try {
@@ -188,22 +189,147 @@ exports.employeeDetails = async (req, res) => {
 
 
 
+// exports.documentDetails = async (req, res) => {
+//   try {
+//     const riderId = req.rider.id;
+
+//     const {
+//       dlNumber,
+//       panNumber,
+//       type,
+//       selfieUrl
+//     } = req.body;
+
+//     // ✅ 1. Validation
+//     if (!dlNumber || !panNumber || !type || !selfieUrl) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "dlNumber, panNumber, type, selfieUrl are required"
+//       });
+//     }
+
+//     const allowedVehicleTypes = ["ev", "bike", "scooty"];
+
+//     if (!allowedVehicleTypes.includes(type)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid vehicle type"
+//       });
+//     }
+
+//     // ✅ 2. Check rider exists
+//     const rider = await prisma.rider.findUnique({
+//       where: { id: riderId }
+//     });
+
+//     if (!rider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Rider not found"
+//       });
+//     }
+
+//     // ✅ 3. Upsert RiderKyc
+//     await prisma.riderKyc.upsert({
+//       where: { riderId },
+//       update: {
+//         dlNumber,
+//         panNumber
+//       },
+//       create: {
+//         riderId,
+//         dlNumber,
+//         panNumber
+//       }
+//     });
+
+//     // ✅ 4. Upsert Vehicle
+//     await prisma.riderVehicle.upsert({
+//       where: { riderId },
+//       update: {
+//         type
+//       },
+//       create: {
+//         riderId,
+//         type
+//       }
+//     });
+
+//     // ✅ 5. Upsert Selfie
+//     await prisma.riderSelfie.upsert({
+//       where: { riderId },
+//       update: {
+//         url: selfieUrl,
+//         uploadedAt: new Date()
+//       },
+//       create: {
+//         riderId,
+//         url: selfieUrl,
+//         uploadedAt: new Date()
+//       }
+//     });
+
+//     // ✅ 6. Update Onboarding Flags
+//     await prisma.riderOnboarding.upsert({
+//       where: { riderId },
+//       update: {
+//         documentDetailsSubmitted: true,
+//         dlUploaded: true,
+//         panUploaded: true,
+//         selfieUploaded: true
+//       },
+//       create: {
+//         riderId,
+//         documentDetailsSubmitted: true,
+//         dlUploaded: true,
+//         panUploaded: true,
+//         selfieUploaded: true
+//       }
+//     });
+
+//     // ✅ 7. Update Rider Stage
+//     await prisma.rider.update({
+//       where: { id: riderId },
+//       data: {
+//         onboardingStage: OnboardingStage.KYC_APPROVAL_PENDING
+//       }
+//     });
+
+//     // ✅ 8. Response
+//     return res.status(200).json({
+//       success: true,
+//       message: "Documents uploaded",
+//       selfieUrl,
+//       nextStage: OnboardingStage.KYC_APPROVAL_PENDING
+//     });
+
+//   } catch (error) {
+//     console.error("Document Details Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error"
+//     });
+//   }
+// };
+
+
+
+
+
+
 exports.documentDetails = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    const {
-      dlNumber,
-      panNumber,
-      type,
-      selfieUrl
-    } = req.body;
+    const { dlNumber, panNumber, type } = req.body;
 
-    // ✅ 1. Validation
-    if (!dlNumber || !panNumber || !type || !selfieUrl) {
+    const file = req.file;
+
+    // ✅ Validation
+    if (!dlNumber || !panNumber || !type || !file) {
       return res.status(400).json({
         success: false,
-        message: "dlNumber, panNumber, type, selfieUrl are required"
+        message: "dlNumber, panNumber, type, selfie(file) are required"
       });
     }
 
@@ -216,7 +342,7 @@ exports.documentDetails = async (req, res) => {
       });
     }
 
-    // ✅ 2. Check rider exists
+    // ✅ Check rider
     const rider = await prisma.rider.findUnique({
       where: { id: riderId }
     });
@@ -228,33 +354,24 @@ exports.documentDetails = async (req, res) => {
       });
     }
 
-    // ✅ 3. Upsert RiderKyc
+    // 🔥 ✅ Upload to Azure
+    const selfieUrl = await uploadToAzure(file, "rider-selfies");
+
+    // ✅ KYC
     await prisma.riderKyc.upsert({
       where: { riderId },
-      update: {
-        dlNumber,
-        panNumber
-      },
-      create: {
-        riderId,
-        dlNumber,
-        panNumber
-      }
+      update: { dlNumber, panNumber },
+      create: { riderId, dlNumber, panNumber }
     });
 
-    // ✅ 4. Upsert Vehicle
+    // ✅ Vehicle
     await prisma.riderVehicle.upsert({
       where: { riderId },
-      update: {
-        type
-      },
-      create: {
-        riderId,
-        type
-      }
+      update: { type },
+      create: { riderId, type }
     });
 
-    // ✅ 5. Upsert Selfie
+    // ✅ Selfie
     await prisma.riderSelfie.upsert({
       where: { riderId },
       update: {
@@ -268,7 +385,7 @@ exports.documentDetails = async (req, res) => {
       }
     });
 
-    // ✅ 6. Update Onboarding Flags
+    // ✅ Onboarding flags
     await prisma.riderOnboarding.upsert({
       where: { riderId },
       update: {
@@ -286,20 +403,27 @@ exports.documentDetails = async (req, res) => {
       }
     });
 
-    // ✅ 7. Update Rider Stage
+    // 🔥 ✅ Dynamic NEXT STAGE
+    let nextStage;
+
+    if (rider.riderType === RiderType.COMPANY_EMPLOYEE) {
+      nextStage = OnboardingStage.EMPLOYEEKYC_VERIFICATION;
+    } else {
+      nextStage = OnboardingStage.COMPLETED;
+    }
+
+    // ✅ Update stage
     await prisma.rider.update({
       where: { id: riderId },
-      data: {
-        onboardingStage: OnboardingStage.KYC_APPROVAL_PENDING
-      }
+      data: { onboardingStage: nextStage }
     });
 
-    // ✅ 8. Response
+    // ✅ Response
     return res.status(200).json({
       success: true,
       message: "Documents uploaded",
-      selfieUrl,
-      nextStage: OnboardingStage.KYC_APPROVAL_PENDING
+      selfieUrl, // 👈 Azure URL
+      nextStage
     });
 
   } catch (error) {
