@@ -7,12 +7,17 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  * @swagger
  * /api/company/rider/type:
  *   post:
- *     summary: Select Rider Type
- *     description: Allows a rider to select their onboarding type (Individual or Company).
+ *     summary: Select rider type (Individual or Company)
+ *     description: |
+ *       This API allows a rider to select their onboarding type.
+ *       Once selected, the riderType flag is updated to true in RiderOnboarding table.
+ *
  *     tags:
- *       - Rider Type Onboarding
+ *       - Rider Onboarding
+ *
  *     security:
  *       - bearerAuth: []
+ *
  *     requestBody:
  *       required: true
  *       content:
@@ -25,7 +30,8 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *               riderType:
  *                 type: string
  *                 enum: [INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE]
- *                 example: COMPANY_EMPLOYEE
+ *                 example: INDIVIDUAL_EMPLOYEE
+ *
  *     responses:
  *       200:
  *         description: Rider type selected successfully
@@ -50,25 +56,28 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                       type: string
  *                       example: "uuid"
  *                     riderType:
- *                       type: string
- *                       example: COMPANY_EMPLOYEE
+ *                       type: boolean
+ *                       example: true
  *                     appPermissionDone:
  *                       type: boolean
  *                       example: true
+ *                 selectedType:
+ *                   type: string
+ *                   example: COMPANY_EMPLOYEE
  *                 nextStage:
  *                   type: string
  *                   example: EMPLOYEE_DETAILS
  *
  *       400:
- *         description: Bad request (invalid input)
+ *         description: Bad request (missing or invalid riderType)
  *         content:
  *           application/json:
  *             example:
  *               success: false
- *               message: "Invalid riderType. Allowed values: INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE"
+ *               message: riderType is required
  *
  *       401:
- *         description: Unauthorized (missing or invalid token)
+ *         description: Unauthorized (missing token)
  *         content:
  *           application/json:
  *             example:
@@ -81,7 +90,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *           application/json:
  *             example:
  *               success: false
- *               message: Rider onboarding record not found
+ *               message: Rider not found
  *
  *       500:
  *         description: Internal server error

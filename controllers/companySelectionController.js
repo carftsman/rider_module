@@ -53,36 +53,29 @@ exports.selectRiderType = async (req, res) => {
       });
     }
 
-    const riderTypeBoolean = riderType === "COMPANY_EMPLOYEE";
-
     const updatedOnboarding = await prisma.riderOnboarding.update({
       where: { riderId },
       data: {
-        riderType: riderTypeBoolean
+        riderType: true
       },
       select: {
         id: true,
         riderId: true,
         riderType: true,
-        appPermissionDone: true,
-        // citySelected: true,
-        // employeeDetailsSubmitted: true
+        appPermissionDone: true
       }
     });
 
-    const nextStage = riderTypeBoolean
-      ? "EMPLOYEE_DETAILS"
-      : "SELECT_LOCATION";
+    const nextStage =
+      riderType === "COMPANY_EMPLOYEE"
+        ? "EMPLOYEE_DETAILS"
+        : "SELECT_LOCATION";
 
     return res.status(200).json({
       success: true,
       message: "Rider type selected successfully",
-      data: {
-        ...updatedOnboarding,
-        riderType: updatedOnboarding.riderType
-          ? "COMPANY_EMPLOYEE"
-          : "INDIVIDUAL_EMPLOYEE"
-      },
+      data: updatedOnboarding,
+      selectedType: riderType,
       nextStage
     });
   } catch (error) {
@@ -93,7 +86,6 @@ exports.selectRiderType = async (req, res) => {
     });
   }
 };
-
 
 
 exports.employeeDetails = async (req, res) => {
