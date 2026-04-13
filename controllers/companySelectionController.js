@@ -4,8 +4,15 @@ const { uploadToAzure } = require("../utils/azureUpload");
 
 exports.selectRiderType = async (req, res) => {
   try {
-    const riderId = req.rider.id;
+    const riderId = req.rider?.id;
     const { riderType } = req.body;
+
+    if (!riderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized"
+      });
+    }
 
     if (!riderType) {
       return res.status(400).json({
@@ -14,7 +21,10 @@ exports.selectRiderType = async (req, res) => {
       });
     }
 
-    if (!Object.values(RiderType).includes(riderType)) {
+    if (
+      riderType !== "INDIVIDUAL_EMPLOYEE" &&
+      riderType !== "COMPANY_EMPLOYEE"
+    ) {
       return res.status(400).json({
         success: false,
         message: "Invalid riderType. Allowed values: INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE"
@@ -32,30 +42,54 @@ exports.selectRiderType = async (req, res) => {
       });
     }
 
-    const updatedRider = await prisma.rider.update({
-      where: { id: riderId },
+    const existingOnboarding = await prisma.riderOnboarding.findUnique({
+      where: { riderId }
+    });
+
+    if (!existingOnboarding) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider onboarding record not found"
+      });
+    }
+
+    const riderTypeBoolean = riderType === "COMPANY_EMPLOYEE";
+
+    const updatedOnboarding = await prisma.riderOnboarding.update({
+      where: { riderId },
       data: {
-        riderType,
-        onboardingStage: OnboardingStage.APP_PERMISSIONS
+        riderType: riderTypeBoolean
       },
       select: {
         id: true,
-        phoneNumber: true,
+        riderId: true,
         riderType: true,
-        onboardingStage: true
+        appPermissionDone: true,
+        // citySelected: true,
+        // employeeDetailsSubmitted: true
       }
     });
+
+    const nextStage = riderTypeBoolean
+      ? "EMPLOYEE_DETAILS"
+      : "SELECT_LOCATION";
 
     return res.status(200).json({
       success: true,
       message: "Rider type selected successfully",
-      data: updatedRider
+      data: {
+        ...updatedOnboarding,
+        riderType: updatedOnboarding.riderType
+          ? "COMPANY_EMPLOYEE"
+          : "INDIVIDUAL_EMPLOYEE"
+      },
+      nextStage
     });
   } catch (error) {
     console.error("Error selecting rider type:", error);
     return res.status(500).json({
       success: false,
-      message: "Internal server error"
+      message: error.message || "Internal server error"
     });
   }
 };
