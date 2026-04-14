@@ -2,6 +2,91 @@ const prisma = require("../config/prisma");
 const { RiderType, OnboardingStage } = require("@prisma/client");
 const { uploadToAzure } = require("../utils/azureUpload");
 
+// exports.selectRiderType = async (req, res) => {
+//   try {
+//     const riderId = req.rider?.id;
+//     const { riderType } = req.body;
+
+//     if (!riderId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized"
+//       });
+//     }
+
+//     if (!riderType) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "riderType is required"
+//       });
+//     }
+
+//     if (
+//       riderType !== "INDIVIDUAL_EMPLOYEE" &&
+//       riderType !== "COMPANY_EMPLOYEE"
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid riderType. Allowed values: INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE"
+//       });
+//     }
+
+//     const existingRider = await prisma.rider.findUnique({
+//       where: { id: riderId }
+//     });
+
+//     if (!existingRider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Rider not found"
+//       });
+//     }
+
+//     const existingOnboarding = await prisma.riderOnboarding.findUnique({
+//       where: { riderId }
+//     });
+
+//     if (!existingOnboarding) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Rider onboarding record not found"
+//       });
+//     }
+
+//     const updatedOnboarding = await prisma.riderOnboarding.update({
+//       where: { riderId },
+//       data: {
+//         riderType: true
+//       },
+//       select: {
+//         id: true,
+//         riderId: true,
+//         riderType: true,
+//         appPermissionDone: true
+//       }
+//     });
+
+//     const nextStage =
+//       riderType === "COMPANY_EMPLOYEE"
+//         ? "EMPLOYEE_DETAILS"
+//         : "SELECT_LOCATION";
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Rider type selected successfully",
+//       data: updatedOnboarding,
+//       selectedType: riderType,
+//       nextStage
+//     });
+//   } catch (error) {
+//     console.error("Error selecting rider type:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Internal server error"
+//     });
+//   }
+// };
+
 exports.selectRiderType = async (req, res) => {
   try {
     const riderId = req.rider?.id;
@@ -27,7 +112,8 @@ exports.selectRiderType = async (req, res) => {
     ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid riderType. Allowed values: INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE"
+        message:
+          "Invalid riderType. Allowed values: INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE"
       });
     }
 
@@ -53,17 +139,37 @@ exports.selectRiderType = async (req, res) => {
       });
     }
 
-    const updatedOnboarding = await prisma.riderOnboarding.update({
-      where: { riderId },
-      data: {
-        riderType: true
-      },
-      select: {
-        id: true,
-        riderId: true,
-        riderType: true,
-        appPermissionDone: true
-      }
+    // update both tables together
+    const result = await prisma.$transaction(async (tx) => {
+      const updatedRider = await tx.rider.update({
+        where: { id: riderId },
+        data: {
+          riderType: riderType
+        },
+        select: {
+          id: true,
+          phoneNumber: true,
+          riderType: true
+        }
+      });
+
+      const updatedOnboarding = await tx.riderOnboarding.update({
+        where: { riderId },
+        data: {
+          riderType: true
+        },
+        select: {
+          id: true,
+          riderId: true,
+          riderType: true,
+          appPermissionDone: true
+        }
+      });
+
+      return {
+        updatedRider,
+        updatedOnboarding
+      };
     });
 
     const nextStage =
@@ -74,7 +180,8 @@ exports.selectRiderType = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Rider type selected successfully",
-      data: updatedOnboarding,
+      rider: result.updatedRider,
+      onboarding: result.updatedOnboarding,
       selectedType: riderType,
       nextStage
     });
@@ -86,8 +193,6 @@ exports.selectRiderType = async (req, res) => {
     });
   }
 };
-
-
 exports.employeeDetails = async (req, res) => {
   try {
     const riderId = req.rider.id;
@@ -337,74 +442,199 @@ exports.documentDetails = async (req, res) => {
 
 
 exports.onboardingStatus = async (req, res) => {
+
   try {
+
     if (!req.rider?.id) {
+
       return res.status(401).json({
+
         success: false,
+
         message: "Unauthorized: Rider token invalid",
+
       });
+
     }
+ 
+    const riderId = req.rider.id;
+ 
+    const onboarding = await prisma.riderOnboarding.findUnique({
 
-    const rider = await prisma.rider.findUnique({
-      where: { id: req.rider.id },
-      select: {
-        riderType: true, // ✅ IMPORTANT
-        onboardingStage: true,
-        isFullyRegistered: true,
-        onboarding: true,
-      },
+      where: { riderId },
+
+      include: { rider: true },
+
     });
+ 
+    if (!onboarding) {
 
-    if (!rider) {
       return res.status(404).json({
+
         success: false,
-        message: "Rider not found",
+
+        message: "Onboarding not found",
+
       });
+
     }
+ 
+    if (!onboarding.rider) {
 
-    // 🔥 Decide nextStage dynamically
-    let nextStage = rider.onboardingStage;
+      return res.status(400).json({
 
-    if (rider.riderType === "COMPANY_EMPLOYEE") {
-      // Company flow
-      switch (rider.onboardingStage) {
-        case "EMPLOYEE_DETAILS":
-          nextStage = "DOCUMENT_DETAILS";
-          break;
-        case "DOCUMENT_DETAILS":
-          nextStage = "EMPLOYEEKYC_VERIFICATION";
-          break;
-        case "EMPLOYEEKYC_VERIFICATION":
-          nextStage = "COMPLETED";
-          break;
-      }
-    } else {
-      // Individual flow (example)
-      switch (rider.onboardingStage) {
-        case "SELECT_LOCATION":
-          nextStage = "SELECT_VEHICLE";
-          break;
-        case "SELECT_VEHICLE":
-          nextStage = "PERSONAL_INFO";
-          break;
-      }
+        success: false,
+
+        message: "Rider data not found",
+
+      });
+
     }
+ 
+    const { phoneVerified, appPermissionDone, riderType } = onboarding;
+ 
+    // ✅ Step 1: Basic checks
 
-    return res.status(200).json({
+    if (!phoneVerified || !appPermissionDone) {
+
+      return res.json({
+
+        success: true,
+
+        message: "Basic onboarding pending",
+
+        data: {
+
+          riderId,
+
+          phoneVerified,
+
+          appPermissionDone,
+
+          riderType,
+
+        },
+
+      });
+
+    }
+ 
+    // ✅ Step 2: Rider type selection pending
+
+    if (!riderType) {
+
+      return res.json({
+
+        success: true,
+
+        message: "Rider type selection pending",
+
+        data: {
+
+          riderId,
+
+          phoneVerified,
+
+          appPermissionDone,
+
+          riderType,
+
+        },
+
+      });
+
+    }
+ 
+    const riderTypeValue = onboarding.rider.riderType;
+ 
+    let responseData;
+ 
+    // ✅ Step 3: INDIVIDUAL
+
+    if (riderTypeValue === "INDIVIDUAL_EMPLOYEE") {
+
+      responseData = {
+
+        riderId,
+
+        phoneVerified,
+
+        appPermissionDone,
+
+        citySelected: onboarding.citySelected,
+
+        vehicleSelected: onboarding.vehicleSelected,
+
+        personalInfoSubmitted: onboarding.personalInfoSubmitted,
+
+        selfieUploaded: onboarding.selfieUploaded,
+
+        aadharVerified: onboarding.aadharVerified,
+
+        panUploaded: onboarding.panUploaded,
+
+        dlUploaded: onboarding.dlUploaded,
+
+        kycCompleted: onboarding.kycCompleted,
+
+        riderType,
+
+      };
+
+    }
+ 
+    // ✅ Step 4: COMPANY
+
+    else if (riderTypeValue === "COMPANY_EMPLOYEE") {
+
+      responseData = {
+
+        riderId,
+
+        phoneVerified,
+
+        appPermissionDone,
+
+        documentDetailsSubmitted: onboarding.documentDetailsSubmitted,
+
+        employeeDetailsSubmitted: onboarding.employeeDetailsSubmitted,
+
+        employeeKycVerified: onboarding.employeeKycVerified,
+
+        kycCompleted: onboarding.kycCompleted,
+
+        riderType,
+
+      };
+
+    }
+ 
+    return res.json({
+
       success: true,
+
       message: "Onboarding status fetched successfully",
-      riderType: rider.riderType, // ✅ key field
-      onboardingStage: rider.onboardingStage,
-      onboardingProgress: rider.onboarding,
-      isFullyRegistered: rider.isFullyRegistered,
-      nextStage // 🔥 unified navigation
+
+      riderType: riderTypeValue,
+
+      data: responseData,
+
+    });
+ 
+  } catch (error) {
+
+    console.error(error);
+
+    return res.status(500).json({
+
+      success: false,
+
+      message: "Internal server error",
+
     });
 
-  } catch (error) {
-    console.error("OnboardingStatus Error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error while fetching onboarding status",
-    });
   }
+
 };
+
+ 
