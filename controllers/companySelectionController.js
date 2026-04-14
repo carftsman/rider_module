@@ -334,6 +334,8 @@ exports.documentDetails = async (req, res) => {
 };
 
 
+
+
 exports.onboardingStatus = async (req, res) => {
   try {
     if (!req.rider?.id) {
