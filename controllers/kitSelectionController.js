@@ -1,5 +1,5 @@
 const prisma = require("../config/prisma");
-const { RequestStatus,PaymentStatus,AssetStatus } = require("@prisma/client");
+const {AssetType, RequestStatus,PaymentStatus,AssetStatus } = require("@prisma/client");
 
 exports.createAsset = async (req, res) => {
   try {
@@ -539,5 +539,134 @@ exports.markAsDelivered = async (req, res) => {
   } catch (error) {
     console.error("Mark Delivered Error:", error);
     return res.status(500).json({ success: false, message: error.message || "Failed to update delivery" });
+  }
+};
+
+
+
+
+
+
+exports.requestJoiningKit = async (req, res) => {
+  try {
+    if (!req.rider?.id) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized"
+      });
+    }
+
+    const riderId = req.rider.id;
+
+    const { name, completeAddress, pincode } = req.body;
+
+    // ✅ Validation
+    if (!name || !completeAddress || !pincode) {
+      return res.status(400).json({
+        success: false,
+        message: "name, completeAddress and pincode are required"
+      });
+    }
+
+    const joiningKitAssets = [
+      AssetType.T_SHIRT,
+      AssetType.BAG,
+      AssetType.HELMET,
+      AssetType.JACKET,
+      AssetType.ID_CARD
+    ];
+
+    // ✅ Prevent duplicate request
+    const existingRequests = await prisma.assetRequest.findMany({
+      where: {
+        riderId,
+        assetType: {
+          in: joiningKitAssets
+        }
+      }
+    });
+
+    if (existingRequests.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Joining kit already requested for this rider"
+      });
+    }
+
+    const createdRequests = [];
+    let totalPrice = 0;
+
+    for (const assetType of joiningKitAssets) {
+      const asset = await prisma.assetMaster.findFirst({
+        where: { assetType }
+      });
+
+      if (!asset) continue;
+
+      const isFree = asset.issuedCount < asset.freeLimit;
+      const calculatedPrice = isFree ? 0 : Number(asset.price);
+
+      const request = await prisma.assetRequest.create({
+        data: {
+          riderId,
+          assetType,
+          quantity: 1,
+          status: isFree
+            ? RequestStatus.READY_FOR_DISPATCH
+            : RequestStatus.PAYMENT_PENDING
+        }
+      });
+
+      createdRequests.push({
+        ...request,
+        deliveryDetails: {
+          name,
+          completeAddress,
+          pincode
+        },
+        price: calculatedPrice,
+        isFree
+      });
+
+      totalPrice += calculatedPrice;
+
+      await prisma.assetMaster.update({
+        where: { id: asset.id },
+        data: {
+          issuedCount: {
+            increment: 1
+          }
+        }
+      });
+    }
+
+    if (createdRequests.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No assets found"
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Joining kit requested successfully",
+      totalItems: createdRequests.length,
+      totalPrice,
+      deliveryDetails: {
+        name,
+        completeAddress,
+        pincode
+      },
+      data: createdRequests
+    });
+
+  } catch (error) {
+    console.error("Request Joining Kit Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong",
+      error: error.message
+    });
   }
 };

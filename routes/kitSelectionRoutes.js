@@ -6,12 +6,13 @@ const{createAsset,
     makePayment,
     dispatchAsset,
     raiseIssue,
-    markAsDelivered
+    markAsDelivered,
+    requestJoiningKit
 
 }=require('../controllers/kitSelectionController');
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 const upload = require("../middleware/uploadSelfie");
-
+router.post("/rider/joining-kit", riderAuthMiddleWare, requestJoiningKit);
 router.post('/admin/assets', createAsset)
 /**
  * @swagger
