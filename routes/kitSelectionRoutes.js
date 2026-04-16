@@ -410,7 +410,7 @@ router.post('/admin/approve', approveRequest)
  *                   example: "Detailed error message"
  */
 router.post('/payment',riderAuthMiddleWare, makePayment)
-router.post('/admin/dispatch', dispatchAsset)
+
 /**
  * @swagger
  * /api/kit/rider/issue:
@@ -560,5 +560,5 @@ router.post('/admin/dispatch', dispatchAsset)
  */
 router.post('/rider/issue',riderAuthMiddleWare,upload.single("image"), raiseIssue)
 router.post('/asset/mark-delivered', markAsDelivered)
-
+router.post('/admin/dispatch/:assetRequestIds', dispatchAsset)
 module.exports = router

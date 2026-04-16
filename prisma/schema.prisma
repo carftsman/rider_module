@@ -1444,6 +1444,8 @@ model RiderIncentiveProgress {
   peakOrders Int @default(0)
 
   normalOrders Int @default(0)
+  completedPeakSlots Int @default(0)
+  completedNormalSlots Int @default(0)
 
   orderIds String[]
 
@@ -1561,7 +1563,8 @@ model Incentive {
   progress RiderIncentiveProgress[]
 
   payouts IncentivePayout[]
-
+  isLocked Boolean @default(false)
+  lockedAt DateTime?
   @@index([status])
   @@index([incentiveType])
 }
