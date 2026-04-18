@@ -390,11 +390,14 @@ model AssetMaster {
 
   assetName String?
 
-  imageUrl String?
+  imageUrl      String?
+  totalAddedQty Int     @default(0)
 
-  createdAt DateTime @default(now())
+  availableStock Int      @default(0)
+  createdAt      DateTime @default(now())
 
-  updatedAt DateTime @updatedAt
+  updatedAt   DateTime         @updatedAt
+  inventories AssetInventory[]
 }
 
 model AssetRequest {
@@ -408,9 +411,10 @@ model AssetRequest {
 
   status RequestStatus @default(PENDING)
 
-  createdAt DateTime @default(now())
-
-  Payment Payment?
+  createdAt        DateTime     @default(now())
+  deliveryMode     DeliveryMode?
+  pickupLocationId String?
+  Payment          Payment?
 
   Shipment Shipment?
 }
@@ -1443,8 +1447,8 @@ model RiderIncentiveProgress {
 
   peakOrders Int @default(0)
 
-  normalOrders Int @default(0)
-  completedPeakSlots Int @default(0)
+  normalOrders         Int @default(0)
+  completedPeakSlots   Int @default(0)
   completedNormalSlots Int @default(0)
 
   orderIds String[]
@@ -1562,9 +1566,10 @@ model Incentive {
 
   progress RiderIncentiveProgress[]
 
-  payouts IncentivePayout[]
-  isLocked Boolean @default(false)
+  payouts  IncentivePayout[]
+  isLocked Boolean           @default(false)
   lockedAt DateTime?
+
   @@index([status])
   @@index([incentiveType])
 }
@@ -1690,4 +1695,23 @@ enum PayoutStatus {
   PENDING
 
   CREDITED
+}
+
+model AssetInventory {
+  id            String   @id @default(uuid())
+  assetMasterId String
+  addedQuantity Int
+  availableQty  Int
+  remarks       String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  assetMaster AssetMaster @relation(fields: [assetMasterId], references: [id], onDelete: Cascade)
+
+  @@index([assetMasterId])
+}
+
+enum DeliveryMode {
+  HOME_DELIVERY
+  PICKUP
 }

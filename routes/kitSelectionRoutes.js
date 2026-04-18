@@ -12,6 +12,169 @@ const{createAsset,
 }=require('../controllers/kitSelectionController');
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 const upload = require("../middleware/uploadSelfie");
+/**
+ * @swagger
+ * /api/kit/rider/joining-kit:
+ *   post:
+ *     summary: Request rider joining kit
+ *     description: |
+ *       Rider requests complete joining kit items (T_SHIRT, BAG, HELMET, JACKET, ID_CARD).
+ *       Rider must choose delivery mode:
+ *       - HOME_DELIVERY → requires name, completeAddress, pincode
+ *       - PICKUP → requires pickupLocationId
+ *
+ *       Free items are moved to READY_FOR_DISPATCH.
+ *       Paid items are moved to PAYMENT_PENDING.
+ *
+ *     tags:
+ *       - Rider Kit
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             oneOf:
+ *               - type: object
+ *                 required:
+ *                   - deliveryMode
+ *                   - name
+ *                   - completeAddress
+ *                   - pincode
+ *                 properties:
+ *                   deliveryMode:
+ *                     type: string
+ *                     enum: [HOME_DELIVERY]
+ *                     example: HOME_DELIVERY
+ *                   name:
+ *                     type: string
+ *                     example: Ravi Kumar
+ *                   completeAddress:
+ *                     type: string
+ *                     example: H.No 1-23, Madhapur, Hyderabad, Telangana
+ *                   pincode:
+ *                     type: string
+ *                     example: "500081"
+ *
+ *               - type: object
+ *                 required:
+ *                   - deliveryMode
+ *                   - pickupLocationId
+ *                 properties:
+ *                   deliveryMode:
+ *                     type: string
+ *                     enum: [PICKUP]
+ *                     example: PICKUP
+ *                   pickupLocationId:
+ *                     type: string
+ *                     example: pickup_loc_001
+ *
+ *     responses:
+ *       201:
+ *         description: Joining kit requested successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Joining kit requested successfully
+ *                 totalItems:
+ *                   type: integer
+ *                   example: 5
+ *                 totalPrice:
+ *                   type: number
+ *                   example: 0
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: 2e70c3ad-fcbd-49b3-9c3c-b876854a4e91
+ *                       riderId:
+ *                         type: string
+ *                         example: ed9797f0-30a0-4bd5-838d-9eb42a95d842
+ *                       assetType:
+ *                         type: string
+ *                         example: T_SHIRT
+ *                       quantity:
+ *                         type: integer
+ *                         example: 1
+ *                       status:
+ *                         type: string
+ *                         example: READY_FOR_DISPATCH
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                       deliveryDetails:
+ *                         type: object
+ *                         example:
+ *                           deliveryMode: HOME_DELIVERY
+ *                           name: Ravi Kumar
+ *                           completeAddress: H.No 1-23, Madhapur, Hyderabad
+ *                           pincode: "500081"
+ *                       price:
+ *                         type: number
+ *                         example: 0
+ *                       isFree:
+ *                         type: boolean
+ *                         example: true
+ *
+ *       400:
+ *         description: Validation error / duplicate request
+ *         content:
+ *           application/json:
+ *             examples:
+ *               missingDeliveryMode:
+ *                 value:
+ *                   success: false
+ *                   message: deliveryMode is required
+ *
+ *               invalidDeliveryMode:
+ *                 value:
+ *                   success: false
+ *                   message: Invalid deliveryMode
+ *
+ *               missingHomeDeliveryFields:
+ *                 value:
+ *                   success: false
+ *                   message: name, completeAddress and pincode required for HOME_DELIVERY
+ *
+ *               missingPickupLocation:
+ *                 value:
+ *                   success: false
+ *                   message: pickupLocationId required for PICKUP
+ *
+ *               alreadyRequested:
+ *                 value:
+ *                   success: false
+ *                   message: Joining kit already requested
+ *
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Unauthorized
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Something went wrong
+ */
 router.post("/rider/joining-kit", riderAuthMiddleWare, requestJoiningKit);
 router.post('/admin/assets', createAsset)
 /**
@@ -269,7 +432,7 @@ router.get('/rider/assets',riderAuthMiddleWare, viewAssets)
  *                   example: "Detailed error message"
  */
 router.post('/rider/request',riderAuthMiddleWare, requestAsset)
-router.post('/admin/approve', approveRequest)
+// router.post('/admin/approve', approveRequest)
 /**
  * @swagger
  * /api/kit/payment:
@@ -409,7 +572,7 @@ router.post('/admin/approve', approveRequest)
  *                   type: string
  *                   example: "Detailed error message"
  */
-router.post('/payment',riderAuthMiddleWare, makePayment)
+router.post('/payment/:requestId ',riderAuthMiddleWare, makePayment)
 
 /**
  * @swagger
@@ -561,4 +724,5 @@ router.post('/payment',riderAuthMiddleWare, makePayment)
 router.post('/rider/issue',riderAuthMiddleWare,upload.single("image"), raiseIssue)
 router.post('/asset/mark-delivered', markAsDelivered)
 router.post('/admin/dispatch/:assetRequestIds', dispatchAsset)
+router.post('/admin/approve/:riderId', approveRequest)
 module.exports = router

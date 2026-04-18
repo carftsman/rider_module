@@ -168,7 +168,7 @@ exports.requestAsset = async (req, res) => {
 
 exports.approveRequest = async (req, res) => {
   try {
-    const { riderId } = req.body;
+    const { riderId } = req.params;
 
     if (!riderId) {
       return res.status(400).json({
@@ -177,92 +177,61 @@ exports.approveRequest = async (req, res) => {
       });
     }
 
-    console.log("Admin approving riderId:", riderId);
-
     const requests = await prisma.assetRequest.findMany({
       where: {
         riderId,
-        status: RequestStatus.READY_FOR_DISPATCH
+        status: RequestStatus.PENDING
       },
       orderBy: { createdAt: "asc" }
     });
 
-    console.log("Requests ready for dispatch:", requests);
-
     if (!requests.length) {
       return res.status(404).json({
         success: false,
-        message: "No requests ready for dispatch found"
+        message: "No pending requests found"
       });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      let riderAssets = await tx.rider_assets.findFirst({
-        where: { riderId }
+    const updatedRequests = [];
+
+    for (const request of requests) {
+      const asset = await prisma.assetMaster.findFirst({
+        where: { assetType: request.assetType }
       });
 
-      if (!riderAssets) {
-        riderAssets = await tx.rider_assets.create({
-          data: {
-            riderId,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          }
+      if (!asset) {
+        return res.status(404).json({
+          success: false,
+          message: `Asset not found for assetType: ${request.assetType}`
         });
       }
 
-      const approvedRequests = [];
-      const dispatchedItems = [];
+      // example logic
+      const isFree = asset.freeLimit > 0;
 
-      for (const request of requests) {
-        const asset = await tx.assetMaster.findFirst({
-          where: { assetType: request.assetType }
-        });
+      const nextStatus = isFree
+        ? RequestStatus.READY_FOR_DISPATCH
+        : RequestStatus.PAYMENT_PENDING;
 
-        if (!asset) {
-          throw new Error(`Asset not found in master for assetType: ${request.assetType}`);
+      const updatedRequest = await prisma.assetRequest.update({
+        where: { id: request.id },
+        data: {
+          status: nextStatus
         }
+      });
 
-        const itemsData = Array.from({ length: request.quantity }, () => ({
-          riderAssetsId: riderAssets.id,
-          assetType: asset.assetType,
-          assetName: asset.assetName,
-          issuedDate: new Date(),
-          status: "ISSUED",
-          condition: "GOOD",
-          quantity: 1
-        }));
-
-        await tx.rider_asset_items.createMany({
-          data: itemsData
-        });
-
-        const updatedRequest = await tx.assetRequest.update({
-          where: { id: request.id },
-          data: { status: RequestStatus.DISPATCHED }
-        });
-
-        approvedRequests.push(updatedRequest);
-        dispatchedItems.push({
-          assetType: asset.assetType,
-          assetName: asset.assetName,
-          quantity: request.quantity
-        });
-      }
-
-      return {
-        riderAssetsId: riderAssets.id,
-        totalRequestsApproved: approvedRequests.length,
-        totalItemsDispatched: dispatchedItems.reduce((sum, item) => sum + item.quantity, 0),
-        approvedRequests,
-        dispatchedItems
-      };
-    });
+      updatedRequests.push({
+        id: updatedRequest.id,
+        assetType: updatedRequest.assetType,
+        quantity: updatedRequest.quantity,
+        status: updatedRequest.status
+      });
+    }
 
     return res.status(200).json({
       success: true,
-      message: "All ready requests approved and assets dispatched successfully",
-      ...result
+      message: "Requests approved successfully",
+      data: updatedRequests
     });
   } catch (error) {
     console.error("Approve Error:", error);
@@ -273,14 +242,209 @@ exports.approveRequest = async (req, res) => {
   }
 };
 
+// exports.makePayment = async (req, res) => {
+//   try {
+//     const riderId = req.rider?.id;
 
+//     if (!riderId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized"
+//       });
+//     }
 
+//     const { paymentMode, paymentType, months } = req.body;
 
+//     // Get all requests that are waiting for payment or already ready/free
+//     const requests = await prisma.assetRequest.findMany({
+//       where: {
+//         riderId,
+//         status: {
+//           in: ["PAYMENT_PENDING", "READY_FOR_DISPATCH"]
+//         }
+//       },
+//       orderBy: { createdAt: "asc" }
+//     });
 
+//     if (!requests.length) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No payment pending request found"
+//       });
+//     }
+
+//     const assetRequestIds = requests.map(r => r.id);
+
+//     // Separate already-ready requests
+//     const alreadyReady = requests.filter(r => r.status === "READY_FOR_DISPATCH");
+//     const paymentPending = requests.filter(r => r.status === "PAYMENT_PENDING");
+
+//     // If all are already ready, just return ids
+//     if (paymentPending.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "No payment is required for current asset requests",
+//         assetRequestIds,
+//         currentStatuses: [...new Set(requests.map(r => r.status))],
+//         note: "Assets are either free or already moved beyond payment stage"
+//       });
+//     }
+
+//     let totalAmount = 0;
+//     let freeRequestIds = [];
+//     let paidRequestIds = [];
+
+//     for (const reqItem of paymentPending) {
+//       const asset = await prisma.assetMaster.findFirst({
+//         where: {
+//           assetType: reqItem.assetType,
+//           isActive: true
+//         }
+//       });
+
+//       if (!asset) {
+//         return res.status(404).json({
+//           success: false,
+//           message: `Active asset not found for ${reqItem.assetType}`
+//         });
+//       }
+
+//       const isEligibleForFree =
+//         asset.freeLimit > 0 &&
+//         asset.issuedCount + reqItem.quantity <= asset.freeLimit;
+
+//       if (isEligibleForFree) {
+//         freeRequestIds.push(reqItem.id);
+//       } else {
+//         paidRequestIds.push(reqItem.id);
+//         totalAmount += asset.price * reqItem.quantity;
+//       }
+//     }
+
+//     // Update free requests directly
+//     if (freeRequestIds.length > 0) {
+//       await prisma.$transaction(async (tx) => {
+//         for (const id of freeRequestIds) {
+//           const reqItem = paymentPending.find(r => r.id === id);
+
+//           await tx.assetRequest.update({
+//             where: { id },
+//             data: { status: "READY_FOR_DISPATCH" }
+//           });
+
+//           await tx.assetMaster.updateMany({
+//             where: { assetType: reqItem.assetType, isActive: true },
+//             data: {
+//               issuedCount: {
+//                 increment: reqItem.quantity
+//               }
+//             }
+//           });
+//         }
+//       });
+//     }
+
+//     // If all requests were free
+//     if (paidRequestIds.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "Congratulations! You got free assets",
+//         popup: true,
+//         paymentRequired: false,
+//         amount: 0,
+//         nextStage: "READY_FOR_DISPATCH",
+//         assetRequestIds: [...alreadyReady.map(r => r.id), ...freeRequestIds]
+//       });
+//     }
+
+//     // Paid flow
+//     if (!paymentMode || !paymentType) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "paymentMode and paymentType are required"
+//       });
+//     }
+
+//     const payment = await prisma.$transaction(async (tx) => {
+//       const createdPayments = [];
+
+//       for (const id of paidRequestIds) {
+//         const reqItem = paymentPending.find(r => r.id === id);
+
+//         const asset = await tx.assetMaster.findFirst({
+//           where: {
+//             assetType: reqItem.assetType,
+//             isActive: true
+//           }
+//         });
+
+//         const amount = asset.price * reqItem.quantity;
+
+//         const pay = await tx.payment.create({
+//           data: {
+//             assetRequestId: id,
+//             amount,
+//             paymentMode,
+//             paymentType,
+//             status: "SUCCESS"
+//           }
+//         });
+
+//         if (paymentType === "EMI") {
+//           if (!months || months <= 0) {
+//             throw new Error("Valid months required for EMI");
+//           }
+
+//           const monthlyAmount = amount / months;
+
+//           await tx.emiPlan.create({
+//             data: {
+//               paymentId: pay.id,
+//               totalAmount: amount,
+//               interestRate: 10,
+//               months,
+//               monthlyAmount,
+//               remainingAmount: amount,
+//               nextDueDate: new Date()
+//             }
+//           });
+//         }
+
+//         await tx.assetRequest.update({
+//           where: { id },
+//           data: { status: "READY_FOR_DISPATCH" }
+//         });
+
+//         createdPayments.push(pay);
+//       }
+
+//       return createdPayments;
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Payment successful. Waiting for admin dispatch",
+//       paymentRequired: true,
+//       totalAmount,
+//       assetRequestIds: [
+//         ...alreadyReady.map(r => r.id),
+//         ...freeRequestIds,
+//         ...paidRequestIds
+//       ],
+//       data: payment
+//     });
+
+//   } catch (error) {
+//     console.error("Payment Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Payment failed"
+//     });
+//   }
+// };
 exports.makePayment = async (req, res) => {
   try {
     const riderId = req.rider?.id;
-    console.log("Rider ID from token:", riderId);
 
     if (!riderId) {
       return res.status(401).json({
@@ -289,246 +453,233 @@ exports.makePayment = async (req, res) => {
       });
     }
 
-    const { paymentMode, paymentType, months } = req.body;
+    const { requestId } = req.params;
+    const { paymentMode, paymentType, emiMonths } = req.body;
 
-    if (!paymentMode || !paymentType) {
+    if (!requestId) {
       return res.status(400).json({
         success: false,
-        message: "paymentMode and paymentType are required"
+        message: "requestId is required in params"
       });
     }
 
-    const riderAssets = await prisma.rider_assets.findFirst({
-      where: { riderId },
-      orderBy: { createdAt: "desc" }
+    if (!paymentMode) {
+      return res.status(400).json({
+        success: false,
+        message: "paymentMode is required"
+      });
+    }
+
+    if (paymentMode !== "ONLINE" && paymentMode !== "OFFLINE") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid paymentMode. Allowed: ONLINE, OFFLINE"
+      });
+    }
+
+    const assetRequest = await prisma.assetRequest.findFirst({
+      where: {
+        id: requestId,
+        riderId
+      }
     });
 
-    const allRequests = await prisma.assetRequest.findMany({
-      where: { riderId },
-      orderBy: { createdAt: "desc" }
-    });
-
-    console.log("All requests for this rider:", JSON.stringify(allRequests, null, 2));
-
-    if (!allRequests.length) {
+    if (!assetRequest) {
       return res.status(404).json({
         success: false,
-        message: "No asset requests found for this rider",
-        riderAssetsId: riderAssets?.id || null
+        message: "Asset request not found"
       });
     }
 
-    const request = allRequests.find(
-      (r) => r.status === RequestStatus.PAYMENT_PENDING
-    );
-
-    console.log("Payment pending request found:", request);
-
-if (!request) {
-  const statuses = [...new Set(allRequests.map((r) => r.status))];
-  const assetRequestIds = allRequests.map((r) => r.id);
-
-  return res.status(200).json({
-    success: true,
-    message: "No payment is required for current asset requests",
-    riderAssetsId: riderAssets?.id || null,
-    assetRequestIds,
-    currentStatuses: statuses,
-    note: "Assets are either free or already moved beyond payment stage"
-  });
-}
-    const existingPayment = await prisma.payment.findFirst({
-      where: { assetRequestId: request.id }
-    });
-
-    if (existingPayment) {
-      return res.status(200).json({
-        success: true,
-        message: "Payment already completed",
-        riderAssetsId: riderAssets?.id || null,
-        assetRequestId: request.id,
-        data: existingPayment
-      });
-    }
-
-    const asset = await prisma.assetMaster.findFirst({
-      where: { assetType: request.assetType }
-    });
-
-    if (!asset) {
-      return res.status(404).json({
+    if (
+      assetRequest.status === "DISPATCHED" ||
+      assetRequest.status === "COMPLETED" ||
+      assetRequest.status === "CANCELLED"
+    ) {
+      return res.status(400).json({
         success: false,
-        message: "Asset not found in master",
-        riderAssetsId: riderAssets?.id || null
+        message: `Payment selection not allowed for status ${assetRequest.status}`
       });
     }
 
-    if ((asset.price || 0) <= 0) {
-      await prisma.assetRequest.update({
-        where: { id: request.id },
-        data: {
-          status: RequestStatus.READY_FOR_DISPATCH
-        }
-      });
-
+    // free item case
+    if (assetRequest.status === "READY_FOR_DISPATCH") {
       return res.status(200).json({
         success: true,
-        message: "This asset is free. Payment is not required.",
-        riderAssetsId: riderAssets?.id || null,
-        assetRequestId: request.id,
-        assetType: request.assetType,
-        quantity: request.quantity,
-        status: RequestStatus.READY_FOR_DISPATCH
+        message: "This asset is already free and ready for dispatch",
+        data: assetRequest
       });
     }
 
-    const totalAmount = asset.price * request.quantity;
+    let updateData = {
+      paymentMode,
+      status: "PAYMENT_PENDING"
+    };
 
-    const payment = await prisma.$transaction(async (tx) => {
-      const pay = await tx.payment.create({
-        data: {
-          assetRequestId: request.id,
-          amount: totalAmount,
-          paymentMode,
-          paymentType,
-          status: PaymentStatus.SUCCESS
-        }
-      });
+    if (paymentMode === "OFFLINE") {
+      updateData.paymentType = null;
+      updateData.emiMonths = null;
+    }
 
-      if (paymentType === "EMI") {
-        if (!months || months <= 0) {
-          throw new Error("Valid months required for EMI");
-        }
-
-        const monthlyAmount = totalAmount / months;
-
-        await tx.emiPlan.create({
-          data: {
-            paymentId: pay.id,
-            totalAmount,
-            interestRate: 10,
-            months,
-            monthlyAmount,
-            remainingAmount: totalAmount,
-            nextDueDate: new Date()
-          }
+    if (paymentMode === "ONLINE") {
+      if (!paymentType) {
+        return res.status(400).json({
+          success: false,
+          message: "paymentType is required when paymentMode is ONLINE"
         });
       }
 
-      await tx.assetRequest.update({
-        where: { id: request.id },
-        data: {
-          status: RequestStatus.READY_FOR_DISPATCH
-        }
-      });
+      if (paymentType !== "FULL_PAYMENT" && paymentType !== "EMI") {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid paymentType. Allowed: FULL_PAYMENT, EMI"
+        });
+      }
 
-      return pay;
+      updateData.paymentType = paymentType;
+
+      if (paymentType === "EMI") {
+        if (!emiMonths) {
+          return res.status(400).json({
+            success: false,
+            message: "emiMonths is required when paymentType is EMI"
+          });
+        }
+
+        const allowedMonths = [3, 6, 9, 12];
+
+        if (!allowedMonths.includes(Number(emiMonths))) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid emiMonths. Allowed: 3, 6, 9, 12"
+          });
+        }
+
+        updateData.emiMonths = Number(emiMonths);
+      } else {
+        updateData.emiMonths = null;
+      }
+    }
+
+    const updatedRequest = await prisma.assetRequest.update({
+      where: { id: requestId },
+      data: updateData
     });
 
     return res.status(200).json({
       success: true,
-      message: "Payment successful. Waiting for admin dispatch",
-      riderAssetsId: riderAssets?.id || null,
-      assetRequestId: request.id,
-      data: payment
+      message: "Payment option selected successfully",
+      data: updatedRequest
     });
+
   } catch (error) {
-    console.error("Payment Error:", error);
+    console.error("makePayment error:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Payment failed"
+      message: "Something went wrong",
+      error: error.message
     });
   }
 };
-
 exports.dispatchAsset = async (req, res) => {
   try {
-    const { assetRequestIds } = req.params;
-    const { courierName, trackingId } = req.body || {};
+    const { assetRequestIds, courierName, trackingId } = req.body;
 
-    if (!assetRequestIds || !courierName || !trackingId) {
+    if (
+      !assetRequestIds ||
+      !Array.isArray(assetRequestIds) ||
+      assetRequestIds.length === 0 ||
+      !courierName ||
+      !trackingId
+    ) {
       return res.status(400).json({
         success: false,
-        message: "assetRequestIds param, courierName and trackingId are required"
+        message: "assetRequestIds, courierName and trackingId are required"
       });
     }
 
-    const idsArray = assetRequestIds
-      .split(",")
-      .map((id) => id.trim())
-      .filter(Boolean);
-
-    if (!idsArray.length) {
-      return res.status(400).json({
-        success: false,
-        message: "No valid assetRequestIds provided"
-      });
-    }
-
-    const allMatchedRequests = await prisma.assetRequest.findMany({
+    const requests = await prisma.assetRequest.findMany({
       where: {
-        id: { in: idsArray }
+        id: { in: assetRequestIds }
       }
     });
 
-    if (!allMatchedRequests.length) {
+    if (!requests.length) {
       return res.status(404).json({
         success: false,
-        message: "No asset requests found for given IDs"
+        message: "No asset requests found"
       });
     }
 
-    const readyRequests = allMatchedRequests.filter(
-      (r) => r.status === RequestStatus.READY_FOR_DISPATCH
+    const invalidRequests = requests.filter(
+      r => r.status !== "READY_FOR_DISPATCH"
     );
 
-    const alreadyDispatched = allMatchedRequests.filter(
-      (r) => r.status === RequestStatus.DISPATCHED
-    );
-
-    if (!readyRequests.length) {
+    if (invalidRequests.length > 0) {
       return res.status(400).json({
         success: false,
-        message: "No READY_FOR_DISPATCH requests found for given IDs",
-        currentStatuses: [...new Set(allMatchedRequests.map((r) => r.status))],
-        alreadyDispatchedIds: alreadyDispatched.map((r) => r.id)
+        message: "Some assets are not ready for dispatch",
+        invalidRequestIds: invalidRequests.map(r => r.id),
+        statuses: invalidRequests.map(r => ({
+          id: r.id,
+          status: r.status
+        }))
       });
     }
 
-    await prisma.assetRequest.updateMany({
+    const existingShipments = await prisma.shipment.findMany({
       where: {
-        id: { in: readyRequests.map((r) => r.id) }
-      },
-      data: {
-        status: RequestStatus.DISPATCHED
+        assetRequestId: { in: assetRequestIds }
       }
     });
 
-    await Promise.all(
-      readyRequests.map((request) =>
-        prisma.shipment.create({
+    if (existingShipments.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Shipment already created for some requests",
+        existingShipmentRequestIds: existingShipments.map(s => s.assetRequestId)
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const shipments = [];
+
+      for (const request of requests) {
+        const shipment = await tx.shipment.create({
           data: {
             assetRequestId: request.id,
             courierName,
-            trackingId
+            trackingId,
+            dispatchDate: new Date(),
+            deliveryStatus: "SHIPPED"
           }
-        })
-      )
-    );
+        });
+
+        await tx.assetRequest.update({
+          where: { id: request.id },
+          data: { status: "DISPATCHED" }
+        });
+
+        shipments.push(shipment);
+      }
+
+      return shipments;
+    });
 
     return res.status(200).json({
       success: true,
       message: "Assets dispatched successfully",
-      totalDispatched: readyRequests.length,
-      assetRequestIds: readyRequests.map((r) => r.id),
-      skippedAlreadyDispatchedIds: alreadyDispatched.map((r) => r.id)
+      totalDispatched: result.length,
+      assetRequestIds,
+      data: result
     });
+
   } catch (error) {
-    console.error("dispatchAsset error =", error);
+    console.error("Dispatch Error:", error);
+
     return res.status(500).json({
       success: false,
-      message: "Internal server error",
-      error: error.message
+      message: "Something went wrong while dispatching asset"
     });
   }
 };
@@ -680,14 +831,49 @@ exports.requestJoiningKit = async (req, res) => {
 
     const riderId = req.rider.id;
 
-    const { name, completeAddress, pincode } = req.body;
+    const {
+      deliveryMode,
+      name,
+      completeAddress,
+      pincode,
+      pickupLocationId
+    } = req.body;
 
-    // ✅ Validation
-    if (!name || !completeAddress || !pincode) {
+    // delivery mode validation
+    if (!deliveryMode) {
       return res.status(400).json({
         success: false,
-        message: "name, completeAddress and pincode are required"
+        message: "deliveryMode is required"
       });
+    }
+
+    if (
+      deliveryMode !== "HOME_DELIVERY" &&
+      deliveryMode !== "PICKUP"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid deliveryMode"
+      });
+    }
+
+    if (deliveryMode === "HOME_DELIVERY") {
+      if (!name || !completeAddress || !pincode) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "name, completeAddress and pincode required for HOME_DELIVERY"
+        });
+      }
+    }
+
+    if (deliveryMode === "PICKUP") {
+      if (!pickupLocationId) {
+        return res.status(400).json({
+          success: false,
+          message: "pickupLocationId required for PICKUP"
+        });
+      }
     }
 
     const joiningKitAssets = [
@@ -698,20 +884,17 @@ exports.requestJoiningKit = async (req, res) => {
       AssetType.ID_CARD
     ];
 
-    // ✅ Prevent duplicate request
     const existingRequests = await prisma.assetRequest.findMany({
       where: {
         riderId,
-        assetType: {
-          in: joiningKitAssets
-        }
+        assetType: { in: joiningKitAssets }
       }
     });
 
     if (existingRequests.length > 0) {
       return res.status(400).json({
         success: false,
-        message: "Joining kit already requested for this rider"
+        message: "Joining kit already requested"
       });
     }
 
@@ -726,7 +909,7 @@ exports.requestJoiningKit = async (req, res) => {
       if (!asset) continue;
 
       const isFree = asset.issuedCount < asset.freeLimit;
-      const calculatedPrice = isFree ? 0 : Number(asset.price);
+      const price = isFree ? 0 : Number(asset.price);
 
       const request = await prisma.assetRequest.create({
         data: {
@@ -741,31 +924,29 @@ exports.requestJoiningKit = async (req, res) => {
 
       createdRequests.push({
         ...request,
-        deliveryDetails: {
-          name,
-          completeAddress,
-          pincode
-        },
-        price: calculatedPrice,
+        deliveryDetails:
+          deliveryMode === "HOME_DELIVERY"
+            ? {
+                deliveryMode,
+                name,
+                completeAddress,
+                pincode
+              }
+            : {
+                deliveryMode,
+                pickupLocationId
+              },
+        price,
         isFree
       });
 
-      totalPrice += calculatedPrice;
+      totalPrice += price;
 
       await prisma.assetMaster.update({
         where: { id: asset.id },
         data: {
-          issuedCount: {
-            increment: 1
-          }
+          issuedCount: { increment: 1 }
         }
-      });
-    }
-
-    if (createdRequests.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No assets found"
       });
     }
 
@@ -774,17 +955,10 @@ exports.requestJoiningKit = async (req, res) => {
       message: "Joining kit requested successfully",
       totalItems: createdRequests.length,
       totalPrice,
-      deliveryDetails: {
-        name,
-        completeAddress,
-        pincode
-      },
       data: createdRequests
     });
 
   } catch (error) {
-    console.error("Request Joining Kit Error:", error);
-
     return res.status(500).json({
       success: false,
       message: "Something went wrong",
@@ -792,3 +966,168 @@ exports.requestJoiningKit = async (req, res) => {
     });
   }
 };
+// exports.requestJoiningKit = async (req, res) => {
+//   try {
+//     if (!req.rider?.id) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized"
+//       });
+//     }
+
+//     const riderId = req.rider.id;
+
+//     const {
+//       deliveryMode,
+//       name,
+//       completeAddress,
+//       pincode,
+//       pickupLocationId
+//     } = req.body;
+
+//     // delivery mode validation
+//     if (!deliveryMode) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "deliveryMode is required"
+//       });
+//     }
+
+//     if (
+//       deliveryMode !== "HOME_DELIVERY" &&
+//       deliveryMode !== "PICKUP"
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid deliveryMode"
+//       });
+//     }
+
+//     if (deliveryMode === "HOME_DELIVERY") {
+//       if (!name || !completeAddress || !pincode) {
+//         return res.status(400).json({
+//           success: false,
+//           message:
+//             "name, completeAddress and pincode are required for HOME_DELIVERY"
+//         });
+//       }
+//     }
+
+//     if (deliveryMode === "PICKUP" && !pickupLocationId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "pickupLocationId is required for PICKUP"
+//       });
+//     }
+
+//     const joiningKitAssets = [
+//       AssetType.T_SHIRT,
+//       AssetType.BAG,
+//       AssetType.HELMET,
+//       AssetType.JACKET,
+//       AssetType.ID_CARD
+//     ];
+
+//     // Prevent duplicate joining kit request
+//     const existingRequests = await prisma.assetRequest.findMany({
+//       where: {
+//         riderId,
+//         assetType: { in: joiningKitAssets },
+//         status: {
+//           notIn: [RequestStatus.CANCELLED]
+//         }
+//       }
+//     });
+
+//     if (existingRequests.length > 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Joining kit already requested"
+//       });
+//     }
+
+//     const createdRequests = [];
+//     let totalPrice = 0;
+//     let hasPaidItem = false;
+
+//     for (const assetType of joiningKitAssets) {
+//       const asset = await prisma.assetMaster.findFirst({
+//         where: {
+//           assetType,
+//           isActive: true
+//         }
+//       });
+
+//       if (!asset) continue;
+
+//       const isFree = asset.issuedCount < asset.freeLimit;
+//       const itemPrice = isFree ? 0 : Number(asset.price);
+
+//       if (!isFree) {
+//         hasPaidItem = true;
+//       }
+
+//       const request = await prisma.assetRequest.create({
+//         data: {
+//           riderId,
+//           assetType,
+//           quantity: 1,
+//           deliveryMode,
+//           name: deliveryMode === "HOME_DELIVERY" ? name : null,
+//           completeAddress:
+//             deliveryMode === "HOME_DELIVERY" ? completeAddress : null,
+//           pincode: deliveryMode === "HOME_DELIVERY" ? pincode : null,
+//           pickupLocationId:
+//             deliveryMode === "PICKUP" ? pickupLocationId : null,
+//           status: isFree
+//             ? RequestStatus.READY_FOR_DISPATCH
+//             : RequestStatus.PAYMENT_PENDING
+//         }
+//       });
+
+//       createdRequests.push({
+//         ...request,
+//         price: itemPrice,
+//         isFree
+//       });
+
+//       totalPrice += itemPrice;
+
+//       await prisma.assetMaster.update({
+//         where: { id: asset.id },
+//         data: {
+//           issuedCount: { increment: 1 }
+//         }
+//       });
+//     }
+
+//     if (createdRequests.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "No joining kit assets found in asset master"
+//       });
+//     }
+
+//     return res.status(201).json({
+//       success: true,
+//       message: hasPaidItem
+//         ? "Joining kit requested successfully. Please select payment option for paid items."
+//         : "Congratulations! You got a free joining kit.",
+//       totalItems: createdRequests.length,
+//       totalPrice,
+//       paymentRequired: hasPaidItem,
+//       nextStep: hasPaidItem
+//         ? "Select payment mode and payment type"
+//         : "Ready for dispatch",
+//       data: createdRequests
+//     });
+
+//   } catch (error) {
+//     console.error("requestJoiningKit error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Something went wrong",
+//       error: error.message
+//     });
+//   }
+// };
