@@ -37,6 +37,8 @@ const rawPayloadRoutes = require("./routes/rawPayloadRoutes");
 const companySelectionRoutes = require("./routes/companySelectionRoutes");
 const riderIncentivesrouter = require("./routes/incentive.routes");
 const todayRiderOnlineRoutes = require("./routes/todayRiderOnlineRoutes");
+const adminIncentivesrouter = require("./routes/incentive.routes")
+const riderIncentivesRouter = require("./routes/riderIncentive.routes")
 // const offlineStoreRoute = require("./routes/offlineStoreRoute");
 
 const app = express();
@@ -92,7 +94,7 @@ app.use("/api/profile", profileRoutes);
 
 app.use("/api/home", incentiveRoutes);
 
-app.use("/api/rider/incentives", riderIncentiveRoutes);
+// app.use("/api/rider/incentives", riderIncentiveRoutes);
 
 app.use("/api/issues", issueRouter);
 app.use("/api/raw", rawPayloadRoutes);
@@ -107,7 +109,10 @@ app.use("/api/web", webIncentiveRoutes);
 
 app.use("/api", pricingConfigRoutes);
 
-app.use("/api/rider/incentives", riderIncentivesrouter);
+
+app.use("/api/admin/incentives", adminIncentivesrouter);
+app.use("/api/rider/incentives", riderIncentivesRouter);
+
 
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/rider/notifications", fcmTokenRoutes);
