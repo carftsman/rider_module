@@ -442,6 +442,8 @@ exports.approveRequest = async (req, res) => {
 //     });
 //   }
 // };
+
+
 exports.makePayment = async (req, res) => {
   try {
     const riderId = req.rider?.id;
@@ -453,13 +455,13 @@ exports.makePayment = async (req, res) => {
       });
     }
 
-    const { requestId } = req.params;
+    const { id } = req.params;
     const { paymentMode, paymentType, emiMonths } = req.body;
 
-    if (!requestId) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "requestId is required in params"
+        message: "id is required in params"
       });
     }
 
@@ -479,7 +481,7 @@ exports.makePayment = async (req, res) => {
 
     const assetRequest = await prisma.assetRequest.findFirst({
       where: {
-        id: requestId,
+        id,
         riderId
       }
     });
@@ -502,7 +504,6 @@ exports.makePayment = async (req, res) => {
       });
     }
 
-    // free item case
     if (assetRequest.status === "READY_FOR_DISPATCH") {
       return res.status(200).json({
         success: true,
@@ -562,7 +563,7 @@ exports.makePayment = async (req, res) => {
     }
 
     const updatedRequest = await prisma.assetRequest.update({
-      where: { id: requestId },
+      where: { id },
       data: updateData
     });
 
@@ -583,24 +584,31 @@ exports.makePayment = async (req, res) => {
 };
 exports.dispatchAsset = async (req, res) => {
   try {
-    const { assetRequestIds, courierName, trackingId } = req.body;
+    const { assetRequestIds } = req.params;
+    const { courierName, trackingId } = req.body;
 
-    if (
-      !assetRequestIds ||
-      !Array.isArray(assetRequestIds) ||
-      assetRequestIds.length === 0 ||
-      !courierName ||
-      !trackingId
-    ) {
+    if (!assetRequestIds || !courierName || !trackingId) {
       return res.status(400).json({
         success: false,
-        message: "assetRequestIds, courierName and trackingId are required"
+        message: "assetRequestIds param, courierName and trackingId are required"
+      });
+    }
+
+    const requestIds = assetRequestIds
+      .split(",")
+      .map(id => id.trim())
+      .filter(Boolean);
+
+    if (!requestIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid assetRequestIds found in params"
       });
     }
 
     const requests = await prisma.assetRequest.findMany({
       where: {
-        id: { in: assetRequestIds }
+        id: { in: requestIds }
       }
     });
 
@@ -608,6 +616,17 @@ exports.dispatchAsset = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "No asset requests found"
+      });
+    }
+
+    if (requests.length !== requestIds.length) {
+      const foundIds = requests.map(r => r.id);
+      const notFoundIds = requestIds.filter(id => !foundIds.includes(id));
+
+      return res.status(404).json({
+        success: false,
+        message: "Some asset requests were not found",
+        notFoundIds
       });
     }
 
@@ -629,7 +648,7 @@ exports.dispatchAsset = async (req, res) => {
 
     const existingShipments = await prisma.shipment.findMany({
       where: {
-        assetRequestId: { in: assetRequestIds }
+        assetRequestId: { in: requestIds }
       }
     });
 
@@ -670,7 +689,7 @@ exports.dispatchAsset = async (req, res) => {
       success: true,
       message: "Assets dispatched successfully",
       totalDispatched: result.length,
-      assetRequestIds,
+      assetRequestIds: requestIds,
       data: result
     });
 
@@ -679,7 +698,8 @@ exports.dispatchAsset = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Something went wrong while dispatching asset"
+      message: "Something went wrong while dispatching asset",
+      error: error.message
     });
   }
 };
@@ -754,7 +774,7 @@ console.log("Request riderAssetsId:", riderAssetsId);
 
 exports.markAsDelivered = async (req, res) => {
   try {
-    const { shipmentId } = req.body;
+    const { shipmentId } = req.params;
 
     if (!shipmentId) {
       return res.status(400).json({ success: false, message: "shipmentId is required" });
