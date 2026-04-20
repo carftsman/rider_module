@@ -169,7 +169,7 @@ model RiderStatus {
   lastLogoutAt DateTime?
 
   totalOnlineMinutesToday Int @default(0)
-
+  onlineMinutesDate DateTime?
   rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
 }
 

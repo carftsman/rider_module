@@ -714,7 +714,7 @@ exports.raiseIssue = async (req, res) => {
         message: "Unauthorized - Invalid token"
       });
     }
-
+    
     const { riderAssetsId, assetType, description, issueType } = req.body;
     const imageUrl = req.file?.path || null;
 

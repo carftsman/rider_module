@@ -1,95 +1,178 @@
 const prisma = require("../config/prisma");
  
 exports.goOnline = async (req, res) => {
+
   try {
+
     const riderId = req.rider.id;
+
     const now = new Date();
  
-    const result = await prisma.$transaction(async (tx) => {
+    const today = new Date();
+
+    today.setHours(0, 0, 0, 0);
  
+    const result = await prisma.$transaction(async (tx) => {
+
       const riderData = await tx.rider.findUnique({
+
         where: { id: riderId },
+
         include: {
+
           deliveryStatus: true,
-          status: true // your RiderStatus relation
-        }
+
+          status: true,
+
+        },
+
       });
  
       if (!riderData) {
+
         throw new Error("Rider not found");
+
       }
  
       if (riderData.isOnline) {
+
         throw new Error("Rider already online");
+
       }
  
-      // ✅ YOUR LOGIC — safe first time access
-      const loginTime = riderData?.status?.lastLoginAt || null;
+      let totalOnlineMinutesToday =
+
+        riderData?.status?.totalOnlineMinutesToday || 0;
  
-      // update rider main status
+      const savedDate = riderData?.status?.onlineMinutesDate
+
+        ? new Date(riderData.status.onlineMinutesDate)
+
+        : null;
+ 
+      // Reset if date changed
+
+      if (
+
+        !savedDate ||
+
+        savedDate.toDateString() !== today.toDateString()
+
+      ) {
+
+        totalOnlineMinutesToday = 0;
+
+      }
+ 
       await tx.rider.update({
+
         where: { id: riderId },
+
         data: {
+
           isOnline: true,
-          isPartnerActive: true
-        }
+
+          isPartnerActive: true,
+
+        },
+
       });
  
-      // ✅ rider status upsert (safe)
       const updatedStatus = await tx.riderStatus.upsert({
+
         where: { riderId },
  
         update: {
+
           lastLoginAt: now,
-          lastLogoutAt: null
+
+          lastLogoutAt: null,
+
+          totalOnlineMinutesToday,
+
+          onlineMinutesDate: today,
+
         },
  
         create: {
+
           riderId,
+
           lastLoginAt: now,
-          lastLogoutAt: null
-        }
+
+          lastLogoutAt: null,
+
+          totalOnlineMinutesToday: 0,
+
+          onlineMinutesDate: today,
+
+        },
+
       });
  
-      // delivery active
       const deliveryStatus = await tx.riderDeliveryStatus.upsert({
+
         where: { riderId },
  
         update: {
+
           isActive: true,
+
           inactiveReason: "MANUAL_OFF",
-          updatedAt: now
+
+          updatedAt: now,
+
         },
  
         create: {
+
           riderId,
+
           isActive: true,
+
           inactiveReason: "MANUAL_OFF",
-          updatedAt: now
-        }
+
+          updatedAt: now,
+
+        },
+
       });
  
       return { updatedStatus, deliveryStatus };
+
     });
  
     res.status(200).json({
+
       success: true,
+
       message: "Rider is now ONLINE",
+
       isPartnerActive: true,
+
       riderStatus: result.updatedStatus,
-      deliveryStatus: result.deliveryStatus
+
+      deliveryStatus: result.deliveryStatus,
+
     });
- 
+
   } catch (error) {
+
     console.error("ONLINE ERROR:", error);
  
     res.status(400).json({
+
       success: false,
-      message: error.message || "Server error"
+
+      message: error.message || "Server error",
+
     });
+
   }
+
 };
- 
+
+  
  
 exports.goOffline = async (req, res) => {
   try {
