@@ -747,36 +747,166 @@ router.put(
   ]),
   updateDocuments
 );
+// /**
+//  * @swagger
+//  * /api/profile/orders/history:
+//  *   get:
+//  *     tags:
+//  *       - Profile
+//  *     summary: Get rider delivered order history
+//  *     description: >
+//  *       Fetch delivered order history of the logged-in rider.
+//  *       Supports multiple time-based filters.
+//  *
+//  *       **Filters**
+//  *       - `all` → All delivered orders
+//  *       - `daily` → Today’s delivered orders
+//  *       - `weekly` → Last 7 days delivered orders
+//  *       - `monthly` → Current month delivered orders
+//  *
+//  *     security:
+//  *       - bearerAuth: []
+//  *
+//  *     parameters:
+//  *       - in: query
+//  *         name: filter
+//  *         required: false
+//  *         schema:
+//  *           type: string
+//  *           enum: [all, daily, weekly, monthly]
+//  *           default: all
+//  *         description: Filter order history by date range
+//  *
+//  *     responses:
+//  *       200:
+//  *         description: Rider order history fetched successfully
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 success:
+//  *                   type: boolean
+//  *                   example: true
+//  *                 filter:
+//  *                   type: string
+//  *                   example: weekly
+//  *                 totalOrders:
+//  *                   type: integer
+//  *                   example: 15
+//  *                 totalEarnings:
+//  *                   type: number
+//  *                   example: 2450
+//  *                 totalDistance:
+//  *                   type: number
+//  *                   example: 72.3
+//  *                 avgRating:
+//  *                   type: string
+//  *                   example: "4.5"
+//  *                 data:
+//  *                   type: array
+//  *                   items:
+//  *                     type: object
+//  *                     properties:
+//  *                       orderId:
+//  *                         type: string
+//  *                         example: ORD-123456
+//  *                       items:
+//  *                         type: array
+//  *                         items:
+//  *                           type: object
+//  *                           properties:
+//  *                             itemName:
+//  *                               type: string
+//  *                               example: Veg Burger
+//  *                             quantity:
+//  *                               type: integer
+//  *                               example: 2
+//  *                             price:
+//  *                               type: number
+//  *                               example: 120
+//  *                             total:
+//  *                               type: number
+//  *                               example: 240
+//  *                       pricing:
+//  *                         type: object
+//  *                         properties:
+//  *                           itemTotal:
+//  *                             type: number
+//  *                             example: 240
+//  *                           deliveryFee:
+//  *                             type: number
+//  *                             example: 40
+//  *                           tax:
+//  *                             type: number
+//  *                             example: 12
+//  *                           platformCommission:
+//  *                             type: number
+//  *                             example: 18
+//  *                           totalAmount:
+//  *                             type: number
+//  *                             example: 310
+//  *                       customerTip:
+//  *                         type: number
+//  *                         example: 20
+//  *                       distanceTravelled:
+//  *                         type: number
+//  *                         example: 5.6
+//  *                       durationInMin:
+//  *                         type: number
+//  *                         example: 28
+//  *                       pickupAddress:
+//  *                         type: string
+//  *                         example: MG Road, Bengaluru
+//  *                       deliveredAddress:
+//  *                         type: string
+//  *                         example: Whitefield, Bengaluru
+//  *                       rating:
+//  *                         type: number
+//  *                         example: 5
+//  *                       deliveredAt:
+//  *                         type: string
+//  *                         format: date-time
+//  *                         example: "2026-01-07T10:15:00.000Z"
+//  *
+//  *       400:
+//  *         description: Rider ID missing
+//  *         content:
+//  *           application/json:
+//  *             schema:
+//  *               type: object
+//  *               properties:
+//  *                 success:
+//  *                   type: boolean
+//  *                   example: false
+//  *                 message:
+//  *                   type: string
+//  *                   example: Rider ID missing
+//  *
+//  *       401:
+//  *         description: Unauthorized
+//  *
+//  *       500:
+//  *         description: Server error
+//  */
+
+
 /**
  * @swagger
  * /api/profile/orders/history:
  *   get:
- *     tags:
- *       - Profile
- *     summary: Get rider delivered order history
- *     description: >
- *       Fetch delivered order history of the logged-in rider.
- *       Supports multiple time-based filters.
- *
- *       **Filters**
- *       - `all` → All delivered orders
- *       - `daily` → Today’s delivered orders
- *       - `weekly` → Last 7 days delivered orders
- *       - `monthly` → Current month delivered orders
- *
+ *     summary: Get rider order history (All / Today / Week / Month)
+ *     tags: [Profile Orders]
  *     security:
  *       - bearerAuth: []
- *
  *     parameters:
  *       - in: query
  *         name: filter
- *         required: false
  *         schema:
  *           type: string
  *           enum: [all, daily, weekly, monthly]
  *           default: all
- *         description: Filter order history by date range
- *
+ *         description: Filter orders by time range (daily = today)
  *     responses:
  *       200:
  *         description: Rider order history fetched successfully
@@ -790,19 +920,21 @@ router.put(
  *                   example: true
  *                 filter:
  *                   type: string
- *                   example: weekly
+ *                   example: daily
  *                 totalOrders:
  *                   type: integer
- *                   example: 15
+ *                   example: 2
  *                 totalEarnings:
  *                   type: number
- *                   example: 2450
+ *                   example: 330
+ *                   description: Rider earnings (not total order amount)
  *                 totalDistance:
  *                   type: number
- *                   example: 72.3
+ *                   example: 12
  *                 avgRating:
- *                   type: string
- *                   example: "4.5"
+ *                   type: number
+ *                   nullable: true
+ *                   example: 4.5
  *                 data:
  *                   type: array
  *                   items:
@@ -810,7 +942,7 @@ router.put(
  *                     properties:
  *                       orderId:
  *                         type: string
- *                         example: ORD-123456
+ *                         example: ORD-123ABC
  *                       items:
  *                         type: array
  *                         items:
@@ -818,78 +950,72 @@ router.put(
  *                           properties:
  *                             itemName:
  *                               type: string
- *                               example: Veg Burger
+ *                               example: Basmati Rice
  *                             quantity:
  *                               type: integer
- *                               example: 2
+ *                               example: 1
  *                             price:
  *                               type: number
- *                               example: 120
+ *                               example: 150
  *                             total:
  *                               type: number
- *                               example: 240
+ *                               example: 150
  *                       pricing:
  *                         type: object
  *                         properties:
  *                           itemTotal:
  *                             type: number
- *                             example: 240
+ *                             example: 150
  *                           deliveryFee:
  *                             type: number
- *                             example: 40
+ *                             example: 165
  *                           tax:
  *                             type: number
- *                             example: 12
+ *                             example: 10
  *                           platformCommission:
  *                             type: number
- *                             example: 18
+ *                             example: 20
  *                           totalAmount:
  *                             type: number
- *                             example: 310
- *                       customerTip:
- *                         type: number
- *                         example: 20
+ *                             example: 180
+ *                           riderEarning:
+ *                             type: number
+ *                             example: 145
  *                       distanceTravelled:
  *                         type: number
- *                         example: 5.6
+ *                         example: 6.17
  *                       durationInMin:
  *                         type: number
- *                         example: 28
+ *                         example: 25
  *                       pickupAddress:
  *                         type: string
- *                         example: MG Road, Bengaluru
+ *                         example: Madhapur, Hyderabad
  *                       deliveredAddress:
  *                         type: string
- *                         example: Whitefield, Bengaluru
+ *                         example: Kukatpally, Hyderabad
  *                       rating:
  *                         type: number
+ *                         nullable: true
  *                         example: 5
  *                       deliveredAt:
  *                         type: string
  *                         format: date-time
- *                         example: "2026-01-07T10:15:00.000Z"
- *
+ *                         example: 2026-04-20T10:30:00Z
  *       400:
  *         description: Rider ID missing
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Rider ID missing
- *
- *       401:
- *         description: Unauthorized
- *
+ *             example:
+ *               success: false
+ *               message: Rider ID missing
  *       500:
  *         description: Server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Server error
  */
-
 router.get(
   "/orders/history",
   riderAuthMiddleWare,

@@ -763,6 +763,7 @@ exports.getSlotHistory = async (req, res) => {
   }
 };
 
+
 exports.getRiderOrderHistory = async (req, res) => {
   try {
     const riderId = req.rider?.id;
@@ -777,6 +778,7 @@ exports.getRiderOrderHistory = async (req, res) => {
     const { filter = "all" } = req.query;
     let dateFilter = {};
 
+    // ---------- DATE FILTERS ----------
     if (filter === "daily") {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -788,30 +790,35 @@ exports.getRiderOrderHistory = async (req, res) => {
     }
 
     if (filter === "weekly") {
-      const start = new Date();
-      start.setDate(start.getDate() - 6);
-      start.setHours(0, 0, 0, 0);
+      const now = new Date();
 
-      dateFilter = { gte: start, lte: new Date() };
+      const firstDayOfWeek = new Date(now);
+      const day = now.getDay(); // 0 (Sun) - 6 (Sat)
+
+      const diff =
+        now.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+      firstDayOfWeek.setDate(diff);
+      firstDayOfWeek.setHours(0, 0, 0, 0);
+
+      const lastDayOfWeek = new Date(firstDayOfWeek);
+      lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 6);
+      lastDayOfWeek.setHours(23, 59, 59, 999);
+
+      dateFilter = { gte: firstDayOfWeek, lte: lastDayOfWeek };
     }
 
     if (filter === "monthly") {
-      const start = new Date(
-        new Date().getFullYear(),
-        new Date().getMonth(),
-        1,
-      );
-      const end = new Date(
-        new Date().getFullYear(),
-        new Date().getMonth() + 1,
-        0,
-        23,
-        59,
-        59,
-      );
+  const now = new Date();
 
-      dateFilter = { gte: start, lte: end };
-    }
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  dateFilter = {
+    gte: start,
+    lt: nextMonth, // ✅ safest approach
+  };
+}
 
     // ---------- FETCH ORDERS ----------
     const orders = await prisma.order.findMany({
@@ -823,7 +830,6 @@ exports.getRiderOrderHistory = async (req, res) => {
       include: {
         OrderItems: true,
         OrderPricing: true,
-        OrderPayment: true,
         OrderTracking: true,
         OrderPickupAddress: true,
         OrderDeliveryAddress: true,
@@ -832,23 +838,27 @@ exports.getRiderOrderHistory = async (req, res) => {
         createdAt: "desc",
       },
     });
-    orders.forEach((order) => {
-      if (!order.OrderPricing) {
-        console.warn("Delivered order missing pricing:", order.orderId);
-      }
-    });
+
     // ---------- TOTALS ----------
     const totalOrders = orders.length;
 
-    const totalEarnings = orders.reduce(
-      (sum, o) => sum + (o.OrderPricing?.totalAmount || 0),
-      0,
-    );
+    const totalEarnings = orders.reduce((sum, o) => {
+      const pricing = o.OrderPricing;
+
+      const riderEarning =
+        (pricing?.deliveryFee || 0) -
+        (pricing?.platformCommission || 0);
+
+      return sum + riderEarning;
+    }, 0);
 
     const totalDistance = Number(
       orders
-        .reduce((sum, o) => sum + (o.OrderTracking?.distanceInKm || 0), 0)
-        .toFixed(2),
+        .reduce(
+          (sum, o) => sum + (o.OrderTracking?.distanceInKm || 0),
+          0
+        )
+        .toFixed(2)
     );
 
     const ratings = orders
@@ -856,41 +866,49 @@ exports.getRiderOrderHistory = async (req, res) => {
       .filter((r) => typeof r === "number");
 
     const avgRating = ratings.length
-      ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
+      ? Number(
+          (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
+        )
       : null;
 
     // ---------- RESPONSE ----------
-    const data = orders.map((order) => ({
-      orderId: order.orderId,
+    const data = orders.map((order) => {
+      const pricing = order.OrderPricing;
 
-      items:
-        order.OrderItems?.map((item) => ({
-          itemName: item.itemName,
-          quantity: item.quantity,
-          price: item.price,
-          total: item.total,
-        })) || [],
+      const riderEarning =
+        (pricing?.deliveryFee || 0) -
+        (pricing?.platformCommission || 0);
 
-      pricing: {
-        itemTotal: order.OrderPricing?.itemTotal || 0,
-        deliveryFee: order.OrderPricing?.deliveryFee || 0,
-        tax: order.OrderPricing?.tax || 0,
-        platformCommission: order.OrderPricing?.platformCommission || 0,
-        totalAmount: order.OrderPricing?.totalAmount || 0,
-      },
+      return {
+        orderId: order.orderId,
 
-      customerTip: 0,
+        items:
+          order.OrderItems?.map((item) => ({
+            itemName: item.itemName,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+          })) || [],
 
-      distanceTravelled: order.OrderTracking?.distanceInKm || 0,
+        pricing: {
+          itemTotal: pricing?.itemTotal || 0,
+          deliveryFee: pricing?.deliveryFee || 0,
+          tax: pricing?.tax || 0,
+          platformCommission: pricing?.platformCommission || 0,
+          totalAmount: pricing?.totalAmount || 0,
+          riderEarning: riderEarning,
+        },
 
-      durationInMin: order.OrderTracking?.durationInMin || 0,
-      pickupAddress: order.OrderPickupAddress?.addressLine || "",
+        distanceTravelled: order.OrderTracking?.distanceInKm || 0,
+        durationInMin: order.OrderTracking?.durationInMin || 0,
 
-      rating: null,
+        pickupAddress: order.OrderPickupAddress?.addressLine || "",
+        deliveredAddress: order.OrderDeliveryAddress?.addressLine || "",
 
-      deliveredAddress: order.OrderDeliveryAddress?.addressLine || "",
-      deliveredAt: order.updatedAt || null,
-    }));
+        rating: order.rating || null,
+        deliveredAt: order.updatedAt || null,
+      };
+    });
 
     return res.status(200).json({
       success: true,
@@ -909,7 +927,155 @@ exports.getRiderOrderHistory = async (req, res) => {
     });
   }
 };
+
+// exports.getRiderOrderHistory = async (req, res) => {
+//   try {
+//     const riderId = req.rider?.id;
+
+//     if (!riderId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Rider ID missing",
+//       });
+//     }
+
+//     const { filter = "all" } = req.query;
+//     let dateFilter = {};
+
+//     if (filter === "daily") {
+//       const start = new Date();
+//       start.setHours(0, 0, 0, 0);
+
+//       const end = new Date();
+//       end.setHours(23, 59, 59, 999);
+
+//       dateFilter = { gte: start, lte: end };
+//     }
+
+//     if (filter === "weekly") {
+//       const start = new Date();
+//       start.setDate(start.getDate() - 6);
+//       start.setHours(0, 0, 0, 0);
+
+//       dateFilter = { gte: start, lte: new Date() };
+//     }
+
+//     if (filter === "monthly") {
+//       const start = new Date(
+//         new Date().getFullYear(),
+//         new Date().getMonth(),
+//         1,
+//       );
+//       const end = new Date(
+//         new Date().getFullYear(),
+//         new Date().getMonth() + 1,
+//         0,
+//         23,
+//         59,
+//         59,
+//       );
+
+//       dateFilter = { gte: start, lte: end };
+//     }
+
+//     // ---------- FETCH ORDERS ----------
+//     const orders = await prisma.order.findMany({
+//       where: {
+//         riderId,
+//         orderStatus: "DELIVERED",
+//         ...(filter !== "all" && { createdAt: dateFilter }),
+//       },
+//       include: {
+//         OrderItems: true,
+//         OrderPricing: true,
+//         OrderPayment: true,
+//         OrderTracking: true,
+//         OrderPickupAddress: true,
+//         OrderDeliveryAddress: true,
+//       },
+//       orderBy: {
+//         createdAt: "desc",
+//       },
+//     });
+//     orders.forEach((order) => {
+//       if (!order.OrderPricing) {
+//         console.warn("Delivered order missing pricing:", order.orderId);
+//       }
+//     });
+//     // ---------- TOTALS ----------
+//     const totalOrders = orders.length;
+
+//     const totalEarnings = orders.reduce(
+//       (sum, o) => sum + (o.OrderPricing?.totalAmount || 0),
+//       0,
+//     );
+
+//     const totalDistance = Number(
+//       orders
+//         .reduce((sum, o) => sum + (o.OrderTracking?.distanceInKm || 0), 0)
+//         .toFixed(2),
+//     );
+
+//     const ratings = orders
+//       .map((o) => o.rating)
+//       .filter((r) => typeof r === "number");
+
+//     const avgRating = ratings.length
+//       ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
+//       : null;
+
+//     // ---------- RESPONSE ----------
+//     const data = orders.map((order) => ({
+//       orderId: order.orderId,
+
+//       items:
+//         order.OrderItems?.map((item) => ({
+//           itemName: item.itemName,
+//           quantity: item.quantity,
+//           price: item.price,
+//           total: item.total,
+//         })) || [],
+
+//       pricing: {
+//         itemTotal: order.OrderPricing?.itemTotal || 0,
+//         deliveryFee: order.OrderPricing?.deliveryFee || 0,
+//         tax: order.OrderPricing?.tax || 0,
+//         platformCommission: order.OrderPricing?.platformCommission || 0,
+//         totalAmount: order.OrderPricing?.totalAmount || 0,
+//       },
+
+//       customerTip: 0,
+
+//       distanceTravelled: order.OrderTracking?.distanceInKm || 0,
+
+//       durationInMin: order.OrderTracking?.durationInMin || 0,
+//       pickupAddress: order.OrderPickupAddress?.addressLine || "",
+
+//       rating: null,
+
+//       deliveredAddress: order.OrderDeliveryAddress?.addressLine || "",
+//       deliveredAt: order.updatedAt || null,
+//     }));
+
+//     return res.status(200).json({
+//       success: true,
+//       filter,
+//       totalOrders,
+//       totalEarnings,
+//       totalDistance,
+//       avgRating,
+//       data,
+//     });
+//   } catch (err) {
+//     console.error("Order History Error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//     });
+//   }
+// };
 /**
+
 
 * ============================================================
 
