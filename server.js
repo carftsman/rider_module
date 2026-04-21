@@ -20,6 +20,7 @@ const server = http.createServer(app);
 
 // Attach WebSocket to SAME server
 initWebSocket(server);
+initWebSocketForCall(server)
 
 const PORT = process.env.PORT || 4000;
 
