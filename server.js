@@ -11,6 +11,7 @@ const http = require("http");
 
 const app = require("./app");
 const { initWebSocket } = require("./webSocket");
+const {initWebSocketForCall}=require('./webcall')
 
 //connectDB();
 
