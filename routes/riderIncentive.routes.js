@@ -78,17 +78,106 @@ riderIncentivesRouter.get("/weekly", riderAuthMiddleWare, getWeeklyIncentives);
  * @swagger
  * /api/rider/incentives/peak:
  *   get:
- *     summary: Get peak incentives with progress
+ *     summary: Get peak incentives with slot timings and rider progress
  *     tags: [Rider Incentives]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Peak incentives fetched successfully
+ *         description: Peak incentives fetched successfully with slot timings
  *         content:
  *           application/json:
  *             schema:
- *               $ref: '#/components/schemas/IncentiveListResponse'
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: "uuid"
+ *                       title:
+ *                         type: string
+ *                         example: "Peak Hour Bonus"
+ *                       description:
+ *                         type: string
+ *                         example: "Complete peak slots and earn rewards"
+ *                       incentiveType:
+ *                         type: string
+ *                         example: "PEAK_SLOT"
+ *                       validFrom:
+ *                         type: string
+ *                         format: date-time
+ *                       validTill:
+ *                         type: string
+ *                         format: date-time
+ *
+ *                       peakSlots:
+ *                         type: array
+ *                         description: List of today's peak slot timings
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             slotId:
+ *                               type: string
+ *                             startTime:
+ *                               type: string
+ *                               example: "18:00"
+ *                             endTime:
+ *                               type: string
+ *                               example: "22:00"
+ *                             slotStartAt:
+ *                               type: string
+ *                               format: date-time
+ *                             slotEndAt:
+ *                               type: string
+ *                               format: date-time
+ *
+ *                       slabs:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *                             minOrders:
+ *                               type: integer
+ *                               example: 10
+ *                             maxOrders:
+ *                               type: integer
+ *                               example: 20
+ *                             rewardAmount:
+ *                               type: number
+ *                               example: 250
+ *
+ *                       progress:
+ *                         type: object
+ *                         properties:
+ *                           totalOrders:
+ *                             type: integer
+ *                             example: 5
+ *                           peakOrders:
+ *                             type: integer
+ *                             example: 3
+ *                           normalOrders:
+ *                             type: integer
+ *                             example: 2
+ *                           completedPeakSlots:
+ *                             type: integer
+ *                             example: 1
+ *                           completedNormalSlots:
+ *                             type: integer
+ *                             example: 0
+ *                           achievedReward:
+ *                             type: number
+ *                             example: 100
+ *                           eligible:
+ *                             type: boolean
+ *                             example: false
+ *
  *       401:
  *         description: Unauthorized
  */
