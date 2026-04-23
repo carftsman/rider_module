@@ -23,68 +23,7 @@ const {
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: List of all incentives with progress
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/IncentiveListResponse'
- *       401:
- *         description: Unauthorized
- */
-riderIncentivesRouter.get("/with-progress", riderAuthMiddleWare, getAllIncentivesWithProgress);
-
-
-/**
- * @swagger
- * /api/rider/incentives/daily:
- *   get:
- *     summary: Get daily incentives with progress
- *     tags: [Rider Incentives]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Daily incentives fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/IncentiveListResponse'
- *       401:
- *         description: Unauthorized
- */
-riderIncentivesRouter.get("/daily", riderAuthMiddleWare, getDailyIncentives);
-
-/**
- * @swagger
- * /api/rider/incentives/weekly:
- *   get:
- *     summary: Get weekly incentives with progress
- *     tags: [Rider Incentives]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Weekly incentives fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/IncentiveListResponse'
- *       401:
- *         description: Unauthorized
- */
-riderIncentivesRouter.get("/weekly", riderAuthMiddleWare, getWeeklyIncentives);
-
-/**
- * @swagger
- * /api/rider/incentives/peak:
- *   get:
- *     summary: Get peak incentives with slot timings and rider progress
- *     tags: [Rider Incentives]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Peak incentives fetched successfully with slot timings
+ *         description: Incentives fetched successfully
  *         content:
  *           application/json:
  *             schema:
@@ -96,88 +35,71 @@ riderIncentivesRouter.get("/weekly", riderAuthMiddleWare, getWeeklyIncentives);
  *                 data:
  *                   type: array
  *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                         example: "uuid"
- *                       title:
- *                         type: string
- *                         example: "Peak Hour Bonus"
- *                       description:
- *                         type: string
- *                         example: "Complete peak slots and earn rewards"
- *                       incentiveType:
- *                         type: string
- *                         example: "PEAK_SLOT"
- *                       validFrom:
- *                         type: string
- *                         format: date-time
- *                       validTill:
- *                         type: string
- *                         format: date-time
- *
- *                       peakSlots:
- *                         type: array
- *                         description: List of today's peak slot timings
- *                         items:
- *                           type: object
- *                           properties:
- *                             slotId:
- *                               type: string
- *                             startTime:
- *                               type: string
- *                               example: "18:00"
- *                             endTime:
- *                               type: string
- *                               example: "22:00"
- *                             slotStartAt:
- *                               type: string
- *                               format: date-time
- *                             slotEndAt:
- *                               type: string
- *                               format: date-time
- *
- *                       slabs:
- *                         type: array
- *                         items:
- *                           type: object
- *                           properties:
- *                             minOrders:
- *                               type: integer
- *                               example: 10
- *                             maxOrders:
- *                               type: integer
- *                               example: 20
- *                             rewardAmount:
- *                               type: number
- *                               example: 250
- *
- *                       progress:
- *                         type: object
- *                         properties:
- *                           totalOrders:
- *                             type: integer
- *                             example: 5
- *                           peakOrders:
- *                             type: integer
- *                             example: 3
- *                           normalOrders:
- *                             type: integer
- *                             example: 2
- *                           completedPeakSlots:
- *                             type: integer
- *                             example: 1
- *                           completedNormalSlots:
- *                             type: integer
- *                             example: 0
- *                           achievedReward:
- *                             type: number
- *                             example: 100
- *                           eligible:
- *                             type: boolean
- *                             example: false
- *
+ *                     oneOf:
+ *                       - $ref: '#/components/schemas/DailyIncentive'
+ *                       - $ref: '#/components/schemas/WeeklyIncentive'
+ *                       - $ref: '#/components/schemas/PeakIncentive'
+ *       401:
+ *         description: Unauthorized
+ */
+riderIncentivesRouter.get("/with-progress", riderAuthMiddleWare, getAllIncentivesWithProgress);
+
+
+/**
+ * @swagger
+ * /api/rider/incentives/daily:
+ *   get:
+ *     summary: Get today's daily incentive with progress
+ *     tags: [Rider Incentives]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Daily incentive fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/DailyIncentiveResponse'
+ *       401:
+ *         description: Unauthorized
+ */
+riderIncentivesRouter.get("/daily", riderAuthMiddleWare, getDailyIncentives);
+
+/**
+ * @swagger
+ * /api/rider/incentives/weekly:
+ *   get:
+ *     summary: Get weekly incentives with day-wise breakdown
+ *     tags: [Rider Incentives]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Weekly incentives fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/WeeklyIncentiveResponse'
+ *       401:
+ *         description: Unauthorized
+ */
+riderIncentivesRouter.get("/weekly", riderAuthMiddleWare, getWeeklyIncentives);
+
+/**
+ * @swagger
+ * /api/rider/incentives/peak:
+ *   get:
+ *     summary: Get peak slot incentives with slot timings and orders
+ *     tags: [Rider Incentives]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Peak incentives fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/PeakIncentiveResponse'
  *       401:
  *         description: Unauthorized
  */
@@ -187,7 +109,7 @@ riderIncentivesRouter.get("/peak", riderAuthMiddleWare, getPeakIncentives);
  * @swagger
  * /api/rider/incentives/{id}:
  *   get:
- *     summary: Get single incentive with rider progress
+ *     summary: Get single incentive with progress
  *     tags: [Rider Incentives]
  *     security:
  *       - bearerAuth: []
@@ -201,10 +123,6 @@ riderIncentivesRouter.get("/peak", riderAuthMiddleWare, getPeakIncentives);
  *     responses:
  *       200:
  *         description: Incentive fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/IncentiveResponse'
  *       404:
  *         description: Incentive not found
  *       401:
