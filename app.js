@@ -39,6 +39,7 @@ const riderIncentivesrouter = require("./routes/incentive.routes");
 const todayRiderOnlineRoutes = require("./routes/todayRiderOnlineRoutes");
 const adminIncentivesrouter = require("./routes/incentive.routes")
 const riderIncentivesRouter = require("./routes/riderIncentive.routes")
+const pinCodeRouter = require("./routes/pinCode.routes")
 // const offlineStoreRoute = require("./routes/offlineStoreRoute");
 
 const app = express();
@@ -127,6 +128,12 @@ app.use("/api/rider", require("./routes/availableRidersRoutes"));
 app.use("/api/kit", kitRoutes);
 app.use("/api/company", companySelectionRoutes);
 app.use("/api/status", todayRiderOnlineRoutes);
+
+// pincode admin
+app.use("/api/pincode", pinCodeRouter);
+
+
+
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");
 });
