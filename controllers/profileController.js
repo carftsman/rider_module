@@ -99,7 +99,7 @@ exports.getProfile = async (req, res) => {
     console.error("Get Clean Profile Error:", err);
     return res.status(500).json({
       success: false,
-      message: "Server error",
+      message: err.message
     });
   }
 };

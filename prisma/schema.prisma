@@ -79,7 +79,7 @@ model Rider {
 
   kyc RiderKyc?
 
- 
+   location RiderLocation?
 
   onboarding RiderOnboarding?
 
@@ -1759,4 +1759,21 @@ model Area {
 
   @@unique([name, pincodeId]) 
 
+}
+model RiderLocation {
+  id String @id @default(uuid())
+
+  riderId String @unique
+
+  streetAddress String?
+
+  area String?
+
+  city String?
+
+  state String?
+
+  pincode String?
+
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
 }
