@@ -79,7 +79,7 @@ model Rider {
 
   kyc RiderKyc?
 
-  location RiderLocation?
+ 
 
   onboarding RiderOnboarding?
 
@@ -209,23 +209,7 @@ model RiderProfile {
   rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
 }
 
-model RiderLocation {
-  id String @id @default(uuid())
 
-  riderId String @unique
-
-  streetAddress String?
-
-  area String?
-
-  city String?
-
-  state String?
-
-  pincode String?
-
-  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
-}
 
 model RiderVehicle {
   id String @id @default(uuid())
@@ -485,7 +469,7 @@ model Shipment {
 
 model rider_asset_issues {
   id String @id @default(uuid())
-
+  requestId     String?
   riderAssetsId String
 
   assetType AssetType
@@ -1714,4 +1698,65 @@ model AssetInventory {
 enum DeliveryMode {
   HOME_DELIVERY
   PICKUP
+}
+model City { 
+
+  id        String    @id @default(cuid()) 
+
+  name      String    @unique 
+
+  state     String 
+
+  isActive  Boolean   @default(true) 
+
+  pincodes  Pincode[] 
+
+  createdAt DateTime  @default(now()) 
+
+  updatedAt DateTime  @updatedAt 
+
+}
+model Pincode { 
+
+  id        String   @id @default(cuid()) 
+
+  code      String 
+
+  name      String 
+
+  isActive  Boolean  @default(true) 
+
+  cityId    String 
+
+  city      City     @relation(fields: [cityId], references: [id]) 
+
+  
+
+  areas     Area[] 
+
+  createdAt DateTime @default(now()) 
+
+  updatedAt DateTime @updatedAt 
+
+  @@unique([code, cityId]) // same pincode can exist in different cities 
+
+}
+model Area { 
+
+  id        String   @id @default(cuid()) 
+
+  name      String 
+
+  isActive  Boolean  @default(true) 
+
+  pincodeId String 
+
+  pincode   Pincode  @relation(fields: [pincodeId], references: [id]) 
+
+  createdAt DateTime @default(now()) 
+
+  updatedAt DateTime @updatedAt 
+
+  @@unique([name, pincodeId]) 
+
 }

@@ -1,6 +1,6 @@
 const prisma = require("../config/prisma");
 const {AssetType, RequestStatus,PaymentStatus,AssetStatus } = require("@prisma/client");
-
+const { uploadToAzure } = require("../utils/azureUpload"); // adjust path
 exports.createAsset = async (req, res) => {
   try {
     const { assetType, assetName, price, freeLimit, imageUrl } = req.body;
@@ -703,9 +703,9 @@ exports.dispatchAsset = async (req, res) => {
     });
   }
 };
+
 exports.raiseIssue = async (req, res) => {
   try {
-    //  Get rider from token
     const riderId = req.rider?.id;
 
     if (!riderId) {
@@ -714,41 +714,120 @@ exports.raiseIssue = async (req, res) => {
         message: "Unauthorized - Invalid token"
       });
     }
-    
-    const { riderAssetsId, assetType, description, issueType } = req.body;
-    const imageUrl = req.file?.path || null;
 
-    // Validate required fields
-    if (!riderAssetsId || !assetType || !description) {
+    const { requestId } = req.params;
+    const { assetType, description, issueType } = req.body;
+
+    if (!requestId) {
       return res.status(400).json({
         success: false,
-        message: "riderAssetsId, assetType and description are required"
+        message: "requestId is required in params"
       });
     }
-    console.log("Token Rider ID:", riderId);
-console.log("Request riderAssetsId:", riderAssetsId);
 
-    // Check asset belongs to rider
-    const riderAsset = await prisma.rider_assets.findFirst({
-      where: {
-        id: riderAssetsId,
-        riderId: riderId   //  token validation here
-      }
-      
+    if (!assetType || !description) {
+      return res.status(400).json({
+        success: false,
+        message: "assetType and description are required"
+      });
+    }
+
+    let imageUrl = req.body.imageUrl || null;
+
+    if (req.file) {
+      imageUrl = await uploadToAzure(req.file, "asset-issues");
+    }
+
+    console.log("Token riderId:", riderId);
+    console.log("Params requestId:", requestId);
+
+    // 1. Check request exists
+    const assetRequest = await prisma.assetRequest.findUnique({
+      where: { id: requestId }
     });
-    console.log("DB Asset Record:", riderAsset);
-    if (!riderAsset) {
+
+    console.log("DB assetRequest:", assetRequest);
+
+    if (!assetRequest) {
+      return res.status(404).json({
+        success: false,
+        message: "Asset request not found",
+        requestId
+      });
+    }
+
+    // 2. Check request belongs to logged-in rider
+    if (assetRequest.riderId !== riderId) {
       return res.status(403).json({
         success: false,
-        message: "You are not allowed to raise issue for this asset"
+        message: "You are not allowed to raise issue for this request"
       });
     }
 
-    // Create issue
+    // 3. Allow issue only for dispatched/completed assets
+    if (
+      assetRequest.status !== "COMPLETED" &&
+      assetRequest.status !== "DISPATCHED"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Issue can be raised only for dispatched or completed assets"
+      });
+    }
+
+    // 4. Find rider_assets record
+    const riderAsset = await prisma.rider_assets.findFirst({
+      where: {
+        riderId: riderId
+      }
+    });
+
+    if (!riderAsset) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider asset record not found"
+      });
+    }
+
+    // 5. Check rider has this asset type
+    const riderAssetItem = await prisma.rider_asset_items.findFirst({
+      where: {
+        riderAssetsId: riderAsset.id,
+        assetType: assetType
+      }
+    });
+
+    if (!riderAssetItem) {
+      return res.status(404).json({
+        success: false,
+        message: "This asset type is not assigned to the rider"
+      });
+    }
+
+    // 6. Prevent duplicate open issue
+    const existingIssue = await prisma.rider_asset_issues.findFirst({
+      where: {
+        riderAssetsId: riderAsset.id,
+        assetType,
+        status: {
+          in: ["OPEN", "APPROVED", "READY_FOR_DISPATCH"]
+        }
+      }
+    });
+
+    if (existingIssue) {
+      return res.status(400).json({
+        success: false,
+        message: "Issue already exists for this asset"
+      });
+    }
+
+    // 7. Create issue
     const issue = await prisma.rider_asset_issues.create({
       data: {
-        riderAssetsId,
+        riderAssetsId: riderAsset.id,
         assetType,
+        assetName: riderAssetItem.assetName || null,
         description,
         imageUrl,
         issueType: issueType || "OTHER",
@@ -771,7 +850,6 @@ console.log("Request riderAssetsId:", riderAssetsId);
     });
   }
 };
-
 exports.markAsDelivered = async (req, res) => {
   try {
     const { shipmentId } = req.params;
@@ -920,6 +998,7 @@ exports.requestJoiningKit = async (req, res) => {
 
     const createdRequests = [];
     let totalPrice = 0;
+    let freeItemCount = 0;
 
     for (const assetType of joiningKitAssets) {
       const asset = await prisma.assetMaster.findFirst({
@@ -930,6 +1009,10 @@ exports.requestJoiningKit = async (req, res) => {
 
       const isFree = asset.issuedCount < asset.freeLimit;
       const price = isFree ? 0 : Number(asset.price);
+
+      if (isFree) {
+        freeItemCount++;
+      }
 
       const request = await prisma.assetRequest.create({
         data: {
@@ -970,11 +1053,17 @@ exports.requestJoiningKit = async (req, res) => {
       });
     }
 
+    const isEntireKitFree = freeItemCount === createdRequests.length;
+
     return res.status(201).json({
       success: true,
-      message: "Joining kit requested successfully",
+      message: isEntireKitFree
+        ? "Congratulations! You got the free joining kit."
+        : "Joining kit requested successfully",
       totalItems: createdRequests.length,
       totalPrice,
+      isEntireKitFree,
+      freeItemCount,
       data: createdRequests
     });
 
@@ -1151,3 +1240,106 @@ exports.requestJoiningKit = async (req, res) => {
 //     });
 //   }
 // };
+exports.verifyIssue = async (req, res) => {
+  try {
+    const { issueId } = req.params;
+    const { action, adminRemark, requestId } = req.body;
+
+    if (!issueId) {
+      return res.status(400).json({
+        success: false,
+        message: "issueId is required in params"
+      });
+    }
+
+    if (!action) {
+      return res.status(400).json({
+        success: false,
+        message: "action is required"
+      });
+    }
+
+    if (!["APPROVE", "REJECT"].includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid action. Allowed: APPROVE, REJECT"
+      });
+    }
+
+    const issue = await prisma.rider_asset_issues.findUnique({
+      where: { id: issueId }
+    });
+
+    if (!issue) {
+      return res.status(404).json({
+        success: false,
+        message: "Issue not found"
+      });
+    }
+
+    if (issue.status !== "OPEN") {
+      return res.status(400).json({
+        success: false,
+        message: `Issue already processed with status ${issue.status}`
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      let updatedIssue;
+
+      if (action === "APPROVE") {
+        updatedIssue = await tx.rider_asset_issues.update({
+          where: { id: issueId },
+          data: {
+            status: "APPROVED",
+            resolvedAt: new Date()
+          }
+        });
+
+        if (!requestId) {
+          throw new Error("requestId is required when approving issue");
+        }
+
+        await tx.assetRequest.update({
+          where: { id: requestId },
+          data: {
+            status: "READY_FOR_DISPATCH"
+          }
+        });
+
+        updatedIssue = await tx.rider_asset_issues.update({
+          where: { id: issueId },
+          data: {
+            status: "READY_FOR_DISPATCH"
+          }
+        });
+      } else {
+        updatedIssue = await tx.rider_asset_issues.update({
+          where: { id: issueId },
+          data: {
+            status: "REJECTED",
+            resolvedAt: new Date()
+          }
+        });
+      }
+
+      return updatedIssue;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        action === "APPROVE"
+          ? "Issue verified successfully and moved to READY_FOR_DISPATCH"
+          : "Issue rejected successfully",
+      data: result
+    });
+
+  } catch (error) {
+    console.error("Verify Issue Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Something went wrong while verifying issue"
+    });
+  }
+};

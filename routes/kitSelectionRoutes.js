@@ -11,7 +11,8 @@ const{createAsset,
 
 }=require('../controllers/kitSelectionController');
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
-const upload = require("../middleware/uploadSelfie");
+// const upload = require("../middleware/uploadSelfie");
+const { upload } = require("../utils/azureUpload"); 
 
 /**
  * @swagger
@@ -789,7 +790,15 @@ router.post('/rider/request',riderAuthMiddleWare, requestAsset)
  *                   type: string
  *                   example: "Detailed error message"
  */
-router.post('/rider/issue',riderAuthMiddleWare,upload.single("image"), raiseIssue)
+router.post('/rider/issue/:requestId',riderAuthMiddleWare,upload.single("imageUrl"),(err, req, res, next) => {
+    if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message
+      });
+    }
+    next();
+  }, raiseIssue)
 /**
  * @swagger
  * /api/kit/asset/mark-delivered/{shipmentId}:
