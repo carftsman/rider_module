@@ -232,8 +232,8 @@ riderRouter.post("/rider/personal-info", riderAuthMiddleWare, savePersonalInfo);
  * /api/rider/location:
  *   post:
  *     tags: [Rider]
- *     summary: Update rider location (city & area)
- *     description: Saves selected city and area for the rider and moves onboarding to SELECT_VEHICLE stage.
+ *     summary: Update rider location (city & pincode)
+ *     description: Saves selected city and pincode for the rider and moves onboarding to SELECT_VEHICLE stage.
  *     security:
  *       - bearerAuth: []
  *
@@ -245,14 +245,14 @@ riderRouter.post("/rider/personal-info", riderAuthMiddleWare, savePersonalInfo);
  *             type: object
  *             required:
  *               - city
- *               - area
+ *               - pincode
  *             properties:
  *               city:
  *                 type: string
  *                 example: "Hyderabad"
- *               area:
+ *               pincode:
  *                 type: string
- *                 example: "Madhapur"
+ *                 example: "500081"
  *
  *     responses:
  *       200:
@@ -274,18 +274,28 @@ riderRouter.post("/rider/personal-info", riderAuthMiddleWare, savePersonalInfo);
  *                     city:
  *                       type: string
  *                       example: Hyderabad
- *                     area:
+ *                     pincode:
  *                       type: string
- *                       example: Madhapur
+ *                       example: "500081"
  *                 nextStage:
  *                   type: string
  *                   example: SELECT_VEHICLE
  *
  *       400:
- *         description: Missing city or area
+ *         description: Missing city or pincode
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: City and pincode are required
  *
  *       404:
- *         description: Invalid city or area
+ *         description: Invalid pincode
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Invalid pincode
  *
  *       500:
  *         description: Server error
