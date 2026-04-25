@@ -207,53 +207,140 @@ exports.verifyOtp = async (req, res) => {
 // ===============================
 // SAVE RIDER LOCATION
 // ===============================
+// exports.updateLocation = async (req, res) => {
+//   try {
+//     const riderId = req.rider.id;
+
+//     const { city, area } = req.body;
+
+//     if (!city || !area) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "City & area required",
+//       });
+//     }
+
+//     // Validate city
+//     const foundCity = citiesData.find(
+//       (item) => item.city.toLowerCase() === city.toLowerCase()
+//     );
+
+//     if (!foundCity) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Invalid city",
+//       });
+//     }
+
+//     if (!foundCity.areas.includes(area)) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Invalid area",
+//       });
+//     }
+
+//     // UPSERT location
+//     const location = await prisma.riderLocation.upsert({
+//       where: { riderId },
+//       update: {
+//         city,
+//         area,
+//       },
+//       create: {
+//         riderId,
+//         city,
+//         area,
+//       },
+//     });
+
+//     // Update onboarding
+//     await prisma.riderOnboarding.update({
+//       where: { riderId },
+//       data: {
+//         citySelected: true,
+//       },
+//     });
+
+//     // Update stage
+//     const rider = await prisma.rider.update({
+//       where: { id: riderId },
+//       data: {
+//         onboardingStage: "SELECT_VEHICLE",
+//       },
+//     });
+
+//     return res.json({
+//       success: true,
+//       message: "Location updated",
+//       location: {
+//         city: location.city,
+//         area: location.area,
+//       },
+//       nextStage: rider.onboardingStage,
+//     });
+
+//   } catch (err) {
+//     console.log(err);
+
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//     });
+//   }
+// };
+
 exports.updateLocation = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    const { city, area } = req.body;
+    const { city, pincode } = req.body;
 
-    if (!city || !area) {
+    // Missing Data
+    if (!city || !pincode) {
       return res.status(400).json({
         success: false,
-        message: "City & area required",
+        message: "City and pincode are required",
       });
     }
 
-    // Validate city
-    const foundCity = citiesData.find(
-      (item) => item.city.toLowerCase() === city.toLowerCase()
-    );
+    //Validate City + Pincode from DB
+    const foundPincode = await prisma.pincode.findFirst({
+      where: {
+        code: String(pincode),
+        city: {
+          name: city,
+          isActive: true
+        },
+        isActive: true
+      },
+      include: {
+        city: true
+      }
+    });
 
-    if (!foundCity) {
+    //  Invalid Pincode
+    if (!foundPincode) {
       return res.status(404).json({
         success: false,
-        message: "Invalid city",
+        message: "Invalid pincode",
       });
     }
 
-    if (!foundCity.areas.includes(area)) {
-      return res.status(404).json({
-        success: false,
-        message: "Invalid area",
-      });
-    }
-
-    // UPSERT location
+    //  UPSERT location (updated to pincode instead of area)
     const location = await prisma.riderLocation.upsert({
       where: { riderId },
       update: {
-        city,
-        area,
+        city: foundPincode.city.name,
+        pincode: foundPincode.code,
       },
       create: {
         riderId,
-        city,
-        area,
+        city: foundPincode.city.name,
+        pincode: foundPincode.code,
       },
     });
 
-    // Update onboarding
+    //  Update onboarding
     await prisma.riderOnboarding.update({
       where: { riderId },
       data: {
@@ -261,7 +348,7 @@ exports.updateLocation = async (req, res) => {
       },
     });
 
-    // Update stage
+    //  Update stage
     const rider = await prisma.rider.update({
       where: { id: riderId },
       data: {
@@ -274,7 +361,7 @@ exports.updateLocation = async (req, res) => {
       message: "Location updated",
       location: {
         city: location.city,
-        area: location.area,
+        pincode: location.pincode,
       },
       nextStage: rider.onboardingStage,
     });
