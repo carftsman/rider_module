@@ -79,7 +79,7 @@ model Rider {
 
   kyc RiderKyc?
 
-   location RiderLocation?
+  location RiderLocation?
 
   onboarding RiderOnboarding?
 
@@ -93,11 +93,12 @@ model Rider {
 
   vehicle RiderVehicle?
 
-  wallet RiderWallet?
-
+  wallet       RiderWallet?
+  isStackable  Boolean            @default(false)
+  performance  RiderPerformance[]
   slotBookings SlotBooking[]
-
-  slotRiders SlotRider[]
+  gpsHistory   RiderGpsHistory[]
+  slotRiders   SlotRider[]
 
   rider_assets rider_assets[]
 
@@ -168,9 +169,16 @@ model RiderStatus {
 
   lastLogoutAt DateTime?
 
-  totalOnlineMinutesToday Int @default(0)
-  onlineMinutesDate DateTime?
-  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  totalOnlineMinutesToday Int       @default(0)
+  onlineMinutesDate       DateTime?
+  tripsToday              Int       @default(0)
+  lastTripAt              DateTime?
+
+  availabilityScore  Float     @default(0)
+  lastScoreUpdatedAt DateTime?
+
+  isOnline Boolean @default(false)
+  rider    Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
 }
 
 model RiderGps {
@@ -183,10 +191,14 @@ model RiderGps {
   latitude Float?
 
   longitude Float?
-
+  speed     Float? // km/h
+  heading   Float? // 0–360 direction
+  accuracy  Float?
   updatedAt DateTime?
 
   rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@index([latitude, longitude])
 }
 
 model RiderProfile {
@@ -208,8 +220,6 @@ model RiderProfile {
 
   rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
 }
-
-
 
 model RiderVehicle {
   id String @id @default(uuid())
@@ -395,7 +405,7 @@ model AssetRequest {
 
   status RequestStatus @default(PENDING)
 
-  createdAt        DateTime     @default(now())
+  createdAt        DateTime      @default(now())
   deliveryMode     DeliveryMode?
   pickupLocationId String?
   Payment          Payment?
@@ -468,7 +478,7 @@ model Shipment {
 }
 
 model rider_asset_issues {
-  id String @id @default(uuid())
+  id            String  @id @default(uuid())
   requestId     String?
   riderAssetsId String
 
@@ -1017,9 +1027,29 @@ model OrderCandidateRider {
 
   status AllocationStatus @default(PENDING)
 
-  notifiedAt DateTime?
+  notifiedAt         DateTime?
+  // ---------- PROXIMITY INPUTS ----------
+  etaToVendor        Float     @default(0) // minutes
+  etaToCustomer      Float     @default(0) // minutes
+  distanceToVendor   Float     @default(0) // km
+  distanceToCustomer Float     @default(0) // km
+  directionScore     Float     @default(0) // 0 → 0.1
+  // ---------- FINAL SCORES ----------
+  proximityScore     Float     @default(0)
+  availabilityScore  Float     @default(0)
+  performanceScore   Float     @default(0)
+  orderFitScore      Float     @default(0)
+  externalScore      Float     @default(0)
+  totalScore         Float     @default(0)
+
+  scoringVersion Int      @default(1)
+  calculatedAt   DateTime @default(now())
 
   OrderAllocation OrderAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+
+  @@index([allocationId])
+  @@index([riderId])
+  @@index([totalScore])
 }
 
 //////////////////// CANCEL ISSUE ////////////////////
@@ -1699,67 +1729,63 @@ enum DeliveryMode {
   HOME_DELIVERY
   PICKUP
 }
-model City { 
 
-  id        String    @id @default(cuid()) 
+model City {
+  id String @id @default(cuid())
 
-  name      String    @unique 
+  name String @unique
 
-  state     String 
+  state String
 
-  isActive  Boolean   @default(true) 
+  isActive Boolean @default(true)
 
-  pincodes  Pincode[] 
+  pincodes Pincode[]
 
-  createdAt DateTime  @default(now()) 
+  createdAt DateTime @default(now())
 
-  updatedAt DateTime  @updatedAt 
-
+  updatedAt DateTime @updatedAt
 }
-model Pincode { 
 
-  id        String   @id @default(cuid()) 
+model Pincode {
+  id String @id @default(cuid())
 
-  code      String 
+  code String
 
-  name      String 
+  name String
 
-  isActive  Boolean  @default(true) 
+  isActive Boolean @default(true)
 
-  cityId    String 
+  cityId String
 
-  city      City     @relation(fields: [cityId], references: [id]) 
+  city City @relation(fields: [cityId], references: [id])
 
-  
+  areas Area[]
 
-  areas     Area[] 
+  createdAt DateTime @default(now())
 
-  createdAt DateTime @default(now()) 
-
-  updatedAt DateTime @updatedAt 
+  updatedAt DateTime @updatedAt
 
   @@unique([code, cityId]) // same pincode can exist in different cities 
-
 }
-model Area { 
 
-  id        String   @id @default(cuid()) 
+model Area {
+  id String @id @default(cuid())
 
-  name      String 
+  name String
 
-  isActive  Boolean  @default(true) 
+  isActive Boolean @default(true)
 
-  pincodeId String 
+  pincodeId String
 
-  pincode   Pincode  @relation(fields: [pincodeId], references: [id]) 
+  pincode Pincode @relation(fields: [pincodeId], references: [id])
 
-  createdAt DateTime @default(now()) 
+  createdAt DateTime @default(now())
 
-  updatedAt DateTime @updatedAt 
+  updatedAt DateTime @updatedAt
 
-  @@unique([name, pincodeId]) 
-
+  @@unique([name, pincodeId])
 }
+
 model RiderLocation {
   id String @id @default(uuid())
 
@@ -1776,4 +1802,51 @@ model RiderLocation {
   pincode String?
 
   rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+}
+
+model RiderPerformance {
+  id String @id @default(uuid())
+
+  riderId String
+
+  periodStart DateTime
+
+  periodEnd DateTime
+
+  averageRating Float @default(0)
+
+  totalRatings Int @default(0)
+
+  totalOrdersAssigned Int @default(0)
+
+  totalOrdersAccepted Int @default(0)
+
+  totalOrdersRejected Int @default(0)
+
+  rejectionPenalty Float @default(0)
+
+  performanceScore Float @default(0)
+
+  calculatedAt DateTime @default(now())
+
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@unique([riderId, periodStart, periodEnd])
+  @@index([riderId])
+}
+
+model RiderGpsHistory {
+  id String @id @default(uuid())
+
+  riderId String
+
+  latitude Float
+
+  longitude Float
+
+  recordedAt DateTime @default(now())
+
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@index([riderId, recordedAt])
 }
