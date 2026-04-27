@@ -99,7 +99,7 @@ model Rider {
   slotBookings SlotBooking[]
   gpsHistory   RiderGpsHistory[]
   slotRiders   SlotRider[]
-
+  ratings      RiderRating[]
   rider_assets rider_assets[]
 
   riderIncentiveProgresses RiderIncentiveProgress[]
@@ -553,24 +553,24 @@ model WeeklySlot {
   id String @id @default(uuid())
 
   weekNumber Int
+  year       Int
 
-  year Int
-
-  city String
-
-  zone String
+  cityId    String?
+  pincodeId String?
 
   isDeleted Boolean @default(false)
 
   createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
 
-  slots Slot[]
-
+  slots        Slot[]
   slotBookings SlotBooking[]
 
-  @@unique([weekNumber, year, city, zone])
+  city    City?    @relation(fields: [cityId], references: [id])
+  pincode Pincode? @relation(fields: [pincodeId], references: [id])
+
+  @@unique([weekNumber, year, pincodeId])
+  @@index([pincodeId])
 }
 
 model Slot {
@@ -659,64 +659,53 @@ model SlotRider {
 model SlotBooking {
   id String @id @default(uuid())
 
-  riderId String
-
+  riderId   String
   daySlotId String
+  slotId    String
 
-  slotId String
+  cityId    String?
+  pincodeId String?
 
-  slotKey String?
-
-  date String
-
-  dayOfWeek DayOfWeek
-
-  dayNumber Int
-
+  slotKey    String?
+  date       String
+  dayOfWeek  DayOfWeek
+  dayNumber  Int
   weekNumber Int
-
-  year Int
-
-  city String?
-
-  zone String?
+  year       Int
 
   startTime String?
-
-  endTime String?
+  endTime   String?
 
   slotStartAt DateTime
-
-  slotEndAt DateTime
+  slotEndAt   DateTime
 
   totalMinutes Int?
 
-  isPeakSlot Boolean @default(false)
+  isPeakSlot    Boolean @default(false)
+  incentiveText String  @default("")
 
-  incentiveText String @default("")
-
-  status SlotBookingStatus @default(BOOKED)
-
-  progress SlotProgress @default(UPCOMING)
+  status   SlotBookingStatus @default(BOOKED)
+  progress SlotProgress      @default(UPCOMING)
 
   bookedFrom SlotBookedFrom @default(APP)
 
   cancellationReason String @default("")
 
   createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
 
   weeklySlot WeeklySlot @relation(fields: [daySlotId], references: [id])
+  rider      Rider      @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  slot       Slot       @relation(fields: [slotId], references: [slotId])
 
-  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
-
-  slot Slot @relation(fields: [slotId], references: [slotId])
+  city    City?    @relation(fields: [cityId], references: [id])
+  pincode Pincode? @relation(fields: [pincodeId], references: [id])
 
   @@unique([riderId, date, slotId])
   @@index([riderId])
   @@index([slotStartAt])
   @@index([status])
+  @@index([pincodeId])
 }
 
 //////////////////// ORDER ////////////////////
@@ -761,6 +750,7 @@ model Order {
   OrderCancelIssue OrderCancelIssue?
 
   OrderSettlement OrderSettlement?
+  totalWeight     Float?
 
   @@index([orderStatus])
   @@index([riderId])
@@ -780,9 +770,9 @@ model OrderItem {
 
   price Float
 
-  total Float
-
-  createdAt DateTime @default(now())
+  total         Float
+  weightPerUnit Float?
+  createdAt     DateTime @default(now())
 
   updatedAt DateTime @updatedAt
 
@@ -1743,7 +1733,9 @@ model City {
 
   createdAt DateTime @default(now())
 
-  updatedAt DateTime @updatedAt
+  updatedAt    DateTime      @updatedAt
+  weeklySlots  WeeklySlot[]
+  slotBookings SlotBooking[]
 }
 
 model Pincode {
@@ -1763,7 +1755,9 @@ model Pincode {
 
   createdAt DateTime @default(now())
 
-  updatedAt DateTime @updatedAt
+  updatedAt    DateTime      @updatedAt
+  weeklySlots  WeeklySlot[]
+  slotBookings SlotBooking[]
 
   @@unique([code, cityId]) // same pincode can exist in different cities 
 }
@@ -1821,11 +1815,11 @@ model RiderPerformance {
 
   totalOrdersAccepted Int @default(0)
 
-  totalOrdersRejected Int @default(0)
+  totalOrdersRejected Int   @default(0)
+  acceptanceRate      Float @default(0)
+  rejectionPenalty    Float @default(0)
 
-  rejectionPenalty Float @default(0)
-
-  performanceScore Float @default(0)
+  performanceScore Float @default(0.7)
 
   calculatedAt DateTime @default(now())
 
@@ -1849,4 +1843,21 @@ model RiderGpsHistory {
   rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
 
   @@index([riderId, recordedAt])
+}
+
+model RiderRating {
+  id String @id @default(uuid())
+
+  orderId String @unique
+  riderId String
+
+  rating Float
+  review String?
+
+  createdAt DateTime @default(now())
+
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@index([riderId])
+  @@index([createdAt])
 }
