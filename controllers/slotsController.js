@@ -104,21 +104,48 @@ const prisma=require("../config/prisma");
 //   }
 // };
 
+
 exports.getWeeklySlots = async (req, res) => {
   try {
-    let { cityId, pincodeId, weekNumber, year } = req.query;
+    let { weekNumber, year } = req.query;
+    const riderId = req.rider.id;
 
-    if (!cityId) {
+    // Get rider location
+    const riderLocation = await prisma.riderLocation.findUnique({
+      where: { riderId }
+    });
+
+    if (!riderLocation || !riderLocation.city || !riderLocation.pincode) {
       return res.status(400).json({
         success: false,
-        message: "cityId is required"
+        message: "Rider location not set"
       });
     }
 
-    if (!pincodeId) {
-      return res.status(400).json({
+  
+    const city = await prisma.city.findFirst({
+      where: { name: riderLocation.city }
+    });
+
+    if (!city) {
+      return res.status(404).json({
         success: false,
-        message: "pincodeId is required"
+        message: "City not found"
+      });
+    }
+
+    //  Convert pincode 
+    const pincode = await prisma.pincode.findFirst({
+      where: {
+        code: riderLocation.pincode,
+        cityId: city.id
+      }
+    });
+
+    if (!pincode) {
+      return res.status(404).json({
+        success: false,
+        message: "Pincode not found"
       });
     }
 
@@ -134,8 +161,8 @@ exports.getWeeklySlots = async (req, res) => {
 
     const weekDocs = await prisma.weeklySlot.findMany({
       where: {
-        cityId: cityId,
-        pincodeId: pincodeId,
+        cityId: city.id,
+        pincodeId: pincode.id,
         weekNumber: Number(weekNumber),
         year: Number(year),
         isDeleted: false
@@ -147,9 +174,6 @@ exports.getWeeklySlots = async (req, res) => {
             { startTime: "asc" }
           ]
         }
-      },
-      orderBy: {
-        createdAt: "asc"
       }
     });
 
@@ -189,15 +213,13 @@ exports.getWeeklySlots = async (req, res) => {
       grouped[dateKey].slots.push(slot);
     });
 
-    const result = Object.values(grouped);
-
     return res.json({
       success: true,
       message: "Weekly slots fetched",
       weekNumber: Number(weekNumber),
       year: Number(year),
-      count: result.length,
-      data: result
+      count: Object.keys(grouped).length,
+      data: Object.values(grouped)
     });
 
   } catch (err) {
@@ -372,9 +394,11 @@ exports.getDailySlotsWithStatus = async (req, res) => {
 //   }
 // };
 
+
 exports.getDailySlots = async (req, res) => {
   try {
-    const { date, cityId, pincodeId } = req.query;
+    const { date } = req.query;
+    const riderId = req.rider.id;
 
     if (!date) {
       return res.status(400).json({
@@ -383,26 +407,51 @@ exports.getDailySlots = async (req, res) => {
       });
     }
 
-    if (!cityId) {
+    //Get rider location (string values)
+    const riderLocation = await prisma.riderLocation.findUnique({
+      where: { riderId }
+    });
+
+    if (!riderLocation || !riderLocation.city || !riderLocation.pincode) {
       return res.status(400).json({
         success: false,
-        message: "cityId is required"
+        message: "Rider location not set"
       });
     }
 
-    if (!pincodeId) {
-      return res.status(400).json({
+    // Convert city name 
+    const city = await prisma.city.findFirst({
+      where: { name: riderLocation.city }
+    });
+
+    if (!city) {
+      return res.status(404).json({
         success: false,
-        message: "pincodeId is required"
+        message: "City not found"
+      });
+    }
+
+    // Convert pincode
+    const pincode = await prisma.pincode.findFirst({
+      where: {
+        code: riderLocation.pincode,
+        cityId: city.id
+      }
+    });
+
+    if (!pincode) {
+      return res.status(404).json({
+        success: false,
+        message: "Pincode not found"
       });
     }
 
     const slots = await prisma.slot.findMany({
       where: {
-        date: date,
+        date,
         weeklySlot: {
-          cityId: cityId,
-          pincodeId: pincodeId,
+          cityId: city.id,
+          pincodeId: pincode.id,
           isDeleted: false
         }
       },
@@ -820,7 +869,7 @@ exports.bookSlot = async (req, res) => {
       });
     }
 
-    // ✅ NEW: Get rider location (city + pincode)
+    // Get rider location (city + pincode)
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId }
     });
@@ -833,7 +882,7 @@ exports.bookSlot = async (req, res) => {
       });
     }
 
-    // ✅ UPDATED: filter by city + pincode
+    // filter by city + pincode
     const slots = await prisma.slot.findMany({
       where: {
         slotId: { in: slotIds },
@@ -870,7 +919,7 @@ exports.bookSlot = async (req, res) => {
       const slot = slots.find(s => s.slotId === slotId);
 
       if (!slot) {
-        failed.push({ slotId, reason: "Slot not found for your location" }); // ✅ updated msg
+        failed.push({ slotId, reason: "Slot not found for your location" }); 
         continue;
       }
 
@@ -943,9 +992,9 @@ exports.bookSlot = async (req, res) => {
             weekNumber: slot.weeklySlot.weekNumber,
             year: slot.weeklySlot.year,
 
-            // ✅ IMPORTANT: now storing pincode instead of zone
+            // now storing pincode instead of zone
             city: slot.weeklySlot.city,
-            zone: slot.weeklySlot.pincode, // 🔥 reuse field
+            zone: slot.weeklySlot.pincode, // reuse field
 
             startTime: slot.startTime,
             endTime: slot.endTime,

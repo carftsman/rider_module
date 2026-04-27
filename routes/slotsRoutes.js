@@ -8,45 +8,31 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  * @swagger
  * /api/slots/week:
  *   get:
- *     summary: Get weekly slots (cityId + pincodeId based)
+ *     tags: [Slots]
+ *     summary: Get weekly slots based on rider location
  *     description: >
- *       Fetch slot list for a given week filtered by cityId and pincodeId.
- *       Returns each day with its date, day name, and slots.
- *     tags:
- *       - Slots
+ *       Fetch slots for a given week.
+ *       Slots are automatically filtered using the rider's saved city and pincode.
+ *       If weekNumber or year is not provided, current week is used.
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
- *       - in: query
- *         name: cityId
- *         required: true
- *         schema:
- *           type: string
- *         description: City ID
- *         example: "c1a2b3c4-city-id"
- *
- *       - in: query
- *         name: pincodeId
- *         required: true
- *         schema:
- *           type: string
- *         description: Pincode ID
- *         example: "p1a2b3c4-pincode-id"
- *
  *       - in: query
  *         name: weekNumber
  *         required: false
  *         schema:
  *           type: number
- *         description: Week number (defaults to current week)
  *         example: 18
+ *         description: Week number (1–52). Defaults to current week
  *
  *       - in: query
  *         name: year
  *         required: false
  *         schema:
  *           type: number
- *         description: Year (defaults to current year)
  *         example: 2026
+ *         description: Year. Defaults to current year
  *
  *     responses:
  *       200:
@@ -64,45 +50,71 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                   dayName: "Mon"
  *                   weekNumber: 18
  *                   year: 2026
- *                   cityId: "c1a2b3c4-city-id"
- *                   pincodeId: "p1a2b3c4-pincode-id"
+ *                   cityId: "city-uuid"
+ *                   pincodeId: "pincode-uuid"
  *                   slots:
  *                     - slotId: "db7e5fb1-a8fd-43da-bb5f-34d517cf32fc"
  *                       startTime: "06:00"
  *                       endTime: "08:00"
- *                       durationMinutes: 120
  *                       maxRiders: 40
  *                       bookedRiders: 5
- *                       isAvailable: true
+ *                       status: "ACTIVE"
  *
  *       400:
- *         description: Missing required parameters
+ *         description: Missing or invalid data
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: "Rider location not set"
+ *
+ *       404:
+ *         description: Invalid city or pincode
  *         content:
  *           application/json:
  *             examples:
- *               missingCityId:
+ *               cityNotFound:
  *                 value:
  *                   success: false
- *                   message: "cityId is required"
+ *                   message: "City not found"
  *
- *               missingPincodeId:
+ *               pincodeNotFound:
  *                 value:
  *                   success: false
- *                   message: "pincodeId is required"
+ *                   message: "Pincode not found"
+ *
+ *       201:
+ *         description: No slots available
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "No slots found for this week"
+ *               weekNumber: 18
+ *               year: 2026
+ *               count: 0
+ *               data: []
+ *
+ *       401:
+ *         description: Unauthorized
  *
  *       500:
  *         description: Server error
  */
 
-slotRouter.get("/week", getWeeklySlots);
+slotRouter.get("/week",riderAuthMiddleWare ,getWeeklySlots);
 
 /**
  * @swagger
  * /api/slots/day:
  *   get:
  *     tags: [Slots]
- *     summary: Get daily slots (cityId + pincodeId based)
- *     description: Fetch slots for a specific date filtered by cityId and pincodeId.
+ *     summary: Get daily slots based on rider location
+ *     description: >
+ *       Fetch all active slots for a specific date.
+ *       Slots are automatically filtered using the rider's saved city and pincode.
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: query
@@ -112,21 +124,7 @@ slotRouter.get("/week", getWeeklySlots);
  *           type: string
  *           format: date
  *         example: 2026-04-27
- *         description: Date (YYYY-MM-DD)
- *
- *       - in: query
- *         name: cityId
- *         required: true
- *         schema:
- *           type: string
- *         example: "c1a2b3c4-city-id"
- *
- *       - in: query
- *         name: pincodeId
- *         required: true
- *         schema:
- *           type: string
- *         example: "p1a2b3c4-pincode-id"
+ *         description: Date for which slots are fetched (YYYY-MM-DD)
  *
  *     responses:
  *       200:
@@ -139,15 +137,17 @@ slotRouter.get("/week", getWeeklySlots);
  *               date: "2026-04-27"
  *               weekNumber: 18
  *               year: 2026
- *               count: 3
+ *               count: 2
  *               data:
  *                 - slotId: "db7e5fb1-a8fd-43da-bb5f-34d517cf32fc"
- *                   startTime: "08:00"
- *                   endTime: "10:00"
+ *                   startTime: "06:00"
+ *                   endTime: "08:00"
+ *                   maxRiders: 40
+ *                   bookedRiders: 5
  *                   isPeakSlot: false
  *
  *       400:
- *         description: Missing required parameters
+ *         description: Missing required data
  *         content:
  *           application/json:
  *             examples:
@@ -156,21 +156,45 @@ slotRouter.get("/week", getWeeklySlots);
  *                   success: false
  *                   message: "Date is required (YYYY-MM-DD)"
  *
- *               missingCityId:
+ *               locationMissing:
  *                 value:
  *                   success: false
- *                   message: "cityId is required"
+ *                   message: "Rider location not set"
  *
- *               missingPincodeId:
+ *       404:
+ *         description: Invalid city or pincode
+ *         content:
+ *           application/json:
+ *             examples:
+ *               cityNotFound:
  *                 value:
  *                   success: false
- *                   message: "pincodeId is required"
+ *                   message: "City not found"
+ *
+ *               pincodeNotFound:
+ *                 value:
+ *                   success: false
+ *                   message: "Pincode not found"
+ *
+ *       201:
+ *         description: No slots available
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: "No slots found for this date"
+ *               date: "2026-04-27"
+ *               count: 0
+ *               data: []
+ *
+ *       401:
+ *         description: Unauthorized
  *
  *       500:
  *         description: Server error
  */
 
-slotRouter.get("/day", getDailySlots);
+slotRouter.get("/day",riderAuthMiddleWare, getDailySlots);
 
 /**
  * @swagger
