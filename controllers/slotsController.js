@@ -6,15 +6,120 @@ const prisma=require("../config/prisma");
 
 
 
+// exports.getWeeklySlots = async (req, res) => {
+//   try {
+//     let { city, zone, weekNumber, year } = req.query;
+
+//     if (!city) {
+//       return res.status(400).json({ success: false, message: "City is required" });
+//     }
+//     if (!zone) {
+//       return res.status(400).json({ success: false, message: "Zone is required" });
+//     }
+
+//     const today = new Date();
+
+//     if (!weekNumber) {
+//       weekNumber = getWeekNumber(today);
+//     }
+
+//     if (!year) {
+//       year = today.getFullYear();
+//     }
+
+//     const weekDocs = await prisma.weeklySlot.findMany({
+//       where: {
+//         city,
+//         zone,
+//         weekNumber: Number(weekNumber),
+//         year: Number(year),
+//         isDeleted: false
+//       },
+//       include: {
+//         slots: {
+//           where: {
+//             status: "ACTIVE"
+//           },
+//           orderBy: [
+//             { date: "asc" },
+//             { startTime: "asc" }
+//           ]
+//         }
+//       },
+//       orderBy: {
+//         createdAt: "asc"
+//       }
+//     });
+
+//     if (!weekDocs.length) {
+//       return res.json({
+//         success: true,
+//         message: "No slots found for this week",
+//         weekNumber,
+//         year,
+//         count: 0,
+//         data: []
+//       });
+//     }
+
+//     const weekly = weekDocs[0]; 
+//     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+//     const grouped = {};
+
+//     weekly.slots.forEach(slot => {
+//       const dateKey = slot.date;
+
+//       if (!grouped[dateKey]) {
+//         const currentDate = new Date(dateKey);
+
+//         grouped[dateKey] = {
+//           date: dateKey, 
+//           dayName: dayNames[currentDate.getDay()],
+//           weekNumber: weekly.weekNumber,
+//           year: weekly.year,
+//           city: weekly.city,
+//           zone: weekly.zone,
+//           slots: []
+//         };
+//       }
+
+//       grouped[dateKey].slots.push(slot);
+//     });
+
+//     const result = Object.values(grouped);
+
+//     return res.json({
+//       success: true,
+//       message: "Weekly slots fetched",
+//       weekNumber: Number(weekNumber),
+//       year: Number(year),
+//       count: result.length,
+//       data: result
+//     });
+
+//   } catch (err) {
+//     console.error("Get Weekly Slots Error:", err);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// };
+
 exports.getWeeklySlots = async (req, res) => {
   try {
-    let { city, zone, weekNumber, year } = req.query;
+    let { cityId, pincodeId, weekNumber, year } = req.query;
 
-    if (!city) {
-      return res.status(400).json({ success: false, message: "City is required" });
+    if (!cityId) {
+      return res.status(400).json({
+        success: false,
+        message: "cityId is required"
+      });
     }
-    if (!zone) {
-      return res.status(400).json({ success: false, message: "Zone is required" });
+
+    if (!pincodeId) {
+      return res.status(400).json({
+        success: false,
+        message: "pincodeId is required"
+      });
     }
 
     const today = new Date();
@@ -29,17 +134,14 @@ exports.getWeeklySlots = async (req, res) => {
 
     const weekDocs = await prisma.weeklySlot.findMany({
       where: {
-        city,
-        zone,
+        cityId: cityId,
+        pincodeId: pincodeId,
         weekNumber: Number(weekNumber),
         year: Number(year),
         isDeleted: false
       },
       include: {
         slots: {
-          where: {
-            status: "ACTIVE"
-          },
           orderBy: [
             { date: "asc" },
             { startTime: "asc" }
@@ -62,7 +164,7 @@ exports.getWeeklySlots = async (req, res) => {
       });
     }
 
-    const weekly = weekDocs[0]; 
+    const weekly = weekDocs[0];
     const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
     const grouped = {};
@@ -74,12 +176,12 @@ exports.getWeeklySlots = async (req, res) => {
         const currentDate = new Date(dateKey);
 
         grouped[dateKey] = {
-          date: dateKey, 
+          date: dateKey,
           dayName: dayNames[currentDate.getDay()],
           weekNumber: weekly.weekNumber,
           year: weekly.year,
-          city: weekly.city,
-          zone: weekly.zone,
+          cityId: weekly.cityId,
+          pincodeId: weekly.pincodeId,
           slots: []
         };
       }
@@ -100,11 +202,12 @@ exports.getWeeklySlots = async (req, res) => {
 
   } catch (err) {
     console.error("Get Weekly Slots Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
   }
 };
-
-
 
 exports.getDailySlotsWithStatus = async (req, res) => {
   try {
@@ -211,27 +314,95 @@ exports.getDailySlotsWithStatus = async (req, res) => {
 
 
 
+// exports.getDailySlots = async (req, res) => {
+//   try {
+//     const { date, city, zone } = req.query;
+
+//     if (!date) {
+//       return res.status(400).json({ success: false, message: "Date is required (YYYY-MM-DD)" });
+//     }
+//     if (!city) {
+//       return res.status(400).json({ success: false, message: "City is required" });
+//     }
+//     if (!zone) {
+//       return res.status(400).json({ success: false, message: "Zone is required" });
+//     }
+
+//     const slots = await prisma.slot.findMany({
+//       where: {
+//         date: date, 
+//         status: "ACTIVE",
+//         weeklySlot: {
+//           city,
+//           zone,
+//           isDeleted: false
+//         }
+//       },
+//       include: {
+//         weeklySlot: true
+//       },
+//       orderBy: {
+//         startTime: "asc"
+//       }
+//     });
+
+//     if (!slots.length) {
+//       return res.json({
+//         success: true,
+//         message: "No slots found for this date",
+//         date,
+//         count: 0,
+//         data: []
+//       });
+//     }
+
+//     return res.json({
+//       success: true,
+//       message: "Daily slots fetched",
+//       date,
+//       weekNumber: slots[0].weeklySlot.weekNumber,
+//       year: slots[0].weeklySlot.year,
+//       count: slots.length,
+//       data: slots
+//     });
+
+//   } catch (err) {
+//     console.error("Get Daily Slots Error:", err);
+//     res.status(500).json({ success: false, message: "Server error" });
+//   }
+// };
+
 exports.getDailySlots = async (req, res) => {
   try {
-    const { date, city, zone } = req.query;
+    const { date, cityId, pincodeId } = req.query;
 
     if (!date) {
-      return res.status(400).json({ success: false, message: "Date is required (YYYY-MM-DD)" });
+      return res.status(400).json({
+        success: false,
+        message: "Date is required (YYYY-MM-DD)"
+      });
     }
-    if (!city) {
-      return res.status(400).json({ success: false, message: "City is required" });
+
+    if (!cityId) {
+      return res.status(400).json({
+        success: false,
+        message: "cityId is required"
+      });
     }
-    if (!zone) {
-      return res.status(400).json({ success: false, message: "Zone is required" });
+
+    if (!pincodeId) {
+      return res.status(400).json({
+        success: false,
+        message: "pincodeId is required"
+      });
     }
 
     const slots = await prisma.slot.findMany({
       where: {
-        date: date, 
-        status: "ACTIVE",
+        date: date,
         weeklySlot: {
-          city,
-          zone,
+          cityId: cityId,
+          pincodeId: pincodeId,
           isDeleted: false
         }
       },
@@ -265,357 +436,586 @@ exports.getDailySlots = async (req, res) => {
 
   } catch (err) {
     console.error("Get Daily Slots Error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
   }
 };
 
 
+// exports.bookSlot = async (req, res) => {
 
+//   try {
+
+//     const riderId = req.rider.id;
+
+//     const { date, slotIds } = req.body;
+ 
+//     if (!date || !Array.isArray(slotIds) || slotIds.length === 0) {
+
+//       return res.status(400).json({
+
+//         success: false,
+
+//         message: "date and slotIds[] are required"
+
+//       });
+
+//     }
+
+//     const rider = await prisma.rider.findUnique({
+
+//       where: { id: riderId }
+
+//     });
+ 
+//     if (!rider) {
+
+//       return res.status(404).json({
+
+//         success: false,
+
+//         message: "Rider not found"
+
+//       });
+
+//     }
+ 
+//     if (!rider.isFullyRegistered) {
+
+//       return res.status(403).json({
+
+//         success: false,
+
+//         message: "Complete onboarding before booking slots"
+
+//       });
+
+//     }
+
+//     const slots = await prisma.slot.findMany({
+
+//       where: {
+
+//         slotId: { in: slotIds },
+
+//         date: date,
+
+//         status: "ACTIVE"
+
+//       },
+
+//       include: {
+
+//         weeklySlot: true
+
+//       }
+
+//     });
+ 
+//     if (slots.length === 0) {
+
+//       return res.status(404).json({
+
+//         success: false,
+
+//         message: "No slots found for this date"
+
+//       });
+
+//     }
+
+//     const validSlots = [];
+
+//     const failed = [];
+ 
+//     for (const slotId of slotIds) {
+
+//       const slot = slots.find(s => s.slotId === slotId);
+ 
+//       if (!slot) {
+
+//         failed.push({ slotId, reason: "Slot not found" });
+
+//         continue;
+
+//       }
+ 
+//       if (slot.bookedRiders >= slot.maxRiders) {
+
+//         failed.push({ slotId, reason: "Slot is full" });
+
+//         continue;
+
+//       }
+ 
+//       const alreadyBooked = await prisma.slotBooking.findUnique({
+
+//         where: {
+
+//           riderId_date_slotId: {
+
+//             riderId,
+
+//             date,
+
+//             slotId: slot.slotId
+
+//           }
+
+//         }
+
+//       });
+ 
+//       if (alreadyBooked?.status === "BOOKED") {
+
+//         failed.push({ slotId, reason: "Already booked" });
+
+//         continue;
+
+//       }
+ 
+//       validSlots.push(slot);
+
+//     }
+ 
+//     if (validSlots.length === 0) {
+
+//       return res.status(400).json({
+
+//         success: false,
+
+//         message: "No valid slots to book",
+
+//         failed
+
+//       });
+
+//     }
+ 
+
+//     const jsDate = new Date(date);
+
+//     const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+ 
+//     const dayOfWeek = days[jsDate.getUTCDay()];
+
+//     const dayNumber = jsDate.getUTCDay() === 0 ? 7 : jsDate.getUTCDay();
+ 
+
+//     const createdBookings = [];
+ 
+//     await prisma.$transaction(async (tx) => {
+
+//       for (const slot of validSlots) {
+
+//         const slotKey =
+
+//           `${dayOfWeek}_${slot.startTime.replace(":", "")}_${slot.endTime.replace(":", "")}`;
+ 
+//         const booking = await tx.slotBooking.upsert({
+
+//           where: {
+
+//             riderId_date_slotId: {
+
+//               riderId,
+
+//               date,
+
+//               slotId: slot.slotId
+
+//             }
+
+//           },
+
+//           update: {
+
+//             status: "BOOKED",
+
+//             bookedFrom: "APP",
+
+//             cancellationReason: ""
+
+//           },
+
+//           create: {
+
+//             riderId,
+
+//             daySlotId: slot.weeklySlotId,
+
+//             slotId: slot.slotId,
+
+//             slotKey,
+
+//             date,
+
+//             dayOfWeek,
+
+//             dayNumber,
+
+//             weekNumber: slot.weeklySlot.weekNumber,
+
+//             year: slot.weeklySlot.year,
+
+//             city: slot.weeklySlot.city,
+
+//             zone: slot.weeklySlot.zone,
+
+//             startTime: slot.startTime,
+
+//             endTime: slot.endTime,
+
+//             slotStartAt: slot.slotStartAt,
+
+//             slotEndAt: slot.slotEndAt,
+
+//             totalMinutes: slot.durationMinutes,
+
+//             isPeakSlot: slot.isPeakSlot,
+
+//             incentiveText: slot.incentiveText,
+
+//             status: "BOOKED",
+
+//             bookedFrom: "APP"
+
+//           }
+
+//         });
+ 
+//         createdBookings.push(booking);
+ 
+//         await tx.slot.update({
+
+//           where: { slotId: slot.slotId },
+
+//           data: {
+
+//             bookedRiders: { increment: 1 }
+
+//           }
+
+//         });
+ 
+//         await tx.slotRider.upsert({
+
+//           where: {
+
+//             slotId_riderId: {
+
+//               slotId: slot.slotId,
+
+//               riderId
+
+//             }
+
+//           },
+
+//           update: {
+
+//             status: "BOOKED"
+
+//           },
+
+//           create: {
+
+//             slotId: slot.slotId,
+
+//             riderId,
+
+//             status: "BOOKED"
+
+//           }
+
+//         });
+
+//       }
+
+//     });
+
+//     if (rider.fcmToken) {
+
+//       await fcmService.sendToDevice({
+
+//         token: rider.fcmToken,
+
+//         title: "Slot Booked",
+
+//         body:
+
+//           createdBookings.length > 1
+
+//             ? `${createdBookings.length} slots booked successfully`
+
+//             : "Slot booked successfully",
+
+//         data: { type: "SLOT_BOOKED" }
+
+//       });
+
+//     }
+
+//     return res.json({
+
+//       success: true,
+
+//       message: "Slots booked successfully",
+
+//       bookedCount: createdBookings.length,
+
+//       failedCount: failed.length,
+
+//       booked: createdBookings,
+
+//       failed
+
+//     });
+ 
+//   } catch (err) {
+
+//     console.error("Slot Booking Error:", err);
+
+//     return res.status(500).json({
+
+//       success: false,
+
+//       message: "Server error"
+
+//     });
+
+//   }
+
+// };
 
 exports.bookSlot = async (req, res) => {
-
   try {
-
     const riderId = req.rider.id;
-
     const { date, slotIds } = req.body;
- 
+
     if (!date || !Array.isArray(slotIds) || slotIds.length === 0) {
-
       return res.status(400).json({
-
         success: false,
-
         message: "date and slotIds[] are required"
-
       });
-
     }
 
     const rider = await prisma.rider.findUnique({
-
       where: { id: riderId }
-
     });
- 
+
     if (!rider) {
-
       return res.status(404).json({
-
         success: false,
-
         message: "Rider not found"
-
       });
-
     }
- 
+
     if (!rider.isFullyRegistered) {
-
       return res.status(403).json({
-
         success: false,
-
         message: "Complete onboarding before booking slots"
-
       });
-
     }
 
-    const slots = await prisma.slot.findMany({
-
-      where: {
-
-        slotId: { in: slotIds },
-
-        date: date,
-
-        status: "ACTIVE"
-
-      },
-
-      include: {
-
-        weeklySlot: true
-
-      }
-
+    // ✅ NEW: Get rider location (city + pincode)
+    const riderLocation = await prisma.riderLocation.findUnique({
+      where: { riderId }
     });
- 
-    if (slots.length === 0) {
+    // console.log(riderLocation)
 
-      return res.status(404).json({
-
+    if (!riderLocation || !riderLocation.city || !riderLocation.pincode) {
+      return res.status(400).json({
         success: false,
-
-        message: "No slots found for this date"
-
+        message: "Rider location not set"
       });
+    }
 
+    // ✅ UPDATED: filter by city + pincode
+    const slots = await prisma.slot.findMany({
+      where: {
+        slotId: { in: slotIds },
+        date: date,
+        status: "ACTIVE",
+        weeklySlot: {
+          city: {
+            name: riderLocation.city
+          },
+          pincode: {
+            code: riderLocation.pincode
+          },
+          isDeleted: false
+        }
+      },
+      include: {
+        weeklySlot: true
+      }
+    });
+
+    // console.log(slots)
+
+    if (slots.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No slots found for this date"
+      });
     }
 
     const validSlots = [];
-
     const failed = [];
- 
+
     for (const slotId of slotIds) {
-
       const slot = slots.find(s => s.slotId === slotId);
- 
+
       if (!slot) {
-
-        failed.push({ slotId, reason: "Slot not found" });
-
+        failed.push({ slotId, reason: "Slot not found for your location" }); // ✅ updated msg
         continue;
-
       }
- 
+
       if (slot.bookedRiders >= slot.maxRiders) {
-
         failed.push({ slotId, reason: "Slot is full" });
-
         continue;
-
       }
- 
+
       const alreadyBooked = await prisma.slotBooking.findUnique({
-
         where: {
-
           riderId_date_slotId: {
-
             riderId,
-
             date,
-
             slotId: slot.slotId
-
           }
-
         }
-
       });
- 
+
       if (alreadyBooked?.status === "BOOKED") {
-
         failed.push({ slotId, reason: "Already booked" });
-
         continue;
-
       }
- 
+
       validSlots.push(slot);
-
     }
- 
+
     if (validSlots.length === 0) {
-
       return res.status(400).json({
-
         success: false,
-
         message: "No valid slots to book",
-
         failed
-
       });
-
     }
- 
 
     const jsDate = new Date(date);
-
     const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
- 
-    const dayOfWeek = days[jsDate.getUTCDay()];
 
+    const dayOfWeek = days[jsDate.getUTCDay()];
     const dayNumber = jsDate.getUTCDay() === 0 ? 7 : jsDate.getUTCDay();
- 
 
     const createdBookings = [];
- 
-    await prisma.$transaction(async (tx) => {
 
+    await prisma.$transaction(async (tx) => {
       for (const slot of validSlots) {
 
         const slotKey =
-
           `${dayOfWeek}_${slot.startTime.replace(":", "")}_${slot.endTime.replace(":", "")}`;
- 
+
         const booking = await tx.slotBooking.upsert({
-
           where: {
-
             riderId_date_slotId: {
-
               riderId,
-
               date,
-
               slotId: slot.slotId
-
             }
-
           },
-
           update: {
-
             status: "BOOKED",
-
             bookedFrom: "APP",
-
             cancellationReason: ""
-
           },
-
           create: {
-
             riderId,
-
             daySlotId: slot.weeklySlotId,
-
             slotId: slot.slotId,
-
             slotKey,
-
             date,
-
             dayOfWeek,
-
             dayNumber,
-
             weekNumber: slot.weeklySlot.weekNumber,
-
             year: slot.weeklySlot.year,
 
+            // ✅ IMPORTANT: now storing pincode instead of zone
             city: slot.weeklySlot.city,
-
-            zone: slot.weeklySlot.zone,
+            zone: slot.weeklySlot.pincode, // 🔥 reuse field
 
             startTime: slot.startTime,
-
             endTime: slot.endTime,
-
             slotStartAt: slot.slotStartAt,
-
             slotEndAt: slot.slotEndAt,
-
             totalMinutes: slot.durationMinutes,
-
             isPeakSlot: slot.isPeakSlot,
-
             incentiveText: slot.incentiveText,
 
             status: "BOOKED",
-
             bookedFrom: "APP"
-
           }
-
         });
- 
+
         createdBookings.push(booking);
- 
+
         await tx.slot.update({
-
           where: { slotId: slot.slotId },
-
           data: {
-
             bookedRiders: { increment: 1 }
-
           }
-
         });
- 
+
         await tx.slotRider.upsert({
-
           where: {
-
             slotId_riderId: {
-
               slotId: slot.slotId,
-
               riderId
-
             }
-
           },
-
           update: {
-
             status: "BOOKED"
-
           },
-
           create: {
-
             slotId: slot.slotId,
-
             riderId,
-
             status: "BOOKED"
-
           }
-
         });
-
       }
-
     });
 
     if (rider.fcmToken) {
-
       await fcmService.sendToDevice({
-
         token: rider.fcmToken,
-
         title: "Slot Booked",
-
         body:
-
           createdBookings.length > 1
-
             ? `${createdBookings.length} slots booked successfully`
-
             : "Slot booked successfully",
-
         data: { type: "SLOT_BOOKED" }
-
       });
-
     }
 
     return res.json({
-
       success: true,
-
       message: "Slots booked successfully",
-
       bookedCount: createdBookings.length,
-
       failedCount: failed.length,
-
       booked: createdBookings,
-
       failed
-
     });
- 
+
   } catch (err) {
-
     console.error("Slot Booking Error:", err);
-
     return res.status(500).json({
-
       success: false,
-
       message: "Server error"
-
     });
-
   }
-
 };
 
 exports.cancelSlot = async (req, res) => {
