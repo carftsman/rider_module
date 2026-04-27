@@ -8,36 +8,36 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  * @swagger
  * /api/slots/week:
  *   get:
- *     summary: Get weekly slots (city + pincode based)
+ *     summary: Get weekly slots (cityId + pincodeId based)
  *     description: >
- *       Fetch slot list for a given week filtered by city and pincode.
- *       Returns each day with its date, day name, and active slots.
+ *       Fetch slot list for a given week filtered by cityId and pincodeId.
+ *       Returns each day with its date, day name, and slots.
  *     tags:
  *       - Slots
  *
  *     parameters:
  *       - in: query
- *         name: city
+ *         name: cityId
  *         required: true
  *         schema:
  *           type: string
- *         description: City name
- *         example: Hyderabad
+ *         description: City ID
+ *         example: "c1a2b3c4-city-id"
  *
  *       - in: query
- *         name: pincode
+ *         name: pincodeId
  *         required: true
  *         schema:
  *           type: string
- *         description: Pincode of the area
- *         example: "500032"
+ *         description: Pincode ID
+ *         example: "p1a2b3c4-pincode-id"
  *
  *       - in: query
  *         name: weekNumber
  *         required: false
  *         schema:
  *           type: number
- *         description: Week number (1–52). Defaults to current week.
+ *         description: Week number (defaults to current week)
  *         example: 18
  *
  *       - in: query
@@ -45,7 +45,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *         required: false
  *         schema:
  *           type: number
- *         description: Year. Defaults to current year.
+ *         description: Year (defaults to current year)
  *         example: 2026
  *
  *     responses:
@@ -64,8 +64,8 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                   dayName: "Mon"
  *                   weekNumber: 18
  *                   year: 2026
- *                   city: "Hyderabad"
- *                   pincode: "500032"
+ *                   cityId: "c1a2b3c4-city-id"
+ *                   pincodeId: "p1a2b3c4-pincode-id"
  *                   slots:
  *                     - slotId: "db7e5fb1-a8fd-43da-bb5f-34d517cf32fc"
  *                       startTime: "06:00"
@@ -73,42 +73,25 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                       durationMinutes: 120
  *                       maxRiders: 40
  *                       bookedRiders: 5
- *                       status: "ACTIVE"
+ *                       isAvailable: true
  *
  *       400:
  *         description: Missing required parameters
  *         content:
  *           application/json:
  *             examples:
- *               missingCity:
+ *               missingCityId:
  *                 value:
  *                   success: false
- *                   message: "City is required"
+ *                   message: "cityId is required"
  *
- *               missingPincode:
+ *               missingPincodeId:
  *                 value:
  *                   success: false
- *                   message: "Pincode is required"
- *
- *       404:
- *         description: No slots found
- *         content:
- *           application/json:
- *             example:
- *               success: true
- *               message: "No slots found for this week"
- *               weekNumber: 18
- *               year: 2026
- *               count: 0
- *               data: []
+ *                   message: "pincodeId is required"
  *
  *       500:
  *         description: Server error
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: "Server error"
  */
 
 slotRouter.get("/week", getWeeklySlots);
@@ -118,8 +101,8 @@ slotRouter.get("/week", getWeeklySlots);
  * /api/slots/day:
  *   get:
  *     tags: [Slots]
- *     summary: Get daily slots for a specific date (city + pincode based)
- *     description: Fetch all active slots available on a specific day filtered by city and pincode.
+ *     summary: Get daily slots (cityId + pincodeId based)
+ *     description: Fetch slots for a specific date filtered by cityId and pincodeId.
  *
  *     parameters:
  *       - in: query
@@ -129,23 +112,21 @@ slotRouter.get("/week", getWeeklySlots);
  *           type: string
  *           format: date
  *         example: 2026-04-27
- *         description: Date for which slots are fetched (YYYY-MM-DD)
+ *         description: Date (YYYY-MM-DD)
  *
  *       - in: query
- *         name: city
+ *         name: cityId
  *         required: true
  *         schema:
  *           type: string
- *         example: Hyderabad
- *         description: City name
+ *         example: "c1a2b3c4-city-id"
  *
  *       - in: query
- *         name: pincode
+ *         name: pincodeId
  *         required: true
  *         schema:
  *           type: string
- *         example: "500032"
- *         description: Pincode of the area
+ *         example: "p1a2b3c4-pincode-id"
  *
  *     responses:
  *       200:
@@ -160,15 +141,13 @@ slotRouter.get("/week", getWeeklySlots);
  *               year: 2026
  *               count: 3
  *               data:
- *                 - startTime: "08:00"
+ *                 - slotId: "db7e5fb1-a8fd-43da-bb5f-34d517cf32fc"
+ *                   startTime: "08:00"
  *                   endTime: "10:00"
  *                   isPeakSlot: false
- *                 - startTime: "10:00"
- *                   endTime: "12:00"
- *                   isPeakSlot: true
  *
  *       400:
- *         description: Missing required query params
+ *         description: Missing required parameters
  *         content:
  *           application/json:
  *             examples:
@@ -177,26 +156,15 @@ slotRouter.get("/week", getWeeklySlots);
  *                   success: false
  *                   message: "Date is required (YYYY-MM-DD)"
  *
- *               missingCity:
+ *               missingCityId:
  *                 value:
  *                   success: false
- *                   message: "City is required"
+ *                   message: "cityId is required"
  *
- *               missingPincode:
+ *               missingPincodeId:
  *                 value:
  *                   success: false
- *                   message: "Pincode is required"
- *
- *       404:
- *         description: No slots found
- *         content:
- *           application/json:
- *             example:
- *               success: true
- *               message: "No slots found for this date"
- *               date: "2026-04-27"
- *               count: 0
- *               data: []
+ *                   message: "pincodeId is required"
  *
  *       500:
  *         description: Server error
@@ -211,8 +179,8 @@ slotRouter.get("/day", getDailySlots);
  *     summary: Book slots based on rider location (city + pincode)
  *     tags: [Slots]
  *     description: >
- *       Books one or more slots for the rider. 
- *       Slots are filtered based on the rider's saved city and pincode.
+ *       Books one or more slots for the rider.
+ *       Slots are automatically filtered using rider's saved city and pincode.
  *       Rider must complete onboarding before booking.
  *     security:
  *       - bearerAuth: []
@@ -235,7 +203,6 @@ slotRouter.get("/day", getDailySlots);
  *
  *               slotIds:
  *                 type: array
- *                 description: List of slot IDs to book
  *                 items:
  *                   type: string
  *                 example:
@@ -250,15 +217,19 @@ slotRouter.get("/day", getDailySlots);
  *             example:
  *               success: true
  *               message: "Slots booked successfully"
- *               bookedCount: 2
+ *               bookedCount: 1
  *               failedCount: 1
- *               booked: []
- *               failed:
+ *               booked:
  *                 - slotId: "db7e5fb1-a8fd-43da-bb5f-34d517cf32fc"
- *                   reason: "Already booked"
+ *                   date: "2026-04-27"
+ *                   startTime: "06:00"
+ *                   endTime: "08:00"
+ *               failed:
+ *                 - slotId: "aaaf206d-5585-40bb-96ea-88a058955999"
+ *                   reason: "Slot is full"
  *
  *       400:
- *         description: Invalid request or no valid slots
+ *         description: Invalid request or missing data
  *         content:
  *           application/json:
  *             examples:
@@ -273,7 +244,7 @@ slotRouter.get("/day", getDailySlots);
  *                   message: "No valid slots to book"
  *                   failed:
  *                     - slotId: "abc"
- *                       reason: "Slot is full"
+ *                       reason: "Already booked"
  *
  *               locationMissing:
  *                 value:
@@ -289,7 +260,7 @@ slotRouter.get("/day", getDailySlots);
  *               message: "Complete onboarding before booking slots"
  *
  *       404:
- *         description: Slot or rider not found
+ *         description: Rider or slots not found
  *         content:
  *           application/json:
  *             examples:
@@ -298,15 +269,10 @@ slotRouter.get("/day", getDailySlots);
  *                   success: false
  *                   message: "Rider not found"
  *
- *               slotNotFound:
+ *               noSlots:
  *                 value:
  *                   success: false
  *                   message: "No slots found for this date"
- *
- *               locationMismatch:
- *                 value:
- *                   success: false
- *                   message: "Slot not found for your location"
  *
  *       401:
  *         description: Unauthorized
