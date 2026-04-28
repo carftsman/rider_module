@@ -1337,17 +1337,154 @@ exports.cancelSlot = async (req, res) => {
 };
 
 
+// exports.getCurrentSlot = async (req, res) => {
+//   try {
+
+//     const riderId = req.rider.id;
+
+//     const rider = await prisma.rider.findUnique({
+//       where: { id: riderId },
+//       include: { location: true }
+//     });
+
+//     if (!rider || !rider.location?.city || !rider.location?.area) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Rider location not configured"
+//       });
+//     }
+
+//     const { city, area } = rider.location;
+//     const zone = area;
+
+//     const now = new Date(
+//       new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+//     );
+
+//     const today = now.toISOString().split("T")[0];
+//     const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+//     const slots = await prisma.slot.findMany({
+//       where: {
+//         date: today, 
+//         status: "ACTIVE",
+//         weeklySlot: {
+//           city,
+//           zone
+//         }
+//       },
+//       include: { weeklySlot: true },
+//       orderBy: { slotStartAt: "asc" }
+//     });
+
+//     if (!slots.length) {
+//       return res.json({
+//         success: true,
+//         message: "No slots created for today",
+//         data: null
+//       });
+//     }
+
+
+//     let currentSlot = null;
+//     let nextSlot = null;
+
+//     for (const slot of slots) {
+
+//       const [sh, sm] = slot.startTime.split(":").map(Number);
+//       const [eh, em] = slot.endTime.split(":").map(Number);
+
+//       const startMinutes = sh * 60 + sm;
+//       const endMinutes = eh * 60 + em;
+
+//       if (currentMinutes >= startMinutes && currentMinutes < endMinutes) {
+//         if (slot.bookedRiders < slot.maxRiders) {
+//           currentSlot = slot;
+//           break;
+//         }
+//       }
+
+//       if (!nextSlot && startMinutes > currentMinutes) {
+//         if (slot.bookedRiders < slot.maxRiders) {
+//           nextSlot = slot;
+//         }
+//       }
+//     }
+
+//     const selectedSlot = currentSlot || nextSlot;
+
+//     if (!selectedSlot) {
+//       return res.json({
+//         success: true,
+//         message: "No available slots for today",
+//         data: null
+//       });
+//     }
+
+//     let delayMinutes = 0;
+
+//     if (currentSlot) {
+//       const [sh, sm] = selectedSlot.startTime.split(":").map(Number);
+//       const slotStartMinutes = sh * 60 + sm;
+//       delayMinutes = Math.max(0, currentMinutes - slotStartMinutes);
+//     }
+
+
+//     const booking = await prisma.slotBooking.findUnique({
+//       where: {
+//         riderId_date_slotId: {
+//           riderId,
+//           date: today,
+//           slotId: selectedSlot.slotId 
+//         }
+//       }
+//     });
+
+
+
+//     return res.json({
+//       success: true,
+//       message: currentSlot
+//         ? "Current slot available"
+//         : "Current slot full, showing next slot",
+//       date: today,
+//       data: {
+//         daySlotId: selectedSlot.weeklySlotId,
+//         slot: {
+//           slotId: selectedSlot.slotId, 
+//           startTime: selectedSlot.startTime,
+//           endTime: selectedSlot.endTime,
+//           durationInHours: selectedSlot.durationMinutes / 60,
+//           bookedRiders: selectedSlot.bookedRiders,
+//           maxRiders: selectedSlot.maxRiders,
+//           isPeakSlot: selectedSlot.isPeakSlot,
+//           status: selectedSlot.status
+//         },
+//         isBooked: booking?.status === "BOOKED",
+//         delayMinutes: currentSlot ? delayMinutes : 0
+//       }
+//     });
+
+//   } catch (err) {
+//     console.error("Current Slot Error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error"
+//     });
+//   }
+// }; 
+
 exports.getCurrentSlot = async (req, res) => {
   try {
-
     const riderId = req.rider.id;
 
+    // Get rider with location
     const rider = await prisma.rider.findUnique({
       where: { id: riderId },
       include: { location: true }
     });
 
-    if (!rider || !rider.location?.city || !rider.location?.area) {
+    if (!rider || !rider.location?.city ) {
       return res.status(400).json({
         success: false,
         message: "Rider location not configured"
@@ -1355,8 +1492,33 @@ exports.getCurrentSlot = async (req, res) => {
     }
 
     const { city, area } = rider.location;
-    const zone = area;
 
+    //  Resolve city
+    const cityData = await prisma.city.findFirst({
+      where: { name: city }
+    });
+
+    if (!cityData) {
+      return res.status(404).json({
+        success: false,
+        message: "City not found"
+      });
+    }
+    const pincodeData = await prisma.pincode.findFirst({
+  where: {
+    code: rider.location.pincode,
+    cityId: cityData.id
+  }
+});
+
+    if (!pincodeData) {
+      return res.status(404).json({
+        success: false,
+        message: "Pincode not found for this area"
+      });
+    }
+
+    //  Time calculation (IST)
     const now = new Date(
       new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
     );
@@ -1364,13 +1526,20 @@ exports.getCurrentSlot = async (req, res) => {
     const today = now.toISOString().split("T")[0];
     const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
+    // Fetch slots (FIXED QUERY)
     const slots = await prisma.slot.findMany({
       where: {
-        date: today, 
+        date: today,
         status: "ACTIVE",
         weeklySlot: {
-          city,
-          zone
+          is: {
+            city: {
+              id: cityData.id
+            },
+            pincode: {
+              id: pincodeData.id
+            }
+          }
         }
       },
       include: { weeklySlot: true },
@@ -1385,12 +1554,11 @@ exports.getCurrentSlot = async (req, res) => {
       });
     }
 
-
+    // Find current / next slot
     let currentSlot = null;
     let nextSlot = null;
 
     for (const slot of slots) {
-
       const [sh, sm] = slot.startTime.split(":").map(Number);
       const [eh, em] = slot.endTime.split(":").map(Number);
 
@@ -1421,6 +1589,7 @@ exports.getCurrentSlot = async (req, res) => {
       });
     }
 
+    // Delay calculation
     let delayMinutes = 0;
 
     if (currentSlot) {
@@ -1429,19 +1598,18 @@ exports.getCurrentSlot = async (req, res) => {
       delayMinutes = Math.max(0, currentMinutes - slotStartMinutes);
     }
 
-
+    // Check booking
     const booking = await prisma.slotBooking.findUnique({
       where: {
         riderId_date_slotId: {
           riderId,
           date: today,
-          slotId: selectedSlot.slotId 
+          slotId: selectedSlot.slotId
         }
       }
     });
 
-
-
+    // Final response
     return res.json({
       success: true,
       message: currentSlot
@@ -1451,7 +1619,7 @@ exports.getCurrentSlot = async (req, res) => {
       data: {
         daySlotId: selectedSlot.weeklySlotId,
         slot: {
-          slotId: selectedSlot.slotId, 
+          slotId: selectedSlot.slotId,
           startTime: selectedSlot.startTime,
           endTime: selectedSlot.endTime,
           durationInHours: selectedSlot.durationMinutes / 60,
@@ -1467,14 +1635,13 @@ exports.getCurrentSlot = async (req, res) => {
 
   } catch (err) {
     console.error("Current Slot Error:", err);
+
     return res.status(500).json({
       success: false,
-      message: "Server error"
+      message: err.message || "Server error"
     });
   }
-}; 
-
-
+};
 
 
 exports.getSlotHistory = async (req, res) => {
