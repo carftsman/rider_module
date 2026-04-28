@@ -231,14 +231,122 @@ exports.getWeeklySlots = async (req, res) => {
   }
 };
 
+// exports.getDailySlotsWithStatus = async (req, res) => {
+//   try {
+//     const riderId = req.rider?.id;
+//     // const { date, city, zone, status = "all" } = req.query;
+//     const { date, cityId, pincodeId, status = "all" } = req.query;
+// if (!date || !cityId || !pincodeId) {
+//   return res.status(400).json({
+//     success: false,
+//     message: "date, cityId and pincodeId are required"
+//   });
+// }
+
+//     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid date format (YYYY-MM-DD required)"
+//       });
+//     }
+
+
+//  const slots = await prisma.slot.findMany({
+//   where: {
+//     date: date,
+//     weeklySlot: {
+//       is: {   // ✅ THIS IS REQUIRED
+//         cityId: cityId,
+//         pincodeId: pincodeId
+//       }
+//     }
+//   },
+//   include: riderId
+//     ? {
+//         slotBookings: {
+//           where: { riderId }
+//         }
+//       }
+//     : {},
+//   orderBy: { startTime: "asc" }
+// });
+
+//     if (!slots.length) {
+//       return res.json({
+//         success: true,
+//         message: "No slots found",
+//         date,
+//         count: 0,
+//         data: []
+//       });
+//     }
+
+//     let enriched = slots.map(slot => {
+//       const booking = slot.slotBookings?.[0];
+
+//       return {
+//         slotId: slot.slotId,  
+//         startTime: slot.startTime,
+//         endTime: slot.endTime,
+
+//         isAvailable: slot.isAvailable, 
+
+//         isBooked: booking?.status === "BOOKED",
+//         isCancelled: booking?.status === "CANCELLED_BY_RIDER",
+
+//         bookingId: booking?.id || null,
+//         bookingStatus: booking?.status || "NOT_BOOKED"
+//       };
+//     });
+
+//     if (status === "booked") {
+//       enriched = enriched.filter(
+//         s => s.bookingStatus === "BOOKED"
+//       );
+//     }
+
+//     if (status === "cancelled") {
+//       enriched = enriched.filter(
+//         s => s.bookingStatus === "CANCELLED_BY_RIDER"
+//       );
+//     }
+
+//     if (status === "available") {
+//       enriched = enriched.filter(
+//         s =>
+//           s.isAvailable &&   
+//           (
+//             s.bookingStatus === "NOT_BOOKED" ||
+//             s.bookingStatus === "CANCELLED_BY_RIDER"
+//           )
+//       );
+//     }
+//     return res.status(200).json({
+//       success: true,
+//       message: "Daily slots fetched",
+//       date,
+//       count: enriched.length,
+//       data: enriched
+//     });
+
+//   } catch (err) {
+//     console.error("Daily Slots Error:", err);
+
+//     res.status(500).json({
+//       success: false,
+//       message: err.message || "Server error"
+//     });
+//   }
+// };
 exports.getDailySlotsWithStatus = async (req, res) => {
   try {
     const riderId = req.rider?.id;
-    const { date, city, zone, status = "all" } = req.query;
-    if (!date || !city || !zone) {
+    const { date, cityId, pincodeId, status = "all" } = req.query;
+
+    if (!date || !cityId || !pincodeId) {
       return res.status(400).json({
         success: false,
-        message: "date, city and zone are required"
+        message: "date, cityId and pincodeId are required"
       });
     }
 
@@ -248,24 +356,72 @@ exports.getDailySlotsWithStatus = async (req, res) => {
         message: "Invalid date format (YYYY-MM-DD required)"
       });
     }
-    const slots = await prisma.slot.findMany({
-      where: {
-        date: date,
-        weeklySlot: {
-          city,
-          zone
-        }
-      },
-      include: riderId
-        ? {
-            slotBookings: {
-              where: { riderId }
-            }
-          }
-        : {},
-      orderBy: { startTime: "asc" }
-    });
 
+    // Resolve city (ID or name)
+    let city;
+    if (cityId.length > 20) {
+      city = await prisma.city.findUnique({
+        where: { id: cityId }
+      });
+    } else {
+      city = await prisma.city.findFirst({
+        where: { name: cityId }
+      });
+    }
+
+    if (!city) {
+      return res.status(404).json({
+        success: false,
+        message: "City not found"
+      });
+    }
+
+    // Resolve pincode (ID or code)
+    let pincode;
+    if (pincodeId.length > 20) {
+      pincode = await prisma.pincode.findUnique({
+        where: { id: pincodeId }
+      });
+    } else {
+      pincode = await prisma.pincode.findFirst({
+        where: {
+          code: pincodeId,
+          cityId: city.id
+        }
+      });
+    }
+
+    if (!pincode) {
+      return res.status(404).json({
+        success: false,
+        message: "Pincode not found for this city"
+      });
+    }
+
+    // Fetch slots
+const slots = await prisma.slot.findMany({
+  where: {
+    date: date,
+    weeklySlot: {
+      is: {
+        city: {
+          id: city.id
+        },
+        pincode: {
+          id: pincode.id
+        }
+      }
+    }
+  },
+  include: riderId
+    ? {
+        slotBookings: {
+          where: { riderId }
+        }
+      }
+    : {},
+  orderBy: { startTime: "asc" }
+});
     if (!slots.length) {
       return res.json({
         success: true,
@@ -276,15 +432,16 @@ exports.getDailySlotsWithStatus = async (req, res) => {
       });
     }
 
+    //  Enrich response
     let enriched = slots.map(slot => {
       const booking = slot.slotBookings?.[0];
 
       return {
-        slotId: slot.slotId,  
+        slotId: slot.slotId,
         startTime: slot.startTime,
         endTime: slot.endTime,
 
-        isAvailable: slot.isAvailable, 
+        isAvailable: slot.isAvailable,
 
         isBooked: booking?.status === "BOOKED",
         isCancelled: booking?.status === "CANCELLED_BY_RIDER",
@@ -294,10 +451,9 @@ exports.getDailySlotsWithStatus = async (req, res) => {
       };
     });
 
+    //  Filters
     if (status === "booked") {
-      enriched = enriched.filter(
-        s => s.bookingStatus === "BOOKED"
-      );
+      enriched = enriched.filter(s => s.bookingStatus === "BOOKED");
     }
 
     if (status === "cancelled") {
@@ -309,13 +465,14 @@ exports.getDailySlotsWithStatus = async (req, res) => {
     if (status === "available") {
       enriched = enriched.filter(
         s =>
-          s.isAvailable &&   
+          s.isAvailable &&
           (
             s.bookingStatus === "NOT_BOOKED" ||
             s.bookingStatus === "CANCELLED_BY_RIDER"
           )
       );
     }
+
     return res.status(200).json({
       success: true,
       message: "Daily slots fetched",
@@ -327,13 +484,12 @@ exports.getDailySlotsWithStatus = async (req, res) => {
   } catch (err) {
     console.error("Daily Slots Error:", err);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: err.message || "Server error"
     });
   }
 };
-
 
 
 // exports.getDailySlots = async (req, res) => {

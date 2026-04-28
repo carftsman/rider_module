@@ -497,7 +497,7 @@ slotRouter.get("/current", riderAuthMiddleWare, getCurrentSlot);
  *           example: "2025-12-01"
  *
  *       - in: query
- *         name: city
+ *         name: cityId
  *         required: true
  *         description: City name
  *         schema:
@@ -505,9 +505,9 @@ slotRouter.get("/current", riderAuthMiddleWare, getCurrentSlot);
  *           example: "Hyderabad"
  *
  *       - in: query
- *         name: zone
+ *         name: pincodeId
  *         required: true
- *         description: Zone name
+ *         description: Pincode Id
  *         schema:
  *           type: string
  *           example: "Gachibowli"
