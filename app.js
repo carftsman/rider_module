@@ -42,6 +42,7 @@ const riderIncentivesRouter = require("./routes/riderIncentive.routes")
 const pinCodeRouter = require("./routes/pinCode.routes")
 // const offlineStoreRoute = require("./routes/offlineStoreRoute");
 
+const riderRatingRouter= require("./routes/riderRatingRoutes")
 const app = express();
 
 // app.use(cors())
@@ -132,7 +133,7 @@ app.use("/api/status", todayRiderOnlineRoutes);
 // pincode admin
 app.use("/api/pincode", pinCodeRouter);
 
-
+app.use("/api/rider",riderRatingRouter)
 
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");
