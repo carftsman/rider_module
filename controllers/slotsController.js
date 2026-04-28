@@ -1218,7 +1218,7 @@ exports.bookSlot = async (req, res) => {
     console.error("Slot Booking Error:", err);
     return res.status(500).json({
       success: false,
-      message: "Server error"
+      message: err.message
     });
   }
 };

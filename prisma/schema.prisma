@@ -1805,9 +1805,9 @@ model RiderPerformance {
 
   periodStart DateTime
 
-  periodEnd DateTime
-
-  averageRating Float @default(0)
+  periodEnd     DateTime
+  date          DateTime?
+  averageRating Float    @default(0)
 
   totalRatings Int @default(0)
 
@@ -1826,6 +1826,7 @@ model RiderPerformance {
   rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
 
   @@unique([riderId, periodStart, periodEnd])
+  @@unique([riderId, date])
   @@index([riderId])
 }
 
