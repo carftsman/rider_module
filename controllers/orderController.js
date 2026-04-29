@@ -490,67 +490,175 @@ async function acceptOrder(req, res) {
 }
  
 
+// async function rejectOrder(req, res) {
+//   try {
+//     const { orderId } = req.params;
+//     const riderId = req.rider.id;
+
+//     // 1️ Find order with allocation
+//     const order = await prisma.order.findUnique({
+//       where: { orderId },
+//       include: {
+//         OrderAllocation: true
+//       }
+//     });
+
+//     if (!order) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Order not found"
+//       });
+//     }
+
+//     if (!order.OrderAllocation) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Order not allocated"
+//       });
+//     }
+
+//     // 2️ Reject rider inside allocation
+//     const result = await prisma.orderCandidateRider.updateMany({
+//       where: {
+//         allocationId: order.OrderAllocation.id,
+//         riderId: riderId,
+//         status: "PENDING"
+//       },
+//       data: {
+//         status: "REJECTED"
+//       }
+//     });
+
+//     if (result.count === 0) {
+//       return res.status(409).json({
+//         success: false,
+//         message: "Order already handled or not assigned to this rider"
+//       });
+//     }
+
+//     return res.json({
+//       success: true,
+//       message: "Order rejected successfully"
+//     });
+
+//   } catch (err) {
+//     console.error("Reject order error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to reject order"
+//     });
+//   }
+// }
+
 async function rejectOrder(req, res) {
   try {
     const { orderId } = req.params;
     const riderId = req.rider.id;
-
-    // 1️ Find order with allocation
+ 
+    //////////////////////////////////////////////////////
+    // 1️⃣ FIND ORDER + ALLOCATION
+    //////////////////////////////////////////////////////
     const order = await prisma.order.findUnique({
       where: { orderId },
-      include: {
-        OrderAllocation: true
-      }
+      include: { OrderAllocation: true }
     });
-
+ 
     if (!order) {
       return res.status(404).json({
         success: false,
         message: "Order not found"
       });
     }
-
+ 
     if (!order.OrderAllocation) {
       return res.status(400).json({
         success: false,
         message: "Order not allocated"
       });
     }
-
-    // 2️ Reject rider inside allocation
+ 
+    //////////////////////////////////////////////////////
+    // 2️⃣ REJECT ORDER
+    //////////////////////////////////////////////////////
     const result = await prisma.orderCandidateRider.updateMany({
       where: {
         allocationId: order.OrderAllocation.id,
-        riderId: riderId,
+        riderId,
         status: "PENDING"
       },
       data: {
         status: "REJECTED"
       }
     });
-
+ 
     if (result.count === 0) {
       return res.status(409).json({
         success: false,
-        message: "Order already handled or not assigned to this rider"
+        message: "Order already handled or not assigned"
       });
     }
-
+ 
+    //////////////////////////////////////////////////////
+    // 3️⃣ DAILY REJECTION COUNT (AUTO RESET)
+    //////////////////////////////////////////////////////
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+ 
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+ 
+    const rejectCount = await prisma.orderCandidateRider.count({
+      where: {
+        riderId,
+        status: "REJECTED",
+        updatedAt: {
+          gte: todayStart,
+          lte: todayEnd
+        }
+      }
+    });
+ 
+    //////////////////////////////////////////////////////
+    // 4️⃣ OPTIONAL: PENALTY LOGIC (REAL APP BEHAVIOR)
+    //////////////////////////////////////////////////////
+    let warning = null;
+ 
+    if (rejectCount >= 5 && rejectCount < 10) {
+      warning = "⚠️ Too many rejections today. Please accept orders.";
+    }
+ 
+    if (rejectCount >= 10) {
+      // Example: mark rider inactive
+      await prisma.rider.update({
+        where: { id: riderId },
+        data: {
+          isOnline: false
+        }
+      });
+ 
+      warning = "🚫 You are temporarily blocked due to high rejections";
+    }
+ 
+    //////////////////////////////////////////////////////
+    // 5️⃣ RESPONSE
+    //////////////////////////////////////////////////////
     return res.json({
       success: true,
-      message: "Order rejected successfully"
+      message: "Order rejected successfully",
+      todayRejectCount: rejectCount,
+      warning
     });
-
+ 
   } catch (err) {
     console.error("Reject order error:", err);
+ 
     return res.status(500).json({
       success: false,
       message: "Failed to reject order"
     });
   }
 }
-
-
+ 
 async function getOrderDetails(req, res) {
   try {
     const { orderId } = req.params;

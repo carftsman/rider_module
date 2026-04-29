@@ -1032,9 +1032,10 @@ model OrderCandidateRider {
   externalScore      Float     @default(0)
   totalScore         Float     @default(0)
 
-  scoringVersion Int      @default(1)
-  calculatedAt   DateTime @default(now())
-
+  scoringVersion  Int             @default(1)
+  calculatedAt    DateTime        @default(now())
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @default(now())
   OrderAllocation OrderAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
 
   @@index([allocationId])
@@ -1807,7 +1808,7 @@ model RiderPerformance {
 
   periodEnd     DateTime
   date          DateTime?
-  averageRating Float    @default(0)
+  averageRating Float     @default(0)
 
   totalRatings Int @default(0)
 
