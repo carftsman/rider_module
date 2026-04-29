@@ -772,9 +772,9 @@ model OrderItem {
 
   total         Float
   weightPerUnit Float?
-  createdAt     DateTime @default(now())
-
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime    @default(now())
+  weightUnit    WeightUnit?
+  updatedAt     DateTime    @updatedAt
 
   Order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
@@ -1862,4 +1862,11 @@ model RiderRating {
 
   @@index([riderId])
   @@index([createdAt])
+}
+
+enum WeightUnit {
+  g
+  kg
+  ml
+  l
 }
