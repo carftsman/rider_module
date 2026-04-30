@@ -20,16 +20,33 @@ function generateOrderId(){
 }
 
 
+// 🔥 helper function
+function convertToKg(weight, unit) {
+  switch (unit) {
+    case "g":
+      return weight / 1000;
+
+    case "kg":
+      return weight;
+
+    case "ml":
+      return weight / 1000;
+
+    case "l":
+      return weight;
+
+    default:
+      throw new Error("Invalid weight unit");
+  }
+}
+
 async function createOrder(req, res) {
-
   try {
-
     const body = req.body;
 
     //////////////////////////////////////////////////////
-    // 1️ GET LAT LNG
+    // 1️⃣ GET LAT LNG
     //////////////////////////////////////////////////////
-
     const pickupGeo = await getLatLng(
       body.pickupAddress.addressLine
     );
@@ -39,37 +56,63 @@ async function createOrder(req, res) {
     );
 
     //////////////////////////////////////////////////////
-    // 2️ PAYMENT LOGIC
+    // 2️⃣ PAYMENT LOGIC
     //////////////////////////////////////////////////////
-
     let paymentData = {
       mode: body.payment.mode,
       status: "PENDING"
     };
 
     if (body.payment.mode === "ONLINE") {
-
       paymentData.transactionId = generateTxn();
       paymentData.status = "SUCCESS";
-
     }
 
     if (body.payment.mode === "COD") {
-
       paymentData.codPaymentType =
         body.payment.codPaymentType || "CASH";
-
     }
 
     //////////////////////////////////////////////////////
-    // 3️ CALCULATE ITEM TOTAL
+    // 3️⃣ CALCULATE TOTAL + WEIGHT (🔥 CORE LOGIC)
     //////////////////////////////////////////////////////
+    let itemTotal = 0;
+    let totalWeight = 0;
 
-    let itemTotal = body.items.reduce(
-      (sum, i) => sum + i.total,
-      0
-    );
+    for (const item of body.items) {
+      itemTotal += item.total;
 
+      // ✅ validation
+      if (!item.weightPerUnit || !item.weightUnit) {
+        return res.status(400).json({
+          success: false,
+          message: "weightPerUnit and weightUnit are required"
+        });
+      }
+
+      const weightInKg = convertToKg(
+        item.weightPerUnit,
+        item.weightUnit.toLowerCase()
+      );
+
+      totalWeight += weightInKg * item.quantity;
+    }
+
+    //////////////////////////////////////////////////////
+    // ❌ BIKE LIMIT CHECK (20KG)
+    //////////////////////////////////////////////////////
+    if (totalWeight > 20) {
+      return res.status(400).json({
+        success: false,
+        message: `Order weight ${totalWeight.toFixed(
+          2
+        )}kg exceeds 20kg limit for biker`
+      });
+    }
+
+    //////////////////////////////////////////////////////
+    // 4️⃣ PRICING
+    //////////////////////////////////////////////////////
     const deliveryFee = 40;
     const tax = 5;
     const platformCommission = 10;
@@ -78,135 +121,309 @@ async function createOrder(req, res) {
       itemTotal + deliveryFee + tax;
 
     //////////////////////////////////////////////////////
-    // 4️⃣ CREATE ORDER (PRISMA)
+    // 5️⃣ CREATE ORDER
     //////////////////////////////////////////////////////
-
-
     const order = await prisma.order.create({
+      data: {
+        orderId: generateOrderId(),
+        vendorShopName: body.vendorShopName,
 
-  data: {
+        // ✅ STORE TOTAL WEIGHT
+        totalWeight: totalWeight,
 
-    orderId: generateOrderId(),
+        //////////////////////////////////////////////////
+        // ITEMS
+        //////////////////////////////////////////////////
+        OrderItems: {
+          create: body.items.map(item => ({
+            itemName: item.itemName,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            weightPerUnit: item.weightPerUnit,
+            weightUnit: item.weightUnit.toLowerCase() // ✅ NEW
+          }))
+        },
 
-    vendorShopName: body.vendorShopName,
-
-    //////////////////////////////////////////////////
-    // ITEMS
-    //////////////////////////////////////////////////
-
-    OrderItems: {
-      create: body.items.map(item => ({
-        itemName: item.itemName,
-        quantity: item.quantity,
-        price: item.price,
-        total: item.total
-      }))
-    },
-
-    //////////////////////////////////////////////////
-    // PICKUP ADDRESS
-    //////////////////////////////////////////////////
-
-    OrderPickupAddress: {
-      create: {
-        name: body.pickupAddress.name,
-        addressLine: body.pickupAddress.addressLine,
-        contactNumber: body.pickupAddress.contactNumber,
-        latitude: pickupGeo.lat,
-        longitude: pickupGeo.lng
-      }
-    },
-
-    //////////////////////////////////////////////////
-    // DELIVERY ADDRESS
-    //////////////////////////////////////////////////
-
-    OrderDeliveryAddress: {
-      create: {
-        name: body.deliveryAddress.name,
-        addressLine: body.deliveryAddress.addressLine,
-        contactNumber: body.deliveryAddress.contactNumber,
-        latitude: deliveryGeo.lat,
-        longitude: deliveryGeo.lng
-      }
-    },
-
-    //////////////////////////////////////////////////
-    // PRICING
-    //////////////////////////////////////////////////
-
-    OrderPricing: {
-      create: {
-        itemTotal,
-        deliveryFee,
-        tax,
-        platformCommission,
-        totalAmount
-      }
-    },
-
-    //////////////////////////////////////////////////
-    // PAYMENT
-    //////////////////////////////////////////////////
-
-    OrderPayment: {
-      create: paymentData
-    },
-
-    //////////////////////////////////////////////////
-    // COD (ONLY IF COD)
-    //////////////////////////////////////////////////
-
-    OrderCod:
-      body.payment.mode === "COD"
-        ? {
-            create: {
-              amount: totalAmount,
-              pendingAmount: totalAmount
-            }
+        //////////////////////////////////////////////////
+        // PICKUP ADDRESS
+        //////////////////////////////////////////////////
+        OrderPickupAddress: {
+          create: {
+            name: body.pickupAddress.name,
+            addressLine: body.pickupAddress.addressLine,
+            contactNumber:
+              body.pickupAddress.contactNumber,
+            latitude: pickupGeo.lat,
+            longitude: pickupGeo.lng
           }
-        : undefined
+        },
 
-  },
+        //////////////////////////////////////////////////
+        // DELIVERY ADDRESS
+        //////////////////////////////////////////////////
+        OrderDeliveryAddress: {
+          create: {
+            name: body.deliveryAddress.name,
+            addressLine:
+              body.deliveryAddress.addressLine,
+            contactNumber:
+              body.deliveryAddress.contactNumber,
+            latitude: deliveryGeo.lat,
+            longitude: deliveryGeo.lng
+          }
+        },
 
-  include: {
-    OrderPayment: true
-  }
+        //////////////////////////////////////////////////
+        // PRICING
+        //////////////////////////////////////////////////
+        OrderPricing: {
+          create: {
+            itemTotal,
+            deliveryFee,
+            tax,
+            platformCommission,
+            totalAmount
+          }
+        },
 
-});
+        //////////////////////////////////////////////////
+        // PAYMENT
+        //////////////////////////////////////////////////
+        OrderPayment: {
+          create: paymentData
+        },
 
-    //////////////////////////////////////////////////////
-    // 5️ RESPONSE (same Swagger)
-    //////////////////////////////////////////////////////
+        //////////////////////////////////////////////////
+        // COD
+        //////////////////////////////////////////////////
+        OrderCod:
+          body.payment.mode === "COD"
+            ? {
+                create: {
+                  amount: totalAmount,
+                  pendingAmount: totalAmount
+                }
+              }
+            : undefined
+      },
 
-    return res.status(201).json({
-
-      success: true,
-
-      message: "Order created successfully",
-
-      orderId: order.orderId,
-
-      payment: order.payment
-
+      include: {
+        OrderPayment: true
+      }
     });
 
-  }
-  catch (err) {
+    //////////////////////////////////////////////////////
+    // 6️⃣ RESPONSE
+    //////////////////////////////////////////////////////
+    return res.status(201).json({
+      success: true,
+      message: "Order created successfully",
+      orderId: order.orderId,
+      totalWeight: totalWeight.toFixed(2) + " kg",
+      payment: order.OrderPayment
+    });
 
+  } catch (err) {
     console.error(err);
 
     return res.status(500).json({
-
       success: false,
-
       message: err.message
-
     });
-
   }
-
 }
+
+
+
+
+// async function createOrder(req, res) {
+
+//   try {
+
+//     const body = req.body;
+
+//     //////////////////////////////////////////////////////
+//     // 1️ GET LAT LNG
+//     //////////////////////////////////////////////////////
+
+//     const pickupGeo = await getLatLng(
+//       body.pickupAddress.addressLine
+//     );
+
+//     const deliveryGeo = await getLatLng(
+//       body.deliveryAddress.addressLine
+//     );
+
+//     //////////////////////////////////////////////////////
+//     // 2️ PAYMENT LOGIC
+//     //////////////////////////////////////////////////////
+
+//     let paymentData = {
+//       mode: body.payment.mode,
+//       status: "PENDING"
+//     };
+
+//     if (body.payment.mode === "ONLINE") {
+
+//       paymentData.transactionId = generateTxn();
+//       paymentData.status = "SUCCESS";
+
+//     }
+
+//     if (body.payment.mode === "COD") {
+
+//       paymentData.codPaymentType =
+//         body.payment.codPaymentType || "CASH";
+
+//     }
+
+//     //////////////////////////////////////////////////////
+//     // 3️ CALCULATE ITEM TOTAL
+//     //////////////////////////////////////////////////////
+
+//     let itemTotal = body.items.reduce(
+//       (sum, i) => sum + i.total,
+//       0
+//     );
+
+//     const deliveryFee = 40;
+//     const tax = 5;
+//     const platformCommission = 10;
+
+//     const totalAmount =
+//       itemTotal + deliveryFee + tax;
+
+//     //////////////////////////////////////////////////////
+//     // 4️⃣ CREATE ORDER (PRISMA)
+//     //////////////////////////////////////////////////////
+
+
+//     const order = await prisma.order.create({
+
+//   data: {
+
+//     orderId: generateOrderId(),
+
+//     vendorShopName: body.vendorShopName,
+
+//     //////////////////////////////////////////////////
+//     // ITEMS
+//     //////////////////////////////////////////////////
+
+//     OrderItems: {
+//       create: body.items.map(item => ({
+//         itemName: item.itemName,
+//         quantity: item.quantity,
+//         price: item.price,
+//         total: item.total
+//       }))
+//     },
+
+//     //////////////////////////////////////////////////
+//     // PICKUP ADDRESS
+//     //////////////////////////////////////////////////
+
+//     OrderPickupAddress: {
+//       create: {
+//         name: body.pickupAddress.name,
+//         addressLine: body.pickupAddress.addressLine,
+//         contactNumber: body.pickupAddress.contactNumber,
+//         latitude: pickupGeo.lat,
+//         longitude: pickupGeo.lng
+//       }
+//     },
+
+//     //////////////////////////////////////////////////
+//     // DELIVERY ADDRESS
+//     //////////////////////////////////////////////////
+
+//     OrderDeliveryAddress: {
+//       create: {
+//         name: body.deliveryAddress.name,
+//         addressLine: body.deliveryAddress.addressLine,
+//         contactNumber: body.deliveryAddress.contactNumber,
+//         latitude: deliveryGeo.lat,
+//         longitude: deliveryGeo.lng
+//       }
+//     },
+
+//     //////////////////////////////////////////////////
+//     // PRICING
+//     //////////////////////////////////////////////////
+
+//     OrderPricing: {
+//       create: {
+//         itemTotal,
+//         deliveryFee,
+//         tax,
+//         platformCommission,
+//         totalAmount
+//       }
+//     },
+
+//     //////////////////////////////////////////////////
+//     // PAYMENT
+//     //////////////////////////////////////////////////
+
+//     OrderPayment: {
+//       create: paymentData
+//     },
+
+//     //////////////////////////////////////////////////
+//     // COD (ONLY IF COD)
+//     //////////////////////////////////////////////////
+
+//     OrderCod:
+//       body.payment.mode === "COD"
+//         ? {
+//             create: {
+//               amount: totalAmount,
+//               pendingAmount: totalAmount
+//             }
+//           }
+//         : undefined
+
+//   },
+
+//   include: {
+//     OrderPayment: true
+//   }
+
+// });
+
+//     //////////////////////////////////////////////////////
+//     // 5️ RESPONSE (same Swagger)
+//     //////////////////////////////////////////////////////
+
+//     return res.status(201).json({
+
+//       success: true,
+
+//       message: "Order created successfully",
+
+//       orderId: order.orderId,
+
+//       payment: order.payment
+
+//     });
+
+//   }
+//   catch (err) {
+
+//     console.error(err);
+
+//     return res.status(500).json({
+
+//       success: false,
+
+//       message: err.message
+
+//     });
+
+//   }
+
+// }
 
 
 
@@ -278,216 +495,216 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
 
 ================================ */
 
-async function confirmOrder(req, res) {
-  try {
-    const { orderId } = req.params;
+// async function confirmOrder(req, res) {
+//   try {
+//     const { orderId } = req.params;
 
-    const order = await prisma.order.findFirst({
-      where: { orderId },
-      include: {
-        OrderPickupAddress: true,
-        OrderDeliveryAddress: true
-      }
-    });
+//     const order = await prisma.order.findFirst({
+//       where: { orderId },
+//       include: {
+//         OrderPickupAddress: true,
+//         OrderDeliveryAddress: true
+//       }
+//     });
 
-    if (!order)
-      return res.status(404).json({ success: false, message: "Order not found" });
+//     if (!order)
+//       return res.status(404).json({ success: false, message: "Order not found" });
 
-    if (order.orderStatus !== "CREATED")
-      return res.status(400).json({ success: false, message: "Order already processed" });
+//     if (order.orderStatus !== "CREATED")
+//       return res.status(400).json({ success: false, message: "Order already processed" });
 
-    const now = new Date();
+//     const now = new Date();
 
-    const riders = await prisma.rider.findMany({
-      where: {
-        orderState: "READY",
-        isOnline: true,
-        slotBookings: {
-          some: {
-            status: "BOOKED",
-            slotEndAt: { gte: now }
-          }
-        }
-      },
-      take: 10,
-      select: { id: true }
-    });
+//     const riders = await prisma.rider.findMany({
+//       where: {
+//         orderState: "READY",
+//         isOnline: true,
+//         slotBookings: {
+//           some: {
+//             status: "BOOKED",
+//             slotEndAt: { gte: now }
+//           }
+//         }
+//       },
+//       take: 10,
+//       select: { id: true }
+//     });
 
-    if (!riders.length)
-      return res.status(400).json({ success: false, message: "No riders available" });
+//     if (!riders.length)
+//       return res.status(400).json({ success: false, message: "No riders available" });
 
-    const routeInfo = await getRouteInfo(
-      order.OrderPickupAddress,
-      order.OrderDeliveryAddress
-    );
+//     const routeInfo = await getRouteInfo(
+//       order.OrderPickupAddress,
+//       order.OrderDeliveryAddress
+//     );
 
-    const basePay = 40;
-    const distancePay = routeInfo.distanceKm * 5;
-    const surgePay = 0;
-    const totalEarning = basePay + distancePay + surgePay;
+//     const basePay = 40;
+//     const distancePay = routeInfo.distanceKm * 5;
+//     const surgePay = 0;
+//     const totalEarning = basePay + distancePay + surgePay;
 
-    await prisma.$transaction(async (tx) => {
+//     await prisma.$transaction(async (tx) => {
 
-      // Update order
-      await tx.order.update({
-        where: { id: order.id },   // use UUID
-        data: { orderStatus: "CONFIRMED" }
-      });
+//       // Update order
+//       await tx.order.update({
+//         where: { id: order.id },   // use UUID
+//         data: { orderStatus: "CONFIRMED" }
+//       });
 
-      //  Create allocation
-      await tx.orderAllocation.create({
-        data: {
-          orderId: order.orderId,   // use UUID
-          expiresAt: new Date(Date.now() + 120000),
-          OrderCandidateRiders: {
-            create: riders.map(r => ({
-              riderId: r.id,
-              status: "PENDING",
-              notifiedAt: new Date()
-            }))
-          }
-        }
-      });
+//       //  Create allocation
+//       await tx.orderAllocation.create({
+//         data: {
+//           orderId: order.orderId,   // use UUID
+//           expiresAt: new Date(Date.now() + 120000),
+//           OrderCandidateRiders: {
+//             create: riders.map(r => ({
+//               riderId: r.id,
+//               status: "PENDING",
+//               notifiedAt: new Date()
+//             }))
+//           }
+//         }
+//       });
 
-      //  Create earning snapshot
-      await tx.orderRiderEarning.create({
-        data: {
-          orderId: order.orderId,
-          basePay,
-          distancePay,
-          surgePay,
-          totalEarning,
-          credited: false
-        }
-      });
+//       //  Create earning snapshot
+//       await tx.orderRiderEarning.create({
+//         data: {
+//           orderId: order.orderId,
+//           basePay,
+//           distancePay,
+//           surgePay,
+//           totalEarning,
+//           credited: false
+//         }
+//       });
 
-      //  Create tracking snapshot
-      await tx.orderTracking.create({
-        data: {
-          orderId: order.orderId,
-          distanceInKm: routeInfo.distanceKm,
-          durationInMin: routeInfo.etaMinutes
-        }
-      });
+//       //  Create tracking snapshot
+//       await tx.orderTracking.create({
+//         data: {
+//           orderId: order.orderId,
+//           distanceInKm: routeInfo.distanceKm,
+//           durationInMin: routeInfo.etaMinutes
+//         }
+//       });
 
-    });
+//     });
 
-    // Notify AFTER transaction commits
-    riders.forEach(rider => {
-      notifyRider(rider.id, {
-        type: "ORDER_POPUP",
-        orderId: order.orderId, // send formatted ID to frontend
-        vendorShopName: order.vendorShopName,
-        pickupLocation: order.OrderPickupAddress,
-        dropLocation: order.OrderDeliveryAddress,
-        distanceKm: routeInfo.distanceKm,
-        etaMinutes: routeInfo.etaMinutes,
-        estimatedEarning: totalEarning
-      });
-    });
+//     // Notify AFTER transaction commits
+//     riders.forEach(rider => {
+//       notifyRider(rider.id, {
+//         type: "ORDER_POPUP",
+//         orderId: order.orderId, // send formatted ID to frontend
+//         vendorShopName: order.vendorShopName,
+//         pickupLocation: order.OrderPickupAddress,
+//         dropLocation: order.OrderDeliveryAddress,
+//         distanceKm: routeInfo.distanceKm,
+//         etaMinutes: routeInfo.etaMinutes,
+//         estimatedEarning: totalEarning
+//       });
+//     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Order confirmed and sent to riders",
-      estimatedEarning: totalEarning,
-      notifiedRiders: riders.length
-    });
+//     return res.status(200).json({
+//       success: true,
+//       message: "Order confirmed and sent to riders",
+//       estimatedEarning: totalEarning,
+//       notifiedRiders: riders.length
+//     });
 
-  } catch (err) {
-    console.error("Confirm order error:", err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || "Failed to confirm order"
-    });
-  }
-}
+//   } catch (err) {
+//     console.error("Confirm order error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message || "Failed to confirm order"
+//     });
+//   }
+// }
 
 
-async function acceptOrder(req, res) {
-  try {
-    const { orderId } = req.params;
-    const riderId = req.rider.id;
+// async function acceptOrder(req, res) {
+//   try {
+//     const { orderId } = req.params;
+//     const riderId = req.rider.id;
 
-    const order = await prisma.order.findUnique({
-      where: { orderId },
-      include: { OrderAllocation: true }
-    });
+//     const order = await prisma.order.findUnique({
+//       where: { orderId },
+//       include: { OrderAllocation: true }
+//     });
 
-    if (!order)
-      return res.status(404).json({ success: false, message: "Order not found" });
+//     if (!order)
+//       return res.status(404).json({ success: false, message: "Order not found" });
 
-    if (!order.OrderAllocation)
-      return res.status(400).json({ success: false, message: "Order not allocated" });
+//     if (!order.OrderAllocation)
+//       return res.status(400).json({ success: false, message: "Order not allocated" });
 
-    await prisma.$transaction(async (tx) => {
+//     await prisma.$transaction(async (tx) => {
 
-      //  ATOMIC STATUS UPDATE (prevents race condition)
-      const updated = await tx.order.updateMany({
-        where: {
-          orderId:orderId,
-          orderStatus: "CONFIRMED"
-        },
-        data: {
-          riderId: riderId,
-          orderStatus: "ASSIGNED"
-        }
-      });
+//       //  ATOMIC STATUS UPDATE (prevents race condition)
+//       const updated = await tx.order.updateMany({
+//         where: {
+//           orderId:orderId,
+//           orderStatus: "CONFIRMED"
+//         },
+//         data: {
+//           riderId: riderId,
+//           orderStatus: "ASSIGNED"
+//         }
+//       });
 
-      if (updated.count === 0) {
-        throw new Error("Order already accepted");
-      }
+//       if (updated.count === 0) {
+//         throw new Error("Order already accepted");
+//       }
 
-      // Accept this rider
-      await tx.orderCandidateRider.updateMany({
-        where: {
-          allocationId: order.OrderAllocation.id,
-          riderId: riderId,
-          status: "PENDING"
-        },
-        data: { status: "ACCEPTED" }
-      });
+//       // Accept this rider
+//       await tx.orderCandidateRider.updateMany({
+//         where: {
+//           allocationId: order.OrderAllocation.id,
+//           riderId: riderId,
+//           status: "PENDING"
+//         },
+//         data: { status: "ACCEPTED" }
+//       });
 
-      // Reject others
-      await tx.orderCandidateRider.updateMany({
-        where: {
-          allocationId: order.OrderAllocation.id,
-          riderId: { not: riderId },
-          status: "PENDING"
-        },
-        data: { status: "REJECTED" }
-      });
+//       // Reject others
+//       await tx.orderCandidateRider.updateMany({
+//         where: {
+//           allocationId: order.OrderAllocation.id,
+//           riderId: { not: riderId },
+//           status: "PENDING"
+//         },
+//         data: { status: "REJECTED" }
+//       });
 
-      // Mark allocation assigned
-      await tx.orderAllocation.update({
-        where: { id: order.OrderAllocation.id },
-        data: { assignedAt: new Date() }
-      });
+//       // Mark allocation assigned
+//       await tx.orderAllocation.update({
+//         where: { id: order.OrderAllocation.id },
+//         data: { assignedAt: new Date() }
+//       });
 
-      // Make rider busy
-      await tx.rider.update({
-        where: { id: riderId },
-        data: {
-          orderState: "BUSY",
-          currentOrderId: order.id
-        }
-      });
+//       // Make rider busy
+//       await tx.rider.update({
+//         where: { id: riderId },
+//         data: {
+//           orderState: "BUSY",
+//           currentOrderId: order.id
+//         }
+//       });
 
-    });
+//     });
 
-    return res.json({
-      success: true,
-      message: "Order accepted successfully"
-    });
+//     return res.json({
+//       success: true,
+//       message: "Order accepted successfully"
+//     });
 
-  } catch (err) {
-    console.error("Accept order error:", err);
+//   } catch (err) {
+//     console.error("Accept order error:", err);
 
-    return res.status(400).json({
-      success: false,
-      message: err.message || "Failed to accept order"
-    });
-  }
-}
+//     return res.status(400).json({
+//       success: false,
+//       message: err.message || "Failed to accept order"
+//     });
+//   }
+// }
  
 
 // async function rejectOrder(req, res) {
@@ -549,6 +766,369 @@ async function acceptOrder(req, res) {
 //     });
 //   }
 // }
+
+async function confirmOrder(req, res) {
+  try {
+    const { orderId } = req.params;
+ 
+    const order = await prisma.order.findFirst({
+      where: { orderId },
+      include: {
+        OrderPickupAddress: true,
+        OrderDeliveryAddress: true
+      }
+    });
+ 
+    if (!order)
+      return res.status(404).json({ success: false, message: "Order not found" });
+ 
+    if (order.orderStatus !== "CREATED")
+      return res.status(400).json({ success: false, message: "Order already processed" });
+ 
+    const now = new Date();
+ 
+    const riders = await prisma.rider.findMany({
+      where: {
+        orderState: "READY",
+        isOnline: true,
+        slotBookings: {
+          some: {
+            status: "BOOKED",
+            slotEndAt: { gte: now }
+          }
+        }
+      },
+      take: 10,
+      select: { id: true }
+    });
+ 
+    if (!riders.length)
+      return res.status(400).json({ success: false, message: "No riders available" });
+ 
+    const routeInfo = await getRouteInfo(
+      order.OrderPickupAddress,
+      order.OrderDeliveryAddress
+    );
+ 
+    const basePay = 40;
+    const distancePay = routeInfo.distanceKm * 5;
+    const surgePay = 0;
+    const totalEarning = basePay + distancePay + surgePay;
+ 
+    await prisma.$transaction(async (tx) => {
+ 
+      // Update order
+      await tx.order.update({
+        where: { id: order.id },   // use UUID
+        data: { orderStatus: "CONFIRMED" }
+      });
+ 
+      //  Create allocation
+      await tx.orderAllocation.create({
+        data: {
+          orderId: order.orderId,   // use UUID
+          expiresAt: new Date(Date.now() + 120000),
+          OrderCandidateRiders: {
+            create: riders.map(r => ({
+              riderId: r.id,
+              status: "PENDING",
+              notifiedAt: new Date()
+            }))
+          }
+        }
+      });
+ 
+      //  Create earning snapshot
+      await tx.orderRiderEarning.create({
+        data: {
+          orderId: order.orderId,
+          basePay,
+          distancePay,
+          surgePay,
+          totalEarning,
+          credited: false
+        }
+      });
+ 
+      //  Create tracking snapshot
+      await tx.orderTracking.create({
+        data: {
+          orderId: order.orderId,
+          distanceInKm: routeInfo.distanceKm,
+          durationInMin: routeInfo.etaMinutes
+        }
+      });
+ 
+    });
+ 
+    // Notify AFTER transaction commits
+    riders.forEach(rider => {
+      notifyRider(rider.id, {
+        type: "ORDER_POPUP",
+        orderId: order.orderId, // send formatted ID to frontend
+        vendorShopName: order.vendorShopName,
+        pickupLocation: order.OrderPickupAddress,
+        dropLocation: order.OrderDeliveryAddress,
+        distanceKm: routeInfo.distanceKm,
+        etaMinutes: routeInfo.etaMinutes,
+        estimatedEarning: totalEarning
+      });
+    });
+ 
+    return res.status(200).json({
+      success: true,
+      message: "Order confirmed and sent to riders",
+      estimatedEarning: totalEarning,
+      notifiedRiders: riders.length
+    });
+ 
+  } catch (err) {
+    console.error("Confirm order error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Failed to confirm order"
+    });
+  }
+}
+
+// async function acceptOrder(req, res) {
+//   try {
+//     const { orderId } = req.params;
+//     const riderId = req.rider.id;
+ 
+//     const order = await prisma.order.findUnique({
+//       where: { orderId },
+//       include: { OrderAllocation: true }
+//     });
+ 
+//     if (!order)
+//       return res.status(404).json({ success: false, message: "Order not found" });
+ 
+//     if (!order.OrderAllocation)
+//       return res.status(400).json({ success: false, message: "Order not allocated" });
+ 
+//     await prisma.$transaction(async (tx) => {
+ 
+//       //  ATOMIC STATUS UPDATE (prevents race condition)
+//       const updated = await tx.order.updateMany({
+//         where: {
+//           orderId:orderId,
+//           orderStatus: "CONFIRMED"
+//         },
+//         data: {
+//           riderId: riderId,
+//           orderStatus: "ASSIGNED"
+//         }
+//       });
+ 
+//       if (updated.count === 0) {
+//         throw new Error("Order already accepted");
+//       }
+ 
+//       // Accept this rider
+//       await tx.orderCandidateRider.updateMany({
+//         where: {
+//           allocationId: order.OrderAllocation.id,
+//           riderId: riderId,
+//           status: "PENDING"
+//         },
+//         data: { status: "ACCEPTED" }
+//       });
+ 
+//       // Reject others
+//       await tx.orderCandidateRider.updateMany({
+//         where: {
+//           allocationId: order.OrderAllocation.id,
+//           riderId: { not: riderId },
+//           status: "PENDING"
+//         },
+//         data: { status: "REJECTED" }
+//       });
+ 
+//       // Mark allocation assigned
+//       await tx.orderAllocation.update({
+//         where: { id: order.OrderAllocation.id },
+//         data: { assignedAt: new Date() }
+//       });
+ 
+//       // Make rider busy
+//       await tx.rider.update({
+//         where: { id: riderId },
+//         data: {
+//           orderState: "BUSY",
+//           currentOrderId: order.id
+//         }
+//       });
+ 
+//     });
+ 
+//     return res.json({
+//       success: true,
+//       message: "Order accepted successfully"
+//     });
+ 
+//   } catch (err) {
+//     console.error("Accept order error:", err);
+ 
+//     return res.status(400).json({
+//       success: false,
+//       message: err.message || "Failed to accept order"
+//     });
+//   }
+// }
+
+async function acceptOrder(req, res) {
+  try {
+    const { orderId } = req.params;
+    const riderId = req.rider.id;
+
+    //////////////////////////////////////////////////////
+    // 1️⃣ FIND ORDER
+    //////////////////////////////////////////////////////
+
+    const order = await prisma.order.findUnique({
+      where: { orderId },
+      include: { OrderAllocation: true }
+    });
+
+    if (!order)
+      return res.status(404).json({ success: false, message: "Order not found" });
+
+    if (!order.OrderAllocation)
+      return res.status(400).json({ success: false, message: "Order not allocated" });
+
+    //////////////////////////////////////////////////////
+    // 2️⃣ ACCEPT ORDER (TRANSACTION)
+    //////////////////////////////////////////////////////
+
+    await prisma.$transaction(async (tx) => {
+
+      // Atomic update (prevents race condition)
+      const updated = await tx.order.updateMany({
+        where: {
+          orderId: orderId,
+          orderStatus: "CONFIRMED"
+        },
+        data: {
+          riderId: riderId,
+          orderStatus: "ASSIGNED"
+        }
+      });
+
+      if (updated.count === 0) {
+        throw new Error("Order already accepted");
+      }
+
+      // Accept this rider
+      await tx.orderCandidateRider.updateMany({
+        where: {
+          allocationId: order.OrderAllocation.id,
+          riderId: riderId,
+          status: "PENDING"
+        },
+        data: { status: "ACCEPTED" }
+      });
+
+      // Reject others
+      await tx.orderCandidateRider.updateMany({
+        where: {
+          allocationId: order.OrderAllocation.id,
+          riderId: { not: riderId },
+          status: "PENDING"
+        },
+        data: { status: "REJECTED" }
+      });
+
+      // Mark allocation assigned
+      await tx.orderAllocation.update({
+        where: { id: order.OrderAllocation.id },
+        data: { assignedAt: new Date() }
+      });
+
+      // Make rider busy
+      await tx.rider.update({
+        where: { id: riderId },
+        data: {
+          orderState: "BUSY",
+          currentOrderId: order.id
+        }
+      });
+    });
+
+    //////////////////////////////////////////////////////
+    // 3️⃣ DAILY ACCEPT COUNT (🔥 IMPORTANT)
+    //////////////////////////////////////////////////////
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const acceptCount = await prisma.orderCandidateRider.count({
+      where: {
+        riderId,
+        status: "ACCEPTED",
+        updatedAt: {
+          gte: todayStart,
+          lte: todayEnd
+        }
+      }
+    });
+
+    //////////////////////////////////////////////////////
+    // 4️⃣ UPSERT PERFORMANCE
+    //////////////////////////////////////////////////////
+
+    await prisma.riderPerformance.upsert({
+      where: {
+        riderId_date: {
+          riderId,
+          date: todayStart
+        }
+      },
+      update: {
+        totalOrdersAccepted: acceptCount
+      },
+      create: {
+        riderId,
+        date: todayStart,
+
+        // required fields
+        periodStart: todayStart,
+        periodEnd: todayEnd,
+
+        totalOrdersAccepted: acceptCount,
+        totalOrdersRejected: 0,
+        totalOrdersAssigned: 0,
+
+        acceptanceRate: 0,
+        performanceScore: 0.7
+      }
+    });
+
+    //////////////////////////////////////////////////////
+    // 5️⃣ RESPONSE
+    //////////////////////////////////////////////////////
+
+    return res.json({
+      success: true,
+      message: "Order accepted successfully",
+      todayAcceptedOrders: acceptCount
+    });
+
+  } catch (err) {
+    console.error("Accept order error:", err);
+
+    return res.status(400).json({
+      success: false,
+      message: err.message || "Failed to accept order"
+    });
+  }
+}
+ 
+
+
 
 async function rejectOrder(req, res) {
   try {
@@ -698,13 +1278,17 @@ async function getOrderDetails(req, res) {
       orderId: order.orderId,
       vendorShopName: order.vendorShopName,
       orderStatus: order.orderStatus,
+      totalWeight: order.totalWeight,
+      weightUnit: "kg",
 
       items: order.OrderItems.map(item => ({
         _id: item.id,
         itemName: item.itemName,
         quantity: item.quantity,
         price: item.price,
-        total: item.total
+        total: item.total,
+        weightPerUnit: item.weightPerUnit,
+        weightUnit: item.weightUnit
       })),
 
       pickupAddress: order.OrderPickupAddress

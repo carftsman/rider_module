@@ -30,9 +30,9 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *       - Orders
  *     summary: Create a new order
  *     description: >
- *       Creates a new order with item-level pricing calculation.
- *       This API only creates the order and sets initial values.
- *       Rider allocation, distance, ETA, and earnings are handled later.
+ *       Creates a new order with weight-based validation.
+ *       Supports units like grams, kg, ml, litre and converts everything to KG.
+ *       Orders above 20kg are rejected for bike delivery.
  *
  *     security:
  *       - bearerAuth: []
@@ -63,20 +63,34 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                     - itemName
  *                     - quantity
  *                     - price
- *                     - total        # ✅ ADDED AS REQUIRED
+ *                     - total
+ *                     - weightPerUnit
+ *                     - weightUnit
  *                   properties:
  *                     itemName:
  *                       type: string
  *                       example: Basmati Rice
+ *
  *                     quantity:
  *                       type: number
  *                       example: 2
+ *
  *                     price:
  *                       type: number
  *                       example: 60
- *                     total:         # ✅ ADDED FIELD
+ *
+ *                     total:
  *                       type: number
  *                       example: 120
+ *
+ *                     weightPerUnit:
+ *                       type: number
+ *                       example: 500
+ *
+ *                     weightUnit:
+ *                       type: string
+ *                       enum: [g, kg, ml, l]
+ *                       example: g
  *
  *               pickupAddress:
  *                 type: object
@@ -123,6 +137,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                     example: COD
  *
  *     responses:
+ *
  *       201:
  *         description: Order created successfully
  *         content:
@@ -133,29 +148,58 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                 success:
  *                   type: boolean
  *                   example: true
- *                 orderId:
- *                   type: string
- *                   example: ORD-8F3A2C1B
- *                 mongoId:
- *                   type: string
- *                   example: 65a9b2c44e1f2a0012a45678
  *
- *       400:
- *         description: Validation error
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
  *                 message:
  *                   type: string
- *                   example: vendorShopName is required
+ *                   example: Order created successfully
  *
- *       500:
- *         description: Internal server error while creating order
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     orderId:
+ *                       type: string
+ *                       example: ORD-8F3A2C1B
+ *
+ *                     totalWeight:
+ *                       type: number
+ *                       example: 4.0
+ *
+ *                     weightUnit:
+ *                       type: string
+ *                       example: kg
+ *
+ *                     itemTotal:
+ *                       type: number
+ *                       example: 350
+ *
+ *                     deliveryFee:
+ *                       type: number
+ *                       example: 40
+ *
+ *                     tax:
+ *                       type: number
+ *                       example: 5
+ *
+ *                     platformCommission:
+ *                       type: number
+ *                       example: 10
+ *
+ *                     totalAmount:
+ *                       type: number
+ *                       example: 395
+ *
+ *                     payment:
+ *                       type: object
+ *                       properties:
+ *                         mode:
+ *                           type: string
+ *                           example: COD
+ *                         status:
+ *                           type: string
+ *                           example: PENDING
+ *
+ *       400:
+ *         description: Validation error or weight exceeded
  *         content:
  *           application/json:
  *             schema:
@@ -164,6 +208,22 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                 success:
  *                   type: boolean
  *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Order weight 22.5kg exceeds 20kg limit for biker
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
  *                 message:
  *                   type: string
  *                   example: Order creation failed
