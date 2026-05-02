@@ -495,16 +495,10 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
 
 ================================ */
 
-<<<<<<< Updated upstream
-// async function confirmOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
-=======
 async function confirmOrder(req, res) {
   try {
     const { orderId } = req.params;
     
->>>>>>> Stashed changes
 
 //     const order = await prisma.order.findFirst({
 //       where: { orderId },
@@ -520,24 +514,6 @@ async function confirmOrder(req, res) {
 //     if (order.orderStatus !== "CREATED")
 //       return res.status(400).json({ success: false, message: "Order already processed" });
 
-<<<<<<< Updated upstream
-//     const now = new Date();
-
-//     const riders = await prisma.rider.findMany({
-//       where: {
-//         orderState: "READY",
-//         isOnline: true,
-//         slotBookings: {
-//           some: {
-//             status: "BOOKED",
-//             slotEndAt: { gte: now }
-//           }
-//         }
-//       },
-//       take: 10,
-//       select: { id: true }
-//     });
-=======
     const now = new Date();
    const pickupPincode = order.OrderPickupAddress?.pincode;
    if (!pickupPincode) {
@@ -570,7 +546,6 @@ async function confirmOrder(req, res) {
        }
        
     });
->>>>>>> Stashed changes
 
 //     if (!riders.length)
 //       return res.status(400).json({ success: false, message: "No riders available" });
@@ -652,14 +627,14 @@ async function confirmOrder(req, res) {
 //       notifiedRiders: riders.length
 //     });
 
-//   } catch (err) {
-//     console.error("Confirm order error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message || "Failed to confirm order"
-//     });
-//   }
-// }
+  } catch (err) {
+    console.error("Confirm order error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Failed to confirm order"
+    });
+  }
+}
 
 
 // async function acceptOrder(req, res) {
