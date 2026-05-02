@@ -495,9 +495,16 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
 
 ================================ */
 
+<<<<<<< Updated upstream
 // async function confirmOrder(req, res) {
 //   try {
 //     const { orderId } = req.params;
+=======
+async function confirmOrder(req, res) {
+  try {
+    const { orderId } = req.params;
+    
+>>>>>>> Stashed changes
 
 //     const order = await prisma.order.findFirst({
 //       where: { orderId },
@@ -513,6 +520,7 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
 //     if (order.orderStatus !== "CREATED")
 //       return res.status(400).json({ success: false, message: "Order already processed" });
 
+<<<<<<< Updated upstream
 //     const now = new Date();
 
 //     const riders = await prisma.rider.findMany({
@@ -529,6 +537,40 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
 //       take: 10,
 //       select: { id: true }
 //     });
+=======
+    const now = new Date();
+   const pickupPincode = order.OrderPickupAddress?.pincode;
+   if (!pickupPincode) {
+  return res.status(400).json({
+    success: false,
+    message: "Pickup pincode missing"
+  });
+}
+    const riders = await prisma.rider.findMany({
+      where: {
+        orderState: "READY",
+        isOnline: true,
+        slotBookings: {
+          some: {
+            status: "BOOKED",
+            slotEndAt: { gte: now }
+          }
+        },
+        location: {
+      pincode: pickupPincode
+    },
+      },
+      take: 10,
+      select: { id: true,
+        location: {
+      select: {
+        pincode: true
+      }
+    }
+       }
+       
+    });
+>>>>>>> Stashed changes
 
 //     if (!riders.length)
 //       return res.status(400).json({ success: false, message: "No riders available" });

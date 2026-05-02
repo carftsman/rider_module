@@ -1,13 +1,74 @@
 const prisma = require("../../config/prisma");
 
-function getPerformanceScore({
-  averageRating = 0,
-  totalRatings = 0,
-  totalOrdersAssigned = 0,
-  totalOrdersAccepted = 0,
-  totalOrdersRejected = 0
-}) {
-  if (totalRatings === 0 && totalOrdersAssigned === 0) {
+// function getPerformanceScore({
+//   averageRating = 0,
+//   totalRatings = 0,
+//   totalOrdersAssigned = 0,
+//   totalOrdersAccepted = 0,
+//   totalOrdersRejected = 0
+// }) {
+//   if (totalRatings === 0 && totalOrdersAssigned === 0) {
+//     return {
+//       performanceScore: 0.7,
+//       reason: "New rider default score"
+//     };
+//   }
+
+//   const acceptanceRate =
+//     totalOrdersAssigned > 0
+//       ? (totalOrdersAccepted / totalOrdersAssigned) * 100
+//       : 0;
+
+//   const reliabilityFactor = acceptanceRate / 100;
+
+//   const ratingNormalized =
+//     totalRatings === 0 && totalOrdersAccepted > 0
+//       ? 0.85
+//       : averageRating / 5;
+
+//   const extraRejections = Math.max(totalOrdersRejected - 3, 0);
+//   const rejectionPenalty = extraRejections * 0.05;
+
+//   let performanceScore =
+//     0.6 * ratingNormalized +
+//     0.4 * reliabilityFactor -
+//     rejectionPenalty;
+
+//   performanceScore = Math.max(0, Math.min(1, performanceScore));
+
+//   return {
+//     performanceScore: Number(performanceScore.toFixed(2)),
+//     acceptanceRate: Number(acceptanceRate.toFixed(2)),
+//     rejectionPenalty: Number(rejectionPenalty.toFixed(2)),
+//     reason: getScenarioReason(performanceScore)
+//   };
+// }
+function getPerformanceScore(rider) {
+  const latestPerformance = rider.performance?.[0];
+
+  const totalRatings = rider.ratings?.length || 0;
+
+  const averageRating =
+    totalRatings > 0
+      ? rider.ratings.reduce(
+          (sum, item) => sum + item.rating,
+          0
+        ) / totalRatings
+      : 0;
+
+  const totalOrdersAssigned =
+    latestPerformance?.totalOrdersAssigned || 0;
+
+  const totalOrdersAccepted =
+    latestPerformance?.totalOrdersAccepted || 0;
+
+  const totalOrdersRejected =
+    latestPerformance?.totalOrdersRejected || 0;
+
+  if (
+    totalRatings === 0 &&
+    totalOrdersAssigned === 0
+  ) {
     return {
       performanceScore: 0.7,
       reason: "New rider default score"
@@ -16,34 +77,60 @@ function getPerformanceScore({
 
   const acceptanceRate =
     totalOrdersAssigned > 0
-      ? (totalOrdersAccepted / totalOrdersAssigned) * 100
+      ? (totalOrdersAccepted /
+          totalOrdersAssigned) *
+        100
       : 0;
 
-  const reliabilityFactor = acceptanceRate / 100;
+  const reliabilityFactor =
+    acceptanceRate / 100;
 
   const ratingNormalized =
-    totalRatings === 0 && totalOrdersAccepted > 0
+    totalRatings === 0 &&
+    totalOrdersAccepted > 0
       ? 0.85
       : averageRating / 5;
 
-  const extraRejections = Math.max(totalOrdersRejected - 3, 0);
-  const rejectionPenalty = extraRejections * 0.05;
+  const extraRejections = Math.max(
+    totalOrdersRejected - 3,
+    0
+  );
+
+  const rejectionPenalty =
+    extraRejections * 0.05;
 
   let performanceScore =
     0.6 * ratingNormalized +
     0.4 * reliabilityFactor -
     rejectionPenalty;
 
-  performanceScore = Math.max(0, Math.min(1, performanceScore));
+  performanceScore = Math.max(
+    0,
+    Math.min(1, performanceScore)
+  );
 
   return {
-    performanceScore: Number(performanceScore.toFixed(2)),
-    acceptanceRate: Number(acceptanceRate.toFixed(2)),
-    rejectionPenalty: Number(rejectionPenalty.toFixed(2)),
-    reason: getScenarioReason(performanceScore)
+    performanceScore: Number(
+      performanceScore.toFixed(2)
+    ),
+    acceptanceRate: Number(
+      acceptanceRate.toFixed(2)
+    ),
+    rejectionPenalty: Number(
+      rejectionPenalty.toFixed(2)
+    ),
+    averageRating: Number(
+      averageRating.toFixed(2)
+    ),
+    totalRatings,
+    totalOrdersAssigned,
+    totalOrdersAccepted,
+    totalOrdersRejected,
+    reason: getScenarioReason(
+      performanceScore
+    )
   };
 }
-
 function getScenarioReason(score) {
   if (score >= 0.9) return "Excellent rider";
   if (score >= 0.6) return "Average / Good rider";

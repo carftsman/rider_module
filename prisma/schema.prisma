@@ -104,6 +104,11 @@ model Rider {
 
   riderIncentiveProgresses RiderIncentiveProgress[]
   incentivePayouts         IncentivePayout[]
+  referralsGiven           Referral[]               @relation("Referrer")
+  referralReceived         Referral[]               @relation("Referee")
+  walletTransactions       RiderWalletTransaction[]
+  programProgresses        ProgramProgress[]
+  programPayouts           ProgramPayout[]
 
   @@index([phoneNumber])
   @@index([isOnline])
@@ -873,8 +878,8 @@ model OrderPickupAddress {
   latitude Float?
 
   longitude Float?
-
-  Order Order @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+  pincode   String?
+  Order     Order   @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
 
   @@index([orderId])
 }
@@ -1869,4 +1874,411 @@ enum WeightUnit {
   kg
   ml
   l
+}
+
+enum ProgramType {
+  INCENTIVE
+
+  JOINING_BONUS
+
+  REFERRAL
+}
+
+enum RuleType {
+  PER_ORDER
+
+  SLAB
+
+  FIXED_TARGET
+
+  HYBRID
+
+  TASK
+}
+
+enum RewardType {
+  FIXED
+
+  PER_ORDER
+}
+
+enum ApplicableWhen {
+  ALL
+
+  NO_REFERRAL
+
+  WITH_REFERRAL
+}
+
+enum ReferralRewardFlow {
+  REFERRER_ONLY
+
+  REFEREE_ONLY
+
+  BOTH
+}
+
+enum IncentiveRole {
+  REFERRER
+
+  REFEREE
+}
+
+enum TrackingType {
+  DAILY
+
+  WEEKLY
+
+  MONTHLY
+}
+
+model Program {
+  id String @id @default(uuid())
+
+  name String
+
+  description String?
+
+  programType ProgramType
+
+  cityId String?
+
+  pincodeIds String[]
+
+  applicableWhen ApplicableWhen @default(ALL)
+
+  trackingType TrackingType
+
+  ruleType RuleType
+
+  validFrom DateTime
+
+  validTill DateTime
+
+  //  NEW (IMPORTANT) 
+
+  daysOfWeek DayOfWeek[]
+
+  weekStartDay DayOfWeek?
+
+  // constraints (moved here for global usage) 
+
+  minAcceptanceRate Float?
+
+  minCompletionRate Float?
+
+  // payout caps 
+
+  maxPayoutPerDay Float?
+
+  maxPayoutPerWeek Float?
+
+  validityDays Int?
+
+  isActive Boolean @default(true)
+
+  priority Int @default(1)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  // relations 
+
+  rules ProgramRule[]
+
+  slabs ProgramSlab[]
+
+  tasks ProgramTask[]
+
+  targets ProgramTarget[]
+
+  slots ProgramSlot[]
+
+  consistency ProgramConsistency?
+
+  referralConfig ReferralConfig?
+
+  progresses ProgramProgress[]
+
+  payouts ProgramPayout[]
+
+  referrals Referral[]
+
+  @@index([programType])
+  @@index([isActive])
+}
+
+model ProgramRule {
+  id String @id @default(uuid())
+
+  programId String
+
+  minOrders Int?
+
+  minEarnings Float?
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+}
+
+// ================= SLABS ================= 
+
+model ProgramSlab {
+  id String @id @default(uuid())
+
+  programId String
+
+  role IncentiveRole?
+
+  minValue Float
+
+  maxValue Float
+
+  rewardAmount Float
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+}
+
+model ProgramTarget {
+  id String @id @default(uuid())
+
+  programId String
+
+  targetOrders Int?
+
+  targetEarnings Float?
+
+  rewardAmount Float
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+}
+
+// ================= TASKS ================= 
+
+model ProgramTask {
+  id String @id @default(uuid())
+
+  programId String
+
+  role IncentiveRole?
+
+  dayNumber Int?
+
+  minOrders Int?
+
+  rewardAmount Float
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+}
+
+model ProgramSlot {
+  id String @id @default(uuid())
+
+  programId String
+
+  // better than string → use minutes (18:00 = 1080) 
+
+  startMinutes Int
+
+  endMinutes Int
+
+  daysOfWeek DayOfWeek[]
+
+  ruleType RuleType
+
+  // PER ORDER 
+
+  rewardPerOrder Float?
+
+  // SLABS 
+
+  slabs ProgramSlotSlab[]
+
+  // controls 
+
+  maxEarningPerSlot Float?
+
+  minOrdersRequired Int?
+
+  priority Int @default(1)
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([programId])
+}
+
+// ================= SLOT SLABS ================= 
+
+model ProgramSlotSlab {
+  id String @id @default(uuid())
+
+  slotId String
+
+  minOrders Int
+
+  maxOrders Int
+
+  rewardAmount Float
+
+  slot ProgramSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  @@index([slotId])
+}
+
+model ProgramConsistency {
+  id String @id @default(uuid())
+
+  programId String @unique
+
+  minActiveDays Int
+
+  minOrdersPerDay Int
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+}
+
+model ReferralConfig {
+  id String @id @default(uuid())
+
+  programId String @unique
+
+  rewardFlow ReferralRewardFlow
+
+  maxReferralsPerUser Int?
+
+  maxEarningPerUser Float?
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+}
+
+model Referral {
+  id String @id @default(uuid())
+
+  referrerId String
+  refereeId  String @unique
+  programId  String
+
+  referralCode String
+
+  targetOrders Int
+  totalOrders  Int @default(0)
+
+  joiningBonusGiven   Boolean   @default(false)
+  joiningBonusGivenAt DateTime?
+
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+
+  rewardGiven   Boolean   @default(false)
+  rewardGivenAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  referrer Rider @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referee  Rider @relation("Referee", fields: [refereeId], references: [id], onDelete: Cascade)
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([referrerId, refereeId])
+  @@index([referrerId])
+  @@index([refereeId])
+  @@index([referralCode])
+}
+
+// ================= PROGRESS ================= 
+
+model ProgramProgress {
+  id String @id @default(uuid())
+
+  riderId String
+
+  programId String
+
+  date DateTime?
+
+  week String?
+
+  totalOrders Int @default(0)
+
+  totalEarnings Float @default(0)
+
+  activeDays Int @default(0)
+
+  achieved Boolean @default(false)
+
+  rewardAmount Float @default(0)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([riderId, programId])
+  @@index([date])
+  @@index([week])
+}
+
+// ================= PAYOUT ================= 
+
+model ProgramPayout {
+  id String @id @default(uuid())
+
+  riderId   String
+  programId String
+
+  referralId String?
+
+  amount Float
+  status PayoutStatus @default(PENDING)
+
+  walletTransactionId String?
+  referenceId         String?
+
+  creditedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  rider   Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@index([riderId])
+  @@index([status])
+  @@index([referralId])
+}
+
+enum WalletTransactionType {
+  ORDER_EARNING
+  INCENTIVE
+  JOINING_BONUS
+  REFERRAL_BONUS
+}
+
+model RiderWalletTransaction {
+  id String @id @default(uuid())
+
+  riderId String
+  type    WalletTransactionType
+
+  amount      Float
+  description String?
+  referenceId String?
+
+  createdAt DateTime @default(now())
+
+  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+
+  @@index([riderId])
+  @@index([type])
+  @@index([referenceId])
 }
