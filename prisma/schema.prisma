@@ -93,15 +93,15 @@ model Rider {
 
   vehicle RiderVehicle?
 
-  wallet       RiderWallet?
-  isStackable  Boolean            @default(false)
-  performance  RiderPerformance[]
-  slotBookings SlotBooking[]
-  gpsHistory   RiderGpsHistory[]
-  slotRiders   SlotRider[]
-  ratings      RiderRating[]
-  rider_assets rider_assets[]
-
+  wallet                   RiderWallet?
+  isStackable              Boolean                  @default(false)
+  performance              RiderPerformance[]
+  slotBookings             SlotBooking[]
+  gpsHistory               RiderGpsHistory[]
+  slotRiders               SlotRider[]
+  ratings                  RiderRating[]
+  rider_assets             rider_assets[]
+  referredByPartnerId      String?
   riderIncentiveProgresses RiderIncentiveProgress[]
   incentivePayouts         IncentivePayout[]
   referralsGiven           Referral[]               @relation("Referrer")
@@ -1040,7 +1040,7 @@ model OrderCandidateRider {
   scoringVersion  Int             @default(1)
   calculatedAt    DateTime        @default(now())
   createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
   OrderAllocation OrderAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
 
   @@index([allocationId])
