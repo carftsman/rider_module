@@ -234,202 +234,6 @@ async function createOrder(req, res) {
   }
 }
 
-
-
-
-// async function createOrder(req, res) {
-
-//   try {
-
-//     const body = req.body;
-
-//     //////////////////////////////////////////////////////
-//     // 1️ GET LAT LNG
-//     //////////////////////////////////////////////////////
-
-//     const pickupGeo = await getLatLng(
-//       body.pickupAddress.addressLine
-//     );
-
-//     const deliveryGeo = await getLatLng(
-//       body.deliveryAddress.addressLine
-//     );
-
-//     //////////////////////////////////////////////////////
-//     // 2️ PAYMENT LOGIC
-//     //////////////////////////////////////////////////////
-
-//     let paymentData = {
-//       mode: body.payment.mode,
-//       status: "PENDING"
-//     };
-
-//     if (body.payment.mode === "ONLINE") {
-
-//       paymentData.transactionId = generateTxn();
-//       paymentData.status = "SUCCESS";
-
-//     }
-
-//     if (body.payment.mode === "COD") {
-
-//       paymentData.codPaymentType =
-//         body.payment.codPaymentType || "CASH";
-
-//     }
-
-//     //////////////////////////////////////////////////////
-//     // 3️ CALCULATE ITEM TOTAL
-//     //////////////////////////////////////////////////////
-
-//     let itemTotal = body.items.reduce(
-//       (sum, i) => sum + i.total,
-//       0
-//     );
-
-//     const deliveryFee = 40;
-//     const tax = 5;
-//     const platformCommission = 10;
-
-//     const totalAmount =
-//       itemTotal + deliveryFee + tax;
-
-//     //////////////////////////////////////////////////////
-//     // 4️⃣ CREATE ORDER (PRISMA)
-//     //////////////////////////////////////////////////////
-
-
-//     const order = await prisma.order.create({
-
-//   data: {
-
-//     orderId: generateOrderId(),
-
-//     vendorShopName: body.vendorShopName,
-
-//     //////////////////////////////////////////////////
-//     // ITEMS
-//     //////////////////////////////////////////////////
-
-//     OrderItems: {
-//       create: body.items.map(item => ({
-//         itemName: item.itemName,
-//         quantity: item.quantity,
-//         price: item.price,
-//         total: item.total
-//       }))
-//     },
-
-//     //////////////////////////////////////////////////
-//     // PICKUP ADDRESS
-//     //////////////////////////////////////////////////
-
-//     OrderPickupAddress: {
-//       create: {
-//         name: body.pickupAddress.name,
-//         addressLine: body.pickupAddress.addressLine,
-//         contactNumber: body.pickupAddress.contactNumber,
-//         latitude: pickupGeo.lat,
-//         longitude: pickupGeo.lng
-//       }
-//     },
-
-//     //////////////////////////////////////////////////
-//     // DELIVERY ADDRESS
-//     //////////////////////////////////////////////////
-
-//     OrderDeliveryAddress: {
-//       create: {
-//         name: body.deliveryAddress.name,
-//         addressLine: body.deliveryAddress.addressLine,
-//         contactNumber: body.deliveryAddress.contactNumber,
-//         latitude: deliveryGeo.lat,
-//         longitude: deliveryGeo.lng
-//       }
-//     },
-
-//     //////////////////////////////////////////////////
-//     // PRICING
-//     //////////////////////////////////////////////////
-
-//     OrderPricing: {
-//       create: {
-//         itemTotal,
-//         deliveryFee,
-//         tax,
-//         platformCommission,
-//         totalAmount
-//       }
-//     },
-
-//     //////////////////////////////////////////////////
-//     // PAYMENT
-//     //////////////////////////////////////////////////
-
-//     OrderPayment: {
-//       create: paymentData
-//     },
-
-//     //////////////////////////////////////////////////
-//     // COD (ONLY IF COD)
-//     //////////////////////////////////////////////////
-
-//     OrderCod:
-//       body.payment.mode === "COD"
-//         ? {
-//             create: {
-//               amount: totalAmount,
-//               pendingAmount: totalAmount
-//             }
-//           }
-//         : undefined
-
-//   },
-
-//   include: {
-//     OrderPayment: true
-//   }
-
-// });
-
-//     //////////////////////////////////////////////////////
-//     // 5️ RESPONSE (same Swagger)
-//     //////////////////////////////////////////////////////
-
-//     return res.status(201).json({
-
-//       success: true,
-
-//       message: "Order created successfully",
-
-//       orderId: order.orderId,
-
-//       payment: order.payment
-
-//     });
-
-//   }
-//   catch (err) {
-
-//     console.error(err);
-
-//     return res.status(500).json({
-
-//       success: false,
-
-//       message: err.message
-
-//     });
-
-//   }
-
-// }
-
-
-
-
-
- 
 /* ===============================
 
    GOOGLE DISTANCE + ETA HELPER
@@ -480,48 +284,42 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
 
 
 
-
-
-
-
-
-
-
-
-
 /* ===============================
 
    CONFIRM ORDER API
 
 ================================ */
-
 async function confirmOrder(req, res) {
   try {
     const { orderId } = req.params;
-    
 
-//     const order = await prisma.order.findFirst({
-//       where: { orderId },
-//       include: {
-//         OrderPickupAddress: true,
-//         OrderDeliveryAddress: true
-//       }
-//     });
+    const order = await prisma.order.findFirst({
+      where: { orderId },
+      include: {
+        OrderPickupAddress: true,
+        OrderDeliveryAddress: true
+      }
+    });
 
-//     if (!order)
-//       return res.status(404).json({ success: false, message: "Order not found" });
+    if (!order)
+      return res.status(404).json({ success: false, message: "Order not found" });
 
-//     if (order.orderStatus !== "CREATED")
-//       return res.status(400).json({ success: false, message: "Order already processed" });
+    if (order.orderStatus !== "CREATED")
+      return res.status(400).json({ success: false, message: "Order already processed" });
 
     const now = new Date();
-   const pickupPincode = order.OrderPickupAddress?.pincode;
-   if (!pickupPincode) {
-  return res.status(400).json({
-    success: false,
-    message: "Pickup pincode missing"
-  });
-}
+
+    // ✅ PINCODE LOGIC ADDED HERE
+    const pickupPincode = order.OrderPickupAddress?.pincode;
+    console.log(pickupPincode)
+
+    if (!pickupPincode) {
+      return res.status(400).json({
+        success: false,
+        message: "Pickup pincode missing"
+      });
+    }
+
     const riders = await prisma.rider.findMany({
       where: {
         orderState: "READY",
@@ -532,318 +330,45 @@ async function confirmOrder(req, res) {
             slotEndAt: { gte: now }
           }
         },
+        // ✅ PINCODE FILTER ADDED
         location: {
-      pincode: pickupPincode
-    },
-      },
-      take: 10,
-      select: { id: true,
-        location: {
-      select: {
-        pincode: true
-      }
-    }
-       }
-       
-    });
-
-//     if (!riders.length)
-//       return res.status(400).json({ success: false, message: "No riders available" });
-
-//     const routeInfo = await getRouteInfo(
-//       order.OrderPickupAddress,
-//       order.OrderDeliveryAddress
-//     );
-
-//     const basePay = 40;
-//     const distancePay = routeInfo.distanceKm * 5;
-//     const surgePay = 0;
-//     const totalEarning = basePay + distancePay + surgePay;
-
-//     await prisma.$transaction(async (tx) => {
-
-//       // Update order
-//       await tx.order.update({
-//         where: { id: order.id },   // use UUID
-//         data: { orderStatus: "CONFIRMED" }
-//       });
-
-//       //  Create allocation
-//       await tx.orderAllocation.create({
-//         data: {
-//           orderId: order.orderId,   // use UUID
-//           expiresAt: new Date(Date.now() + 120000),
-//           OrderCandidateRiders: {
-//             create: riders.map(r => ({
-//               riderId: r.id,
-//               status: "PENDING",
-//               notifiedAt: new Date()
-//             }))
-//           }
-//         }
-//       });
-
-//       //  Create earning snapshot
-//       await tx.orderRiderEarning.create({
-//         data: {
-//           orderId: order.orderId,
-//           basePay,
-//           distancePay,
-//           surgePay,
-//           totalEarning,
-//           credited: false
-//         }
-//       });
-
-//       //  Create tracking snapshot
-//       await tx.orderTracking.create({
-//         data: {
-//           orderId: order.orderId,
-//           distanceInKm: routeInfo.distanceKm,
-//           durationInMin: routeInfo.etaMinutes
-//         }
-//       });
-
-//     });
-
-//     // Notify AFTER transaction commits
-//     riders.forEach(rider => {
-//       notifyRider(rider.id, {
-//         type: "ORDER_POPUP",
-//         orderId: order.orderId, // send formatted ID to frontend
-//         vendorShopName: order.vendorShopName,
-//         pickupLocation: order.OrderPickupAddress,
-//         dropLocation: order.OrderDeliveryAddress,
-//         distanceKm: routeInfo.distanceKm,
-//         etaMinutes: routeInfo.etaMinutes,
-//         estimatedEarning: totalEarning
-//       });
-//     });
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Order confirmed and sent to riders",
-//       estimatedEarning: totalEarning,
-//       notifiedRiders: riders.length
-//     });
-
-  } catch (err) {
-    console.error("Confirm order error:", err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || "Failed to confirm order"
-    });
-  }
-}
-
-
-// async function acceptOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
-//     const riderId = req.rider.id;
-
-//     const order = await prisma.order.findUnique({
-//       where: { orderId },
-//       include: { OrderAllocation: true }
-//     });
-
-//     if (!order)
-//       return res.status(404).json({ success: false, message: "Order not found" });
-
-//     if (!order.OrderAllocation)
-//       return res.status(400).json({ success: false, message: "Order not allocated" });
-
-//     await prisma.$transaction(async (tx) => {
-
-//       //  ATOMIC STATUS UPDATE (prevents race condition)
-//       const updated = await tx.order.updateMany({
-//         where: {
-//           orderId:orderId,
-//           orderStatus: "CONFIRMED"
-//         },
-//         data: {
-//           riderId: riderId,
-//           orderStatus: "ASSIGNED"
-//         }
-//       });
-
-//       if (updated.count === 0) {
-//         throw new Error("Order already accepted");
-//       }
-
-//       // Accept this rider
-//       await tx.orderCandidateRider.updateMany({
-//         where: {
-//           allocationId: order.OrderAllocation.id,
-//           riderId: riderId,
-//           status: "PENDING"
-//         },
-//         data: { status: "ACCEPTED" }
-//       });
-
-//       // Reject others
-//       await tx.orderCandidateRider.updateMany({
-//         where: {
-//           allocationId: order.OrderAllocation.id,
-//           riderId: { not: riderId },
-//           status: "PENDING"
-//         },
-//         data: { status: "REJECTED" }
-//       });
-
-//       // Mark allocation assigned
-//       await tx.orderAllocation.update({
-//         where: { id: order.OrderAllocation.id },
-//         data: { assignedAt: new Date() }
-//       });
-
-//       // Make rider busy
-//       await tx.rider.update({
-//         where: { id: riderId },
-//         data: {
-//           orderState: "BUSY",
-//           currentOrderId: order.id
-//         }
-//       });
-
-//     });
-
-//     return res.json({
-//       success: true,
-//       message: "Order accepted successfully"
-//     });
-
-//   } catch (err) {
-//     console.error("Accept order error:", err);
-
-//     return res.status(400).json({
-//       success: false,
-//       message: err.message || "Failed to accept order"
-//     });
-//   }
-// }
- 
-
-// async function rejectOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
-//     const riderId = req.rider.id;
-
-//     // 1️ Find order with allocation
-//     const order = await prisma.order.findUnique({
-//       where: { orderId },
-//       include: {
-//         OrderAllocation: true
-//       }
-//     });
-
-//     if (!order) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Order not found"
-//       });
-//     }
-
-//     if (!order.OrderAllocation) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Order not allocated"
-//       });
-//     }
-
-//     // 2️ Reject rider inside allocation
-//     const result = await prisma.orderCandidateRider.updateMany({
-//       where: {
-//         allocationId: order.OrderAllocation.id,
-//         riderId: riderId,
-//         status: "PENDING"
-//       },
-//       data: {
-//         status: "REJECTED"
-//       }
-//     });
-
-//     if (result.count === 0) {
-//       return res.status(409).json({
-//         success: false,
-//         message: "Order already handled or not assigned to this rider"
-//       });
-//     }
-
-//     return res.json({
-//       success: true,
-//       message: "Order rejected successfully"
-//     });
-
-//   } catch (err) {
-//     console.error("Reject order error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to reject order"
-//     });
-//   }
-// }
-
-async function confirmOrder(req, res) {
-  try {
-    const { orderId } = req.params;
- 
-    const order = await prisma.order.findFirst({
-      where: { orderId },
-      include: {
-        OrderPickupAddress: true,
-        OrderDeliveryAddress: true
-      }
-    });
- 
-    if (!order)
-      return res.status(404).json({ success: false, message: "Order not found" });
- 
-    if (order.orderStatus !== "CREATED")
-      return res.status(400).json({ success: false, message: "Order already processed" });
- 
-    const now = new Date();
- 
-    const riders = await prisma.rider.findMany({
-      where: {
-        orderState: "READY",
-        isOnline: true,
-        slotBookings: {
-          some: {
-            status: "BOOKED",
-            slotEndAt: { gte: now }
-          }
+          pincode: pickupPincode
         }
       },
       take: 10,
-      select: { id: true }
+      select: {
+        id: true,
+        location: {
+          select: {
+            pincode: true
+          }
+        }
+      }
     });
- 
+
     if (!riders.length)
       return res.status(400).json({ success: false, message: "No riders available" });
- 
+
     const routeInfo = await getRouteInfo(
       order.OrderPickupAddress,
       order.OrderDeliveryAddress
     );
- 
+
     const basePay = 40;
     const distancePay = routeInfo.distanceKm * 5;
     const surgePay = 0;
     const totalEarning = basePay + distancePay + surgePay;
- 
+
     await prisma.$transaction(async (tx) => {
- 
-      // Update order
+
       await tx.order.update({
-        where: { id: order.id },   // use UUID
+        where: { id: order.id },
         data: { orderStatus: "CONFIRMED" }
       });
- 
-      //  Create allocation
+
       await tx.orderAllocation.create({
         data: {
-          orderId: order.orderId,   // use UUID
+          orderId: order.orderId,
           expiresAt: new Date(Date.now() + 120000),
           OrderCandidateRiders: {
             create: riders.map(r => ({
@@ -854,8 +379,7 @@ async function confirmOrder(req, res) {
           }
         }
       });
- 
-      //  Create earning snapshot
+
       await tx.orderRiderEarning.create({
         data: {
           orderId: order.orderId,
@@ -866,8 +390,7 @@ async function confirmOrder(req, res) {
           credited: false
         }
       });
- 
-      //  Create tracking snapshot
+
       await tx.orderTracking.create({
         data: {
           orderId: order.orderId,
@@ -875,14 +398,13 @@ async function confirmOrder(req, res) {
           durationInMin: routeInfo.etaMinutes
         }
       });
- 
+
     });
- 
-    // Notify AFTER transaction commits
+
     riders.forEach(rider => {
       notifyRider(rider.id, {
         type: "ORDER_POPUP",
-        orderId: order.orderId, // send formatted ID to frontend
+        orderId: order.orderId,
         vendorShopName: order.vendorShopName,
         pickupLocation: order.OrderPickupAddress,
         dropLocation: order.OrderDeliveryAddress,
@@ -891,14 +413,14 @@ async function confirmOrder(req, res) {
         estimatedEarning: totalEarning
       });
     });
- 
+
     return res.status(200).json({
       success: true,
       message: "Order confirmed and sent to riders",
       estimatedEarning: totalEarning,
       notifiedRiders: riders.length
     });
- 
+
   } catch (err) {
     console.error("Confirm order error:", err);
     return res.status(500).json({
@@ -908,91 +430,6 @@ async function confirmOrder(req, res) {
   }
 }
 
-// async function acceptOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
-//     const riderId = req.rider.id;
- 
-//     const order = await prisma.order.findUnique({
-//       where: { orderId },
-//       include: { OrderAllocation: true }
-//     });
- 
-//     if (!order)
-//       return res.status(404).json({ success: false, message: "Order not found" });
- 
-//     if (!order.OrderAllocation)
-//       return res.status(400).json({ success: false, message: "Order not allocated" });
- 
-//     await prisma.$transaction(async (tx) => {
- 
-//       //  ATOMIC STATUS UPDATE (prevents race condition)
-//       const updated = await tx.order.updateMany({
-//         where: {
-//           orderId:orderId,
-//           orderStatus: "CONFIRMED"
-//         },
-//         data: {
-//           riderId: riderId,
-//           orderStatus: "ASSIGNED"
-//         }
-//       });
- 
-//       if (updated.count === 0) {
-//         throw new Error("Order already accepted");
-//       }
- 
-//       // Accept this rider
-//       await tx.orderCandidateRider.updateMany({
-//         where: {
-//           allocationId: order.OrderAllocation.id,
-//           riderId: riderId,
-//           status: "PENDING"
-//         },
-//         data: { status: "ACCEPTED" }
-//       });
- 
-//       // Reject others
-//       await tx.orderCandidateRider.updateMany({
-//         where: {
-//           allocationId: order.OrderAllocation.id,
-//           riderId: { not: riderId },
-//           status: "PENDING"
-//         },
-//         data: { status: "REJECTED" }
-//       });
- 
-//       // Mark allocation assigned
-//       await tx.orderAllocation.update({
-//         where: { id: order.OrderAllocation.id },
-//         data: { assignedAt: new Date() }
-//       });
- 
-//       // Make rider busy
-//       await tx.rider.update({
-//         where: { id: riderId },
-//         data: {
-//           orderState: "BUSY",
-//           currentOrderId: order.id
-//         }
-//       });
- 
-//     });
- 
-//     return res.json({
-//       success: true,
-//       message: "Order accepted successfully"
-//     });
- 
-//   } catch (err) {
-//     console.error("Accept order error:", err);
- 
-//     return res.status(400).json({
-//       success: false,
-//       message: err.message || "Failed to accept order"
-//     });
-//   }
-// }
 
 async function acceptOrder(req, res) {
   try {
@@ -1495,7 +932,7 @@ const getWeekKey = (date = new Date()) => {
   return `${year}-W${week}`;
 
 };
- 
+
 const isPeakSlot = (date) => {
 
   const hour = new Date(date).getHours();
