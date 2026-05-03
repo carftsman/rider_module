@@ -784,129 +784,129 @@ async function confirmOrder(req, res) {
 //   }
 // }
 
-async function confirmOrder(req, res) {
-  try {
-    const { orderId } = req.params;
+// async function confirmOrder(req, res) {
+//   try {
+//     const { orderId } = req.params;
  
-    const order = await prisma.order.findFirst({
-      where: { orderId },
-      include: {
-        OrderPickupAddress: true,
-        OrderDeliveryAddress: true
-      }
-    });
+//     const order = await prisma.order.findFirst({
+//       where: { orderId },
+//       include: {
+//         OrderPickupAddress: true,
+//         OrderDeliveryAddress: true
+//       }
+//     });
  
-    if (!order)
-      return res.status(404).json({ success: false, message: "Order not found" });
+//     if (!order)
+//       return res.status(404).json({ success: false, message: "Order not found" });
  
-    if (order.orderStatus !== "CREATED")
-      return res.status(400).json({ success: false, message: "Order already processed" });
+//     if (order.orderStatus !== "CREATED")
+//       return res.status(400).json({ success: false, message: "Order already processed" });
  
-    const now = new Date();
+//     const now = new Date();
  
-    const riders = await prisma.rider.findMany({
-      where: {
-        orderState: "READY",
-        isOnline: true,
-        slotBookings: {
-          some: {
-            status: "BOOKED",
-            slotEndAt: { gte: now }
-          }
-        }
-      },
-      take: 10,
-      select: { id: true }
-    });
+//     const riders = await prisma.rider.findMany({
+//       where: {
+//         orderState: "READY",
+//         isOnline: true,
+//         slotBookings: {
+//           some: {
+//             status: "BOOKED",
+//             slotEndAt: { gte: now }
+//           }
+//         }
+//       },
+//       take: 10,
+//       select: { id: true }
+//     });
  
-    if (!riders.length)
-      return res.status(400).json({ success: false, message: "No riders available" });
+//     if (!riders.length)
+//       return res.status(400).json({ success: false, message: "No riders available" });
  
-    const routeInfo = await getRouteInfo(
-      order.OrderPickupAddress,
-      order.OrderDeliveryAddress
-    );
+//     const routeInfo = await getRouteInfo(
+//       order.OrderPickupAddress,
+//       order.OrderDeliveryAddress
+//     );
  
-    const basePay = 40;
-    const distancePay = routeInfo.distanceKm * 5;
-    const surgePay = 0;
-    const totalEarning = basePay + distancePay + surgePay;
+//     const basePay = 40;
+//     const distancePay = routeInfo.distanceKm * 5;
+//     const surgePay = 0;
+//     const totalEarning = basePay + distancePay + surgePay;
  
-    await prisma.$transaction(async (tx) => {
+//     await prisma.$transaction(async (tx) => {
  
-      // Update order
-      await tx.order.update({
-        where: { id: order.id },   // use UUID
-        data: { orderStatus: "CONFIRMED" }
-      });
+//       // Update order
+//       await tx.order.update({
+//         where: { id: order.id },   // use UUID
+//         data: { orderStatus: "CONFIRMED" }
+//       });
  
-      //  Create allocation
-      await tx.orderAllocation.create({
-        data: {
-          orderId: order.orderId,   // use UUID
-          expiresAt: new Date(Date.now() + 120000),
-          OrderCandidateRiders: {
-            create: riders.map(r => ({
-              riderId: r.id,
-              status: "PENDING",
-              notifiedAt: new Date()
-            }))
-          }
-        }
-      });
+//       //  Create allocation
+//       await tx.orderAllocation.create({
+//         data: {
+//           orderId: order.orderId,   // use UUID
+//           expiresAt: new Date(Date.now() + 120000),
+//           OrderCandidateRiders: {
+//             create: riders.map(r => ({
+//               riderId: r.id,
+//               status: "PENDING",
+//               notifiedAt: new Date()
+//             }))
+//           }
+//         }
+//       });
  
-      //  Create earning snapshot
-      await tx.orderRiderEarning.create({
-        data: {
-          orderId: order.orderId,
-          basePay,
-          distancePay,
-          surgePay,
-          totalEarning,
-          credited: false
-        }
-      });
+//       //  Create earning snapshot
+//       await tx.orderRiderEarning.create({
+//         data: {
+//           orderId: order.orderId,
+//           basePay,
+//           distancePay,
+//           surgePay,
+//           totalEarning,
+//           credited: false
+//         }
+//       });
  
-      //  Create tracking snapshot
-      await tx.orderTracking.create({
-        data: {
-          orderId: order.orderId,
-          distanceInKm: routeInfo.distanceKm,
-          durationInMin: routeInfo.etaMinutes
-        }
-      });
+//       //  Create tracking snapshot
+//       await tx.orderTracking.create({
+//         data: {
+//           orderId: order.orderId,
+//           distanceInKm: routeInfo.distanceKm,
+//           durationInMin: routeInfo.etaMinutes
+//         }
+//       });
  
-    });
+//     });
  
-    // Notify AFTER transaction commits
-    riders.forEach(rider => {
-      notifyRider(rider.id, {
-        type: "ORDER_POPUP",
-        orderId: order.orderId, // send formatted ID to frontend
-        vendorShopName: order.vendorShopName,
-        pickupLocation: order.OrderPickupAddress,
-        dropLocation: order.OrderDeliveryAddress,
-        distanceKm: routeInfo.distanceKm,
-        etaMinutes: routeInfo.etaMinutes,
-        estimatedEarning: totalEarning
-      });
-    });
+//     // Notify AFTER transaction commits
+//     riders.forEach(rider => {
+//       notifyRider(rider.id, {
+//         type: "ORDER_POPUP",
+//         orderId: order.orderId, // send formatted ID to frontend
+//         vendorShopName: order.vendorShopName,
+//         pickupLocation: order.OrderPickupAddress,
+//         dropLocation: order.OrderDeliveryAddress,
+//         distanceKm: routeInfo.distanceKm,
+//         etaMinutes: routeInfo.etaMinutes,
+//         estimatedEarning: totalEarning
+//       });
+//     });
  
-    return res.status(200).json({
-      success: true,
-      message: "Order confirmed and sent to riders",
-      estimatedEarning: totalEarning,
-      notifiedRiders: riders.length
-    });
+//     return res.status(200).json({
+//       success: true,
+//       message: "Order confirmed and sent to riders",
+//       estimatedEarning: totalEarning,
+//       notifiedRiders: riders.length
+//     });
  
-  } catch (err) {
-    console.error("Confirm order error:", err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || "Failed to confirm order"
-    });
-  }
-}
+//   } catch (err) {
+//     console.error("Confirm order error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message || "Failed to confirm order"
+//     });
+//   }
+// }
 
 // async function acceptOrder(req, res) {
 //   try {
