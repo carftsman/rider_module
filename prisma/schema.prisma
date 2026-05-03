@@ -1941,7 +1941,7 @@ model Program {
 
   programType ProgramType
 
-  cityId String?
+  cityId String[]
 
   pincodeIds String[]
 
@@ -1959,7 +1959,7 @@ model Program {
 
   daysOfWeek DayOfWeek[]
 
-  weekStartDay DayOfWeek?
+  weekStartDay DayOfWeek
 
   // constraints (moved here for global usage) 
 
@@ -2005,6 +2005,7 @@ model Program {
 
   referrals Referral[]
 
+  @@index([trackingType, cityId, isActive])
   @@index([programType])
   @@index([isActive])
 }

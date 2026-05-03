@@ -7,7 +7,8 @@ const{createAsset,
     dispatchAsset,
     raiseIssue,
     markAsDelivered,
-    requestJoiningKit
+    requestJoiningKit, 
+    uploadIssueImage
 
 }=require('../controllers/kitSelectionController');
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
@@ -642,6 +643,12 @@ router.get('/rider/assets',riderAuthMiddleWare, viewAssets)
  */
 router.post('/rider/request',riderAuthMiddleWare, requestAsset)
 // router.post('/admin/approve', approveRequest)
+router.post(
+  "/asset-issues/:issueId/upload-image",
+  riderAuthMiddleWare ,
+  upload.single("image"),
+  uploadIssueImage
+);
 
 /**
  * @swagger
@@ -790,15 +797,8 @@ router.post('/rider/request',riderAuthMiddleWare, requestAsset)
  *                   type: string
  *                   example: "Detailed error message"
  */
-router.post('/rider/issue/:requestId',riderAuthMiddleWare,upload.single("imageUrl"),(err, req, res, next) => {
-    if (err) {
-      return res.status(400).json({
-        success: false,
-        message: err.message
-      });
-    }
-    next();
-  }, raiseIssue)
+router.post('/rider/issue/:requestId', riderAuthMiddleWare ,
+     raiseIssue)
 /**
  * @swagger
  * /api/kit/asset/mark-delivered/{shipmentId}:

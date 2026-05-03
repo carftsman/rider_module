@@ -41,6 +41,7 @@ const adminIncentivesrouter = require("./routes/incentive.routes")
 const riderIncentivesRouter = require("./routes/riderIncentive.routes")
 const pinCodeRouter = require("./routes/pinCode.routes")
 // const offlineStoreRoute = require("./routes/offlineStoreRoute");
+const adminReferralRoutes = require("./routes/adminReferralRoutes");
 
 const riderRatingRouter= require("./routes/riderRatingRoutes")
 const app = express();
@@ -129,7 +130,7 @@ app.use("/api/rider", require("./routes/availableRidersRoutes"));
 app.use("/api/kit", kitRoutes);
 app.use("/api/company", companySelectionRoutes);
 app.use("/api/status", todayRiderOnlineRoutes);
-
+app.use("/api/refer", adminReferralRoutes);
 // pincode admin
 app.use("/api/pincode", pinCodeRouter);
 
