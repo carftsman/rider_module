@@ -543,7 +543,7 @@ model rider_assets {
 
   createdAt DateTime @default(now())
 
-  updatedAt DateTime
+  updatedAt DateTime @updatedAt
 
   rider_asset_issues rider_asset_issues[]
 
@@ -2071,7 +2071,10 @@ model ProgramTask {
 
   dayNumber Int?
 
-  minOrders Int?
+  minOrders         Int?
+  minAcceptanceRate Float?
+  minPeakSlots      Int?
+  minEarnings       Float?
 
   rewardAmount Float
 

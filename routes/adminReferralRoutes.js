@@ -8,7 +8,9 @@ const {
   getAllReferralConfigs,
   updateReferralConfigStatus,
   getAllReferrals,
-  creditReferralReward
+  creditReferralReward,
+  updateReferralConfig,
+   getReferralProgramByRiderPincode
 } = require("../controllers/adminReferralController");
 
 // POST /api/admin/referral-config
@@ -23,5 +25,9 @@ router.patch(
   "/referral-config/:id/status",
   updateReferralConfigStatus
 );
-
+router.put("/admin/referral-config/:programId",  updateReferralConfig);
+router.get(
+  "/rider/referral-program/:riderId",
+  getReferralProgramByRiderPincode
+)
 module.exports = router;

@@ -3,81 +3,168 @@ const prisma = require("../config/prisma");
 exports.createReferralConfig = async (req, res) => {
   try {
     const {
-      title,
+      name,
       description,
-      referralRewardAmount,
-      joiningBonusAmount,
-      targetOrderCount,
-      rewardFlow,
+      programType,
+      trackingType,
+      ruleType,
       validFrom,
-      validTill
+      validTill,
+      validityDays,
+      isActive,
+      weekStartDay,
+      referralConfig,
+      targetOrders,
+      slabs,
+      tasks
     } = req.body;
+
+    if (!name || !programType || !trackingType || !ruleType) {
+      return res.status(400).json({
+        success: false,
+        message: "name, programType, trackingType and ruleType are required"
+      });
+    }
+
+    if (programType === "REFERRAL") {
+      if (!validFrom || !validTill) {
+        return res.status(400).json({
+          success: false,
+          message: "validFrom and validTill are required for referral program"
+        });
+      }
+
+      const newValidFrom = new Date(validFrom);
+      const newValidTill = new Date(validTill);
+
+      const existingProgram = await prisma.program.findFirst({
+        where: {
+          programType: "REFERRAL",
+          isActive: true,
+          OR: [
+            {
+              validFrom: {
+                lte: newValidTill
+              },
+              validTill: {
+                gte: newValidFrom
+              }
+            }
+          ]
+        }
+      });
+
+      if (existingProgram) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Referral program already exists in this period. You can update the existing program within this period.",
+          data: {
+            existingProgramId: existingProgram.id,
+            existingProgramName: existingProgram.name,
+            validFrom: existingProgram.validFrom,
+            validTill: existingProgram.validTill
+          }
+        });
+      }
+    }
 
     const program = await prisma.program.create({
       data: {
-        name: title,
-        description,
+        name,
+        description: description || null,
 
-        programType: "REFERRAL",
-        applicableWhen: "WITH_REFERRAL",
-        trackingType: "MONTHLY",
-        ruleType: "FIXED_TARGET",
+        programType,
+        trackingType,
+        ruleType,
 
-        validFrom: new Date(validFrom),
-        validTill: new Date(validTill),
+        applicableWhen:
+          programType === "REFERRAL"
+            ? "WITH_REFERRAL"
+            : "WITHOUT_REFERRAL",
+
+        validFrom: validFrom ? new Date(validFrom) : null,
+        validTill: validTill ? new Date(validTill) : null,
+        validityDays: validityDays ? Number(validityDays) : null,
 
         daysOfWeek: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
+        weekStartDay: weekStartDay || "MON",
 
-        isActive: true,
+        isActive: isActive ?? true,
         priority: 1,
 
-        referralConfig: {
-          create: {
-            rewardFlow: rewardFlow || "BOTH"
-          }
-        },
+        referralConfig:
+          programType === "REFERRAL" && referralConfig
+            ? {
+                create: {
+                  rewardFlow: referralConfig.rewardFlow || "BOTH",
+                  maxReferralsPerUser:
+                    referralConfig.maxReferralsPerUser !== undefined
+                      ? Number(referralConfig.maxReferralsPerUser)
+                      : null,
+                  maxEarningPerUser:
+                    referralConfig.maxEarningPerUser !== undefined
+                      ? Number(referralConfig.maxEarningPerUser)
+                      : null
+                }
+              }
+            : undefined,
 
-        targets: {
-          create: {
-            targetOrders: Number(targetOrderCount),
-            rewardAmount: Number(referralRewardAmount)
-          }
-        },
+        targets:
+          targetOrders !== undefined && targetOrders !== null
+            ? {
+                create: {
+                  targetOrders: Number(targetOrders),
+                  rewardAmount: 0
+                }
+              }
+            : undefined,
 
-        tasks: {
-          create: {
-            role: "REFEREE",
-            minOrders: Number(targetOrderCount),
-            rewardAmount: Number(joiningBonusAmount)
-          }
-        }
+        slabs:
+          Array.isArray(slabs) && slabs.length > 0
+            ? {
+                create: slabs.map((slab) => ({
+                  role: slab.role,
+                  minValue: Number(slab.minValue),
+                  maxValue:
+                    slab.maxValue !== undefined && slab.maxValue !== null
+                      ? Number(slab.maxValue)
+                      : null,
+                  rewardAmount: Number(slab.rewardAmount)
+                }))
+              }
+            : undefined,
+
+        tasks:
+          Array.isArray(tasks) && tasks.length > 0
+            ? {
+                create: tasks.map((task) => ({
+                  role: task.role || "REFEREE",
+                  dayNumber:
+                    task.dayNumber !== undefined && task.dayNumber !== null
+                      ? Number(task.dayNumber)
+                      : null,
+                  minOrders: Number(task.minOrders),
+                  rewardAmount: Number(task.rewardAmount)
+                }))
+              }
+            : undefined
       },
       include: {
         referralConfig: true,
         targets: true,
+        slabs: true,
         tasks: true
       }
     });
 
     return res.status(201).json({
       success: true,
-      message: "Referral config created successfully",
-      data: {
-        programId: program.id,
-        referralConfigId: program.referralConfig.id,
-        title: program.name,
-        description: program.description,
-        referralRewardAmount: program.targets[0].rewardAmount,
-        joiningBonusAmount: program.tasks[0].rewardAmount,
-        targetOrderCount: program.targets[0].targetOrders,
-        rewardFlow: program.referralConfig.rewardFlow,
-        validFrom: program.validFrom,
-        validTill: program.validTill,
-        isActive: program.isActive
-      }
+      message: "Program config created successfully",
+      data: program
     });
   } catch (error) {
-    console.error("Create referral config error:", error);
+    console.error("Create program config error:", error);
 
     return res.status(500).json({
       success: false,
@@ -85,8 +172,177 @@ exports.createReferralConfig = async (req, res) => {
     });
   }
 };
-// controllers/adminReferralController.js
+exports.updateReferralConfig = async (req, res) => {
+  try {
+    const { programId } = req.params;
 
+    const {
+      name,
+      description,
+      trackingType,
+      ruleType,
+      validFrom,
+      validTill,
+      isActive,
+      weekStartDay,
+
+      cityId,
+      pincodeIds,
+
+      referralConfig,
+      targetOrders,
+      slabs,
+      tasks
+    } = req.body;
+
+    const existingProgram = await prisma.program.findUnique({
+      where: { id: programId }
+    });
+
+    if (!existingProgram) {
+      return res.status(404).json({
+        success: false,
+        message: "Program not found"
+      });
+    }
+
+    const today = new Date();
+
+    if (
+      existingProgram.validFrom &&
+      existingProgram.validTill &&
+      today < existingProgram.validFrom
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "You can update only within the active program period"
+      });
+    }
+
+    if (
+      existingProgram.validFrom &&
+      existingProgram.validTill &&
+      today > existingProgram.validTill
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Program period expired. You cannot update this program"
+      });
+    }
+
+    await prisma.program.update({
+      where: { id: programId },
+      data: {
+        name: name || existingProgram.name,
+        description: description ?? existingProgram.description,
+
+        trackingType: trackingType || existingProgram.trackingType,
+        ruleType: ruleType || existingProgram.ruleType,
+
+        validFrom: validFrom ? new Date(validFrom) : existingProgram.validFrom,
+        validTill: validTill ? new Date(validTill) : existingProgram.validTill,
+
+        isActive: isActive ?? existingProgram.isActive,
+        weekStartDay: weekStartDay || existingProgram.weekStartDay,
+
+        cityId: Array.isArray(cityId) ? cityId : existingProgram.cityId,
+        pincodeIds: Array.isArray(pincodeIds)
+          ? pincodeIds
+          : existingProgram.pincodeIds,
+
+        referralConfig: referralConfig
+          ? {
+              update: {
+                rewardFlow:
+                  referralConfig.rewardFlow ||
+                  existingProgram.rewardFlow,
+
+                maxReferralsPerUser:
+                  referralConfig.maxReferralsPerUser !== undefined
+                    ? Number(referralConfig.maxReferralsPerUser)
+                    : undefined,
+
+                maxEarningPerUser:
+                  referralConfig.maxEarningPerUser !== undefined
+                    ? Number(referralConfig.maxEarningPerUser)
+                    : undefined
+              }
+            }
+          : undefined
+      }
+    });
+
+    if (targetOrders !== undefined) {
+      await prisma.programTarget.updateMany({
+        where: { programId },
+        data: {
+          targetOrders: Number(targetOrders)
+        }
+      });
+    }
+
+    if (Array.isArray(slabs)) {
+      await prisma.programSlab.deleteMany({
+        where: { programId }
+      });
+
+      await prisma.programSlab.createMany({
+        data: slabs.map((slab) => ({
+          programId,
+          role: slab.role,
+          minValue: Number(slab.minValue),
+          maxValue:
+            slab.maxValue !== undefined && slab.maxValue !== null
+              ? Number(slab.maxValue)
+              : null,
+          rewardAmount: Number(slab.rewardAmount)
+        }))
+      });
+    }
+
+    if (Array.isArray(tasks)) {
+      await prisma.programTask.deleteMany({
+        where: { programId }
+      });
+
+      await prisma.programTask.createMany({
+        data: tasks.map((task) => ({
+          programId,
+          role: task.role || "REFEREE",
+          dayNumber:
+            task.dayNumber !== undefined && task.dayNumber !== null
+              ? Number(task.dayNumber)
+              : null,
+          minOrders: Number(task.minOrders),
+          rewardAmount: Number(task.rewardAmount)
+        }))
+      });
+    }
+
+    const finalProgram = await prisma.program.findUnique({
+      where: { id: programId },
+      include: {
+        referralConfig: true,
+        targets: true,
+        slabs: true,
+        tasks: true
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Referral config updated successfully",
+      data: finalProgram
+    });
+  } catch (error) {
+    console.error("Update referral config error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
 exports.getAllReferralConfigs = async (req, res) => {
   try {
     const programs = await prisma.program.findMany({
@@ -360,6 +616,84 @@ exports.creditReferralReward = async (req, res) => {
     });
   } catch (error) {
     console.error("Credit referral reward error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+exports.getReferralProgramByRiderPincode = async (req, res) => {
+  try {
+    const { riderId } = req.params;
+
+    const riderLocation = await prisma.riderLocation.findUnique({
+      where: { riderId }
+    });
+
+    if (!riderLocation || !riderLocation.pincode) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider pincode not found"
+      });
+    }
+
+    const riderPincode = String(riderLocation.pincode).trim();
+    const today = new Date();
+
+    const allPrograms = await prisma.program.findMany({
+      where: {
+        programType: "REFERRAL"
+      },
+      include: {
+        referralConfig: true,
+        targets: true,
+        slabs: true,
+        tasks: true
+      }
+    });
+
+    const matchedPrograms = allPrograms.filter((program) => {
+      const programPincodes = Array.isArray(program.pincodeIds)
+        ? program.pincodeIds.map((pin) => String(pin).trim())
+        : [];
+
+      const isActiveMatched = program.isActive === true;
+
+      const dateMatched =
+        program.validFrom &&
+        program.validTill &&
+        program.validFrom <= today &&
+        program.validTill >= today;
+
+      const pincodeMatched = programPincodes.includes(riderPincode);
+
+      return isActiveMatched && dateMatched && pincodeMatched;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Referral programs fetched successfully",
+      riderPincode,
+      today,
+      totalPrograms: matchedPrograms.length,
+      debug: allPrograms.map((program) => ({
+        programId: program.id,
+        name: program.name,
+        isActive: program.isActive,
+        validFrom: program.validFrom,
+        validTill: program.validTill,
+        pincodeIds: program.pincodeIds,
+        pincodeMatched: program.pincodeIds
+          ?.map((pin) => String(pin).trim())
+          .includes(riderPincode),
+        dateMatched:
+          program.validFrom <= today && program.validTill >= today
+      })),
+      data: matchedPrograms
+    });
+  } catch (error) {
+    console.error("Get referral program error:", error);
 
     return res.status(500).json({
       success: false,

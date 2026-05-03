@@ -8,7 +8,8 @@ const{createAsset,
     raiseIssue,
     markAsDelivered,
     requestJoiningKit, 
-    uploadIssueImage
+    uploadIssueImage,
+    verifyIssue
 
 }=require('../controllers/kitSelectionController');
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
@@ -195,7 +196,7 @@ const { upload } = require("../utils/azureUpload");
  *                   type: string
  *                   example: Internal server error
  */
-router.post('/payment/:id', riderAuthMiddleWare, makePayment);
+router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
 
 
 
@@ -902,7 +903,7 @@ router.post('/rider/issue/:requestId', riderAuthMiddleWare ,
  *                   type: string
  *                   example: Failed to update delivery
  */
-router.post('/asset/mark-delivered/:shipmentId', markAsDelivered)
+router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
 /**
  * @swagger
  * /api/kit/admin/dispatch/{assetRequestIds}:
@@ -1060,7 +1061,8 @@ router.post('/asset/mark-delivered/:shipmentId', markAsDelivered)
  */
 router.post('/admin/dispatch/:assetRequestIds', dispatchAsset)
 router.post('/admin/approve/:riderId', approveRequest)
-// router.post('/hi', (req,res)=> res.send("test"))
+router.post("/issues/:issueId/verify",  verifyIssue);
+
 
 
 
