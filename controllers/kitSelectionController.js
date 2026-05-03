@@ -704,24 +704,162 @@ exports.dispatchAsset = async (req, res) => {
   }
 };
 
+// exports.raiseIssue = async (req, res) => {
+//   try {
+//     const riderId = req.rider?.id;
+
+//     if (!riderId) {
+//       return res.status(401).json({
+//         success: false,
+//         message: "Unauthorized - Invalid token"
+//       });
+//     }
+
+//     const { requestId } = req.params;
+//     const { assetType, description, issueType } = req.body;
+
+//     if (!requestId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "requestId is required in params"
+//       });
+//     }
+
+//     if (!assetType || !description) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "assetType and description are required"
+//       });
+//     }
+
+//     let imageUrl = req.body.imageUrl || null;
+
+//     if (req.file) {
+//       imageUrl = await uploadToAzure(req.file, "asset-issues");
+//     }
+
+//     console.log("Token riderId:", riderId);
+//     console.log("Params requestId:", requestId);
+
+//     // 1. Check request exists
+//     const assetRequest = await prisma.assetRequest.findUnique({
+//       where: { id: requestId }
+//     });
+
+//     console.log("DB assetRequest:", assetRequest);
+
+//     if (!assetRequest) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Asset request not found",
+//         requestId
+//       });
+//     }
+
+//     // 2. Check request belongs to logged-in rider
+//     if (assetRequest.riderId !== riderId) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "You are not allowed to raise issue for this request"
+//       });
+//     }
+
+//     // 3. Allow issue only for dispatched/completed assets
+//     if (
+//       assetRequest.status !== "COMPLETED" &&
+//       assetRequest.status !== "DISPATCHED"
+//     ) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Issue can be raised only for dispatched or completed assets"
+//       });
+//     }
+
+//     // 4. Find rider_assets record
+//     const riderAsset = await prisma.rider_assets.findFirst({
+//       where: {
+//         riderId: riderId
+//       }
+//     });
+
+//     if (!riderAsset) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Rider asset record not found"
+//       });
+//     }
+
+//     // 5. Check rider has this asset type
+//     const riderAssetItem = await prisma.rider_asset_items.findFirst({
+//       where: {
+//         riderAssetsId: riderAsset.id,
+//         assetType: assetType
+//       }
+//     });
+
+//     if (!riderAssetItem) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "This asset type is not assigned to the rider"
+//       });
+//     }
+
+//     // 6. Prevent duplicate open issue
+//     const existingIssue = await prisma.rider_asset_issues.findFirst({
+//       where: {
+//         riderAssetsId: riderAsset.id,
+//         assetType,
+//         status: {
+//           in: ["OPEN", "APPROVED", "READY_FOR_DISPATCH"]
+//         }
+//       }
+//     });
+
+//     if (existingIssue) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Issue already exists for this asset"
+//       });
+//     }
+
+//     // 7. Create issue
+//     const issue = await prisma.rider_asset_issues.create({
+//       data: {
+//         riderAssetsId: riderAsset.id,
+//         assetType,
+//         assetName: riderAssetItem.assetName || null,
+//         description,
+//         imageUrl,
+//         issueType: issueType || "OTHER",
+//         status: "OPEN"
+//       }
+//     });
+
+//     return res.status(201).json({
+//       success: true,
+//       message: "Issue raised successfully",
+//       data: issue
+//     });
+
+//   } catch (error) {
+//     console.error("Raise Issue Error:", error);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Something went wrong while raising issue"
+//     });
+//   }
+// };
 exports.raiseIssue = async (req, res) => {
   try {
     const riderId = req.rider?.id;
-
+    const { requestId } = req.params;
+    const { assetType, description, issueType } = req.body;
+    
     if (!riderId) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized - Invalid token"
-      });
-    }
-
-    const { requestId } = req.params;
-    const { assetType, description, issueType } = req.body;
-
-    if (!requestId) {
-      return res.status(400).json({
-        success: false,
-        message: "requestId is required in params"
+        message: "Unauthorized"
       });
     }
 
@@ -732,31 +870,19 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    let imageUrl = req.body.imageUrl || null;
-
-    if (req.file) {
-      imageUrl = await uploadToAzure(req.file, "asset-issues");
-    }
-
-    console.log("Token riderId:", riderId);
-    console.log("Params requestId:", requestId);
-
-    // 1. Check request exists
     const assetRequest = await prisma.assetRequest.findUnique({
       where: { id: requestId }
     });
-
-    console.log("DB assetRequest:", assetRequest);
+    console.log("Token riderId:", riderId);
+console.log("DB riderId:", assetRequest.riderId);
 
     if (!assetRequest) {
       return res.status(404).json({
         success: false,
-        message: "Asset request not found",
-        requestId
+        message: "Asset request not found"
       });
     }
 
-    // 2. Check request belongs to logged-in rider
     if (assetRequest.riderId !== riderId) {
       return res.status(403).json({
         success: false,
@@ -764,22 +890,15 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    // 3. Allow issue only for dispatched/completed assets
-    if (
-      assetRequest.status !== "COMPLETED" &&
-      assetRequest.status !== "DISPATCHED"
-    ) {
+    if (!["COMPLETED", "DISPATCHED"].includes(assetRequest.status)) {
       return res.status(400).json({
         success: false,
         message: "Issue can be raised only for dispatched or completed assets"
       });
     }
 
-    // 4. Find rider_assets record
     const riderAsset = await prisma.rider_assets.findFirst({
-      where: {
-        riderId: riderId
-      }
+      where: { riderId }
     });
 
     if (!riderAsset) {
@@ -789,11 +908,10 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    // 5. Check rider has this asset type
     const riderAssetItem = await prisma.rider_asset_items.findFirst({
       where: {
         riderAssetsId: riderAsset.id,
-        assetType: assetType
+        assetType
       }
     });
 
@@ -804,7 +922,6 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    // 6. Prevent duplicate open issue
     const existingIssue = await prisma.rider_asset_issues.findFirst({
       where: {
         riderAssetsId: riderAsset.id,
@@ -822,31 +939,95 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    // 7. Create issue
     const issue = await prisma.rider_asset_issues.create({
       data: {
         riderAssetsId: riderAsset.id,
         assetType,
         assetName: riderAssetItem.assetName || null,
         description,
-        imageUrl,
         issueType: issueType || "OTHER",
+        imageUrl: null,
         status: "OPEN"
       }
     });
 
     return res.status(201).json({
       success: true,
-      message: "Issue raised successfully",
-      data: issue
+      message: "Issue raised successfully. Please upload issue image.",
+      data: {
+        issueId: issue.id,
+        assetType: issue.assetType,
+        status: issue.status,
+        imageRequired: true
+      }
     });
 
   } catch (error) {
-    console.error("Raise Issue Error:", error);
-
     return res.status(500).json({
       success: false,
-      message: error.message || "Something went wrong while raising issue"
+      message: error.message
+    });
+  }
+};
+exports.uploadIssueImage = async (req, res) => {
+  try {
+    const riderId = req.rider?.id;
+    const { issueId } = req.params;
+
+    if (!riderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized"
+      });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Issue image is required"
+      });
+    }
+
+    const issue = await prisma.rider_asset_issues.findUnique({
+      where: { id: issueId },
+      include: {
+        rider_assets: true
+      }
+    });
+
+    if (!issue) {
+      return res.status(404).json({
+        success: false,
+        message: "Issue not found"
+      });
+    }
+
+    if (issue.rider_assets.riderId !== riderId) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not allowed to upload image for this issue"
+      });
+    }
+
+    const imageUrl = await uploadToAzure(req.file, "asset-issues");
+
+    const updatedIssue = await prisma.rider_asset_issues.update({
+      where: { id: issueId },
+      data: {
+        imageUrl
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Issue image uploaded successfully",
+      data: updatedIssue
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message
     });
   }
 };
