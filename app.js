@@ -3,7 +3,8 @@ const { swaggerSetup } = require("./docs/swagger");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const cors = require("cors");
-
+const adminWeeklyIncentiveRoutes = require("./routes/adminWeeklyIncentive.routes");
+const riderWeeklyRoutes = require("./routes/riderWeeklyIncentive.routes");
 const riderRouter = require("./routes/riderRoute");
 const locationRouter = require("./routes/locationRoute");
 const aadharRoute = require("./routes/aadharRoutes");
@@ -84,7 +85,7 @@ app.use("/api/mobile", staticRouter);
 
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin/incentives", adminRouterIncentives);
-
+app.use("/api/admin/programs", adminWeeklyIncentiveRoutes);
 app.use("/api/rider", kitRouter);
 app.use("/api/slots", slotRouter);
 app.use("/api/rider/assets", require("./routes/riderAssetsRoutes"));
@@ -115,8 +116,7 @@ app.use("/api", pricingConfigRoutes);
 
 app.use("/api/admin/incentives", adminIncentivesrouter);
 app.use("/api/rider/incentives", riderIncentivesRouter);
-
-
+app.use("/api", riderWeeklyRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/rider/notifications", fcmTokenRoutes);
 app.use("/api/rider", require("./routes/rider.routes"));
