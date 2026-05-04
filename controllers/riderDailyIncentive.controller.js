@@ -4,7 +4,7 @@ const getDailyIncentive = async (req, res) => {
   try {
     const riderId = req.rider?.id;
 
-    console.log("👉 RiderId:", riderId);
+    // console.log("RiderId:", riderId);
 
     if (!riderId) {
       return res.status(400).json({

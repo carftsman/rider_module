@@ -22,7 +22,6 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *         description: Unauthorized
  */
 
-// 🔐 Protected route
 router.get("/rider/program/daily", riderAuthMiddleWare, getDailyIncentive);
 
 module.exports = router;
