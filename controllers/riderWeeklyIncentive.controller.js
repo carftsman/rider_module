@@ -1,3 +1,4 @@
+const prisma = require("../config/prisma");
 function getWeekKey(date = new Date()) {
   const year = date.getFullYear();
   const oneJan = new Date(year, 0, 1);
