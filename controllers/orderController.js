@@ -1091,6 +1091,7 @@ async function deliverOrder(req, res) {
       success: true,
       message: "Order delivered successfully",
       orderId,
+      orderStatus: "DELIVERED",
       earningCredited: earning,
       codCollected,
     });
