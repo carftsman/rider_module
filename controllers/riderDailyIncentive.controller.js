@@ -186,68 +186,90 @@ isActive: true,
       ["SLAB", "FIXED_TARGET", "HYBRID", "PER_ORDER"].includes(p.ruleType)
     );
 
-    /////////////////////////////////////////////////////
-    // 6️⃣ FORMAT RESPONSE (ADMIN STYLE)
-    /////////////////////////////////////////////////////
-    const response = programs.map((p) => {
 
-      const result = {
-        name: p.name,
+/////////////////////////////////////////////////////
+// 6️⃣ FORMAT RESPONSE (ADMIN STYLE)
+/////////////////////////////////////////////////////
+const response = programs.map((p) => {
 
-        cityId: p.cityId?.[0] || null,
+  /////////////////////////////////////////////////////
+  // MAX PAYOUT FIX
+  /////////////////////////////////////////////////////
+  let maxPayoutPerDay = p.maxPayoutPerDay;
 
-        dateRange: {
-          startDate: p.validFrom,
-          endDate: p.validTill
-        },
+  if (maxPayoutPerDay === null) {
 
-        ruleType: p.ruleType,
+    if (p.ruleType === "SLAB" && p.slabs?.length) {
+      maxPayoutPerDay = Math.max(...p.slabs.map(s => s.rewardAmount));
+    }
 
-        maxPayoutPerDay: p.maxPayoutPerDay,
-        isActive: p.isActive
-      };
+    else if (["FIXED_TARGET", "HYBRID"].includes(p.ruleType) && p.targets?.[0]) {
+      maxPayoutPerDay = p.targets[0].rewardAmount;
+    }
+  }
 
-      ////////////////////////////////////////////////
-      // SLAB
-      ////////////////////////////////////////////////
-      if (p.ruleType === "SLAB" && p.slabs?.length) {
-        result.slabs = p.slabs.map(s => ({
-          minOrders: s.minValue,
-          maxOrders: s.maxValue,
-          rewardAmount: s.rewardAmount
-        }));
-      }
+  /////////////////////////////////////////////////////
+  // BASE RESULT
+  /////////////////////////////////////////////////////
+  const result = {
+    name: p.name,
 
-      ////////////////////////////////////////////////
-      // FIXED TARGET
-      ////////////////////////////////////////////////
-      if (p.ruleType === "FIXED_TARGET") {
-        result.target = {
-          orders: p.targets?.[0]?.targetOrders || null
-        };
+    cityId: p.cityId?.[0] || null,
 
-        result.reward = {
-          amount: p.targets?.[0]?.rewardAmount || null
-        };
-      }
+    dateRange: {
+      startDate: p.validFrom,
+      endDate: p.validTill
+    },
 
-      ////////////////////////////////////////////////
-      // HYBRID
-      ////////////////////////////////////////////////
-      if (p.ruleType === "HYBRID") {
-        result.conditions = {
-          minOrders: p.rules?.[0]?.minOrders || null,
-          minEarnings: p.rules?.[0]?.minEarnings || null,
-          minAcceptanceRate: p.minAcceptanceRate || null,
-          minCompletionRate: p.minCompletionRate || null
-        };
-        result.reward = {
-          amount: p.targets?.[0]?.rewardAmount || null
-        };
-      }
+    ruleType: p.ruleType,
 
-      return result;
-    });
+    maxPayoutPerDay,
+
+    isActive: p.isActive
+  };
+
+  ////////////////////////////////////////////////
+  // SLAB
+  ////////////////////////////////////////////////
+  if (p.ruleType === "SLAB" && p.slabs?.length) {
+    result.slabs = p.slabs.map(s => ({
+      minOrders: s.minValue,
+      maxOrders: s.maxValue,
+      rewardAmount: s.rewardAmount
+    }));
+  }
+
+  ////////////////////////////////////////////////
+  // FIXED TARGET
+  ////////////////////////////////////////////////
+  if (p.ruleType === "FIXED_TARGET") {
+    result.target = {
+      orders: p.targets?.[0]?.targetOrders || null
+    };
+
+    result.reward = {
+      amount: p.targets?.[0]?.rewardAmount || null
+    };
+  }
+
+  ////////////////////////////////////////////////
+  // HYBRID
+  ////////////////////////////////////////////////
+  if (p.ruleType === "HYBRID") {
+    result.conditions = {
+      minOrders: p.rules?.[0]?.minOrders || null,
+      minEarnings: p.rules?.[0]?.minEarnings || null,
+      minAcceptanceRate: p.minAcceptanceRate || null,
+      minCompletionRate: p.minCompletionRate || null
+    };
+
+    result.reward = {
+      amount: p.targets?.[0]?.rewardAmount || null
+    };
+  }
+
+  return result; // ✅ NOW correct place
+});
 
     /////////////////////////////////////////////////////
     // 7️⃣ RESPONSE

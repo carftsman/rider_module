@@ -150,23 +150,41 @@ exports.getRiderWeeklyPrograms = async (req, res) => {
         today > p.validTill ? "EXPIRED" :
         "RUNNING";
 
-      const result = {
-        programId: p.id,
-        name: p.name,
-        type: "WEEKLY",
-        ruleType: p.ruleType,
-        status,
-        validFrom: p.validFrom,
-        validTill: p.validTill,
-        weekStartDay: p.weekStartDay,
+// 🔥 MAX REWARD FIRST
+let maxReward = null;
 
-        // 🔥 MAX REWARD FIX
-        maxReward:
-          p.maxPayoutPerWeek ??
-          (p.slabs?.length
-            ? Math.max(...p.slabs.map(s => s.rewardAmount))
-            : null)
-      };
+// 🔹 SLAB
+if (p.ruleType === "SLAB" && p.slabs?.length) {
+  maxReward = Math.max(...p.slabs.map(s => s.rewardAmount));
+}
+
+// 🔹 FIXED TARGET
+else if (p.ruleType === "FIXED_TARGET" && p.targets?.[0]) {
+  maxReward = p.targets[0].rewardAmount;
+}
+
+// 🔹 HYBRID
+else if (p.ruleType === "HYBRID" && p.targets?.[0]) {
+  maxReward = p.targets[0].rewardAmount;
+}
+
+// 🔹 fallback
+if (maxReward === null) {
+  maxReward = p.maxPayoutPerWeek ?? null;
+}
+
+// ✅ THEN use it
+const result = {
+  programId: p.id,
+  name: p.name,
+  type: "WEEKLY",
+  ruleType: p.ruleType,
+  status,
+  validFrom: p.validFrom,
+  validTill: p.validTill,
+  weekStartDay: p.weekStartDay,
+  maxReward
+};
 
       // ✅ SLAB
       if (p.ruleType === "SLAB" && p.slabs?.length) {
