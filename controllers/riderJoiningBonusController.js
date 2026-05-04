@@ -1,32 +1,42 @@
-//Get Active Joining Bonus Programs
+const prisma = require("../config/prisma");
 
+// Helper
+const getStartOfDay = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+};
+
+const getEndOfDay = () => {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d;
+};
+
+// 1️⃣ Get Available Programs
 exports.getAvailablePrograms = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    // Get rider location
     const location = await prisma.riderLocation.findUnique({
       where: { riderId }
     });
 
-    if (!location?.city || !location?.pincode) {
+    if (!location || !location.city || !location.pincode) {
       return res.status(400).json({
         success: false,
-        message: "Rider location not set"
+        message: "Location not set"
       });
     }
-
-    const today = new Date();
-
+    console.log(location)
     const programs = await prisma.program.findMany({
       where: {
         isActive: true,
         programType: "JOINING_BONUS",
-        validFrom: { lte: today },
-        validTill: { gte: today },
-        cityId: { has: location.city },
-        pincodeIds: { has: location.pincode }
-      }
+        // cityId: { has: location.city },
+        // pincodeIds: { has: location.pincode }
+      },
+      orderBy: { priority: "desc" }
     });
 
     res.json({
@@ -36,13 +46,13 @@ exports.getAvailablePrograms = async (req, res) => {
     });
 
   } catch (err) {
-    res.status(500).json({ success: false });
+    console.error(err);
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
 
-//Get Program Details (with tasks)
-
+// 2️⃣ Get Program Details
 exports.getProgramDetails = async (req, res) => {
   try {
     const { programId } = req.params;
@@ -50,9 +60,7 @@ exports.getProgramDetails = async (req, res) => {
     const program = await prisma.program.findUnique({
       where: { id: programId },
       include: {
-        tasks: {
-          orderBy: { dayNumber: "asc" }
-        }
+        tasks: { orderBy: { dayNumber: "asc" } }
       }
     });
 
@@ -65,13 +73,13 @@ exports.getProgramDetails = async (req, res) => {
 
     res.json({ success: true, data: program });
 
-  } catch {
-    res.status(500).json({ success: false });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// Join / Enroll in Program
 
+// 3️⃣ Join Program (SAFE)
 exports.joinProgram = async (req, res) => {
   try {
     const riderId = req.rider.id;
@@ -88,46 +96,77 @@ exports.joinProgram = async (req, res) => {
       });
     }
 
-    const existing = await prisma.programProgress.findFirst({
-      where: { riderId, programId }
+    const now = new Date();
+
+    if (program.validFrom > now || program.validTill < now) {
+      return res.status(400).json({
+        success: false,
+        message: "Program expired or not started"
+      });
+    }
+
+    // Prevent duplicate join
+    const existing = await prisma.programEnrollment.findUnique({
+      where: {
+        riderId_programId: {
+          riderId,
+          programId
+        }
+      }
     });
 
     if (existing) {
       return res.status(400).json({
         success: false,
-        message: "Already joined program"
+        message: "Already joined"
       });
     }
 
-    await prisma.programProgress.create({
+    const expiresAt = new Date(now);
+    if (program.validityDays) {
+      expiresAt.setDate(expiresAt.getDate() + program.validityDays);
+    }
+
+    await prisma.programEnrollment.create({
       data: {
         riderId,
         programId,
-        totalOrders: 0
+        expiresAt
       }
     });
 
     res.json({
       success: true,
-      message: "Joined program successfully"
+      message: "Program joined successfully"
     });
 
-  } catch {
+  } catch (err) {
+    console.error(err);
+
+    // Unique constraint safe
+    if (err.code === "P2002") {
+      return res.status(400).json({
+        success: false,
+        message: "Already joined"
+      });
+    }
+
     res.status(500).json({ success: false });
   }
 };
 
-//Get My Active Programs
 
+// 4️⃣ My Programs
 exports.getMyPrograms = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    const programs = await prisma.programProgress.findMany({
+    const programs = await prisma.programEnrollment.findMany({
       where: { riderId },
       include: {
         program: true
-      }
+      },
+      orderBy: { enrolledAt: "desc" }
     });
 
     res.json({
@@ -141,14 +180,29 @@ exports.getMyPrograms = async (req, res) => {
   }
 };
 
-// Get My Progress 
 
+// 5️⃣ Get My Progress
 exports.getMyProgress = async (req, res) => {
   try {
     const riderId = req.rider.id;
     const { programId } = req.params;
 
-    const progress = await prisma.programProgress.findFirst({
+    // ✅ Check enrollment first
+    const enrollment = await prisma.programEnrollment.findUnique({
+      where: {
+        riderId_programId: { riderId, programId }
+      }
+    });
+
+    if (!enrollment) {
+      return res.status(400).json({
+        success: false,
+        message: "Not enrolled in program"
+      });
+    }
+
+    // ✅ Fetch progress
+    let progress = await prisma.programProgress.findFirst({
       where: { riderId, programId },
       include: {
         program: {
@@ -157,10 +211,19 @@ exports.getMyProgress = async (req, res) => {
       }
     });
 
+    // ✅ If no progress → return default object
     if (!progress) {
-      return res.status(404).json({
-        success: false,
-        message: "Not enrolled"
+      return res.json({
+        success: true,
+        message: "No progress yet",
+        data: {
+          riderId,
+          programId,
+          totalOrders: 0,
+          totalEarnings: 0,
+          achieved: false,
+          tasks: []
+        }
       });
     }
 
@@ -169,19 +232,38 @@ exports.getMyProgress = async (req, res) => {
       data: progress
     });
 
-  } catch {
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ success: false });
   }
 };
 
-// Get Today Task
 
+// 6️⃣ Get Today Task (FIXED LOGIC 🔥)
 exports.getTodayTask = async (req, res) => {
   try {
+    const riderId = req.rider.id;
     const { programId } = req.params;
 
+    const enrollment = await prisma.programEnrollment.findUnique({
+      where: {
+        riderId_programId: { riderId, programId }
+      }
+    });
+
+    if (!enrollment) {
+      return res.status(400).json({
+        success: false,
+        message: "Not enrolled"
+      });
+    }
+
+    const start = new Date(enrollment.enrolledAt);
     const today = new Date();
-    const dayNumber = today.getDate(); // simple logic (can improve)
+
+    const dayNumber = Math.floor(
+      (today - start) / (1000 * 60 * 60 * 24)
+    ) + 1;
 
     const task = await prisma.programTask.findFirst({
       where: {
@@ -192,7 +274,8 @@ exports.getTodayTask = async (req, res) => {
 
     res.json({
       success: true,
-      data: task
+      dayNumber,
+      data: task || null
     });
 
   } catch {
@@ -200,27 +283,4 @@ exports.getTodayTask = async (req, res) => {
   }
 };
 
-// Get Earnings (Reward Summary)
-
-exports.getEarnings = async (req, res) => {
-  try {
-    const riderId = req.rider.id;
-    const { programId } = req.params;
-
-    const payouts = await prisma.programPayout.findMany({
-      where: { riderId, programId }
-    });
-
-    const total = payouts.reduce((sum, p) => sum + p.amount, 0);
-
-    res.json({
-      success: true,
-      totalEarned: total,
-      data: payouts
-    });
-
-  } catch {
-    res.status(500).json({ success: false });
-  }
-};
 
