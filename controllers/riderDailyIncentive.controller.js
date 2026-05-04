@@ -24,11 +24,14 @@ const getDailyIncentive = async (req, res) => {
       where: {
         programType: "INCENTIVE",
         trackingType: "DAILY",
-        isActive: true,
+ruleType: {
+  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+},
+isActive: true,
       },
     });
 
-    console.log("👉 Program:", program?.id);
+    console.log(" Program:", program?.id);
 
     if (!program) {
       return res.json({
@@ -67,24 +70,24 @@ const getDailyIncentive = async (req, res) => {
     }
 
 
-let status = "NOT_STARTED";
+    let status = "NOT_STARTED";
 
-if (progress.achieved) {
-  status = "ACHIEVED";
-} else if (progress.totalOrders > 0) {
-  status = "IN_PROGRESS";
-}
+    if (progress.achieved) {
+      status = "ACHIEVED";
+    } else if (progress.totalOrders > 0) {
+      status = "IN_PROGRESS";
+    }
 
-return res.json({
-  programId: progress.programId,
-  type: "DAILY",
-  ordersCompleted: progress.totalOrders,
-  rewardEarned: progress.rewardAmount,
-  status,
-});
+    return res.json({
+      programId: progress.programId,
+      type: "DAILY",
+      ordersCompleted: progress.totalOrders,
+      rewardEarned: progress.rewardAmount,
+      status,
+    });
 
   } catch (error) {
-    console.error("🔥 ERROR:", error);
+    console.error("ERROR:", error);
 
     return res.status(500).json({
       message: error.message,
@@ -92,6 +95,179 @@ return res.json({
   }
 };
 
+const getRiderDailyPrograms = async (req, res) => {
+  try {
+    const riderId = req.rider.id;
+
+    /////////////////////////////////////////////////////
+    // 1️⃣ GET RIDER LOCATION
+    /////////////////////////////////////////////////////
+    const riderLocation = await prisma.riderLocation.findUnique({
+      where: { riderId }
+    });
+
+    if (!riderLocation) {
+      return res.json({ success: true, data: [] });
+    }
+
+    /////////////////////////////////////////////////////
+    // 2️⃣ PREPARE VARIABLES
+    /////////////////////////////////////////////////////
+    const riderPincode = riderLocation.pincode
+      ? String(riderLocation.pincode).trim()
+      : null;
+
+    const riderCityId = riderLocation.cityId || null;
+
+    const now = new Date();
+
+    console.log("riderPincode:", riderPincode);
+    console.log("riderCityId:", riderCityId);
+    console.log("now:", now);
+
+    /////////////////////////////////////////////////////
+    // 3️⃣ FETCH PROGRAMS (PINCODE FIRST)
+    /////////////////////////////////////////////////////
+    let programs = [];
+
+    if (riderPincode) {
+      programs = await prisma.program.findMany({
+        where: {
+          programType: "INCENTIVE",
+         trackingType: "DAILY",
+ruleType: {
+  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+},
+isActive: true,
+          validFrom: { lte: now },
+          validTill: { gte: now },
+          pincodeIds: { has: riderPincode }
+        },
+        include: {
+          slabs: true,
+          targets: true,
+          rules: true
+        },
+        orderBy: { createdAt: "desc" }
+      });
+    }
+
+    /////////////////////////////////////////////////////
+    // 4️⃣ FALLBACK TO CITY
+    /////////////////////////////////////////////////////
+    if (!programs.length && riderCityId) {
+      programs = await prisma.program.findMany({
+        where: {
+          programType: "INCENTIVE",
+         trackingType: "DAILY",
+ruleType: {
+  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+},
+isActive: true,
+          validFrom: { lte: now },
+          validTill: { gte: now },
+          cityId: { has: riderCityId }
+        },
+        include: {
+          slabs: true,
+          targets: true,
+          rules: true
+        },
+        orderBy: { createdAt: "desc" }
+      });
+    }
+
+    console.log("RAW PROGRAMS:", programs);
+
+    /////////////////////////////////////////////////////
+    // 5️⃣ FILTER VALID RULE TYPES
+    /////////////////////////////////////////////////////
+    programs = programs.filter(p =>
+      ["SLAB", "FIXED_TARGET", "HYBRID", "PER_ORDER"].includes(p.ruleType)
+    );
+
+    /////////////////////////////////////////////////////
+    // 6️⃣ FORMAT RESPONSE (ADMIN STYLE)
+    /////////////////////////////////////////////////////
+    const response = programs.map((p) => {
+
+      const result = {
+        name: p.name,
+
+        cityId: p.cityId?.[0] || null,
+
+        dateRange: {
+          startDate: p.validFrom,
+          endDate: p.validTill
+        },
+
+        ruleType: p.ruleType,
+
+        maxPayoutPerDay: p.maxPayoutPerDay,
+        isActive: p.isActive
+      };
+
+      ////////////////////////////////////////////////
+      // SLAB
+      ////////////////////////////////////////////////
+      if (p.ruleType === "SLAB" && p.slabs?.length) {
+        result.slabs = p.slabs.map(s => ({
+          minOrders: s.minValue,
+          maxOrders: s.maxValue,
+          rewardAmount: s.rewardAmount
+        }));
+      }
+
+      ////////////////////////////////////////////////
+      // FIXED TARGET
+      ////////////////////////////////////////////////
+      if (p.ruleType === "FIXED_TARGET") {
+        result.target = {
+          orders: p.targets?.[0]?.targetOrders || null
+        };
+
+        result.reward = {
+          amount: p.targets?.[0]?.rewardAmount || null
+        };
+      }
+
+      ////////////////////////////////////////////////
+      // HYBRID
+      ////////////////////////////////////////////////
+      if (p.ruleType === "HYBRID") {
+        result.conditions = {
+          minOrders: p.rules?.[0]?.minOrders || null,
+          minEarnings: p.rules?.[0]?.minEarnings || null,
+          minAcceptanceRate: p.minAcceptanceRate || null,
+          minCompletionRate: p.minCompletionRate || null
+        };
+        result.reward = {
+          amount: p.targets?.[0]?.rewardAmount || null
+        };
+      }
+
+      return result;
+    });
+
+    /////////////////////////////////////////////////////
+    // 7️⃣ RESPONSE
+    /////////////////////////////////////////////////////
+    return res.json({
+      success: true,
+      data: response
+    });
+
+  } catch (error) {
+    console.error("Daily programs error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch daily programs"
+    });
+  }
+};
+
 module.exports = {
   getDailyIncentive,
+  getRiderDailyPrograms,
 };

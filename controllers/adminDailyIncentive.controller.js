@@ -148,7 +148,10 @@ exports.createDailyIncentive = async (req, res) => {
         where: {
           programType: "INCENTIVE",
           trackingType: "DAILY",
-          isActive: true,
+ruleType: {
+  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+},
+isActive: true,
           AND: [
             { validFrom: { lte: end } },
             { validTill: { gte: start } }
@@ -173,7 +176,10 @@ exports.createDailyIncentive = async (req, res) => {
         where: {
           programType: "INCENTIVE",
           trackingType: "DAILY",
-          isActive: true,
+ruleType: {
+  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+},
+isActive: true,
           AND: [
             { validFrom: { lte: end } },
             { validTill: { gte: start } }
