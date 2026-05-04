@@ -48,6 +48,9 @@ const adminReferralRoutes = require("./routes/adminReferralRoutes");
 const adminDailyIncentiveRoutes = require("./routes/adminDailyIncentive.routes");
 const riderDailyIncentiveRoutes = require("./routes/riderDailyIncentive.routes");
 const riderReferralRoutes = require("./routes/riderReferralRoutes");
+const joiningBonusRouter = require("./routes/adminJoiningBonusRoutes")
+const riderJoiningBonusRouter = require("./routes/riderJoiningBonusRoutes")
+
 const riderRatingRouter= require("./routes/riderRatingRoutes")
 const app = express();
 
@@ -148,6 +151,11 @@ app.use("/api/admin/incentive", adminDailyIncentiveRoutes);
 app.use("/api", riderDailyIncentiveRoutes);
 app.use("/api/refer/rider", adminReferralRoutes);
 app.use("/api/refer/", riderReferralRoutes);
+//joining bonus
+
+app.use("/api/admin/joining/bonus", joiningBonusRouter);
+app.use("/api/rider/joining/bonus", riderJoiningBonusRouter);
+
 // pincode admin
 app.use("/api/pincode", pinCodeRouter);
  
