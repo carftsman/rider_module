@@ -45,6 +45,10 @@ const pinCodeRouter = require("./routes/pinCode.routes")
 const adminReferralRoutes = require("./routes/adminReferralRoutes");
 
 const riderRatingRouter= require("./routes/riderRatingRoutes")
+const peakSlot=require("./routes/peakSlotRoutes")
+const getPeakSlotProgresses=require("./routes/getPeakSlotProgressRoutes")
+
+const getPeakSlotIncentive=require("./routes/getRiderIncentiveRoutes")
 const app = express();
 
 // app.use(cors())
@@ -136,6 +140,12 @@ app.use("/api/pincode", pinCodeRouter);
 
 app.use("/api/rider",riderRatingRouter)
 
+
+app.use("/admin/incentives",peakSlot)
+
+app.use("/rider",getPeakSlotProgresses)
+
+app.use("/api/rider/incentives-new",getPeakSlotIncentive)
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");
 });
