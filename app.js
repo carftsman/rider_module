@@ -3,11 +3,8 @@ const { swaggerSetup } = require("./docs/swagger");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const cors = require("cors");
-<<<<<<< Updated upstream
 const adminWeeklyIncentiveRoutes = require("./routes/adminWeeklyIncentive.routes");
 const riderWeeklyRoutes = require("./routes/riderWeeklyIncentive.routes");
-=======
->>>>>>> Stashed changes
 const riderRouter = require("./routes/riderRoute");
 const locationRouter = require("./routes/locationRoute");
 const aadharRoute = require("./routes/aadharRoutes");
@@ -97,10 +94,7 @@ app.use("/api/mobile", staticRouter);
  
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin/incentives", adminRouterIncentives);
-<<<<<<< Updated upstream
 app.use("/api/admin/programs", adminWeeklyIncentiveRoutes);
-=======
->>>>>>> Stashed changes
 app.use("/api/rider", kitRouter);
 app.use("/api/slots", slotRouter);
 app.use("/api/rider/assets", require("./routes/riderAssetsRoutes"));
@@ -131,12 +125,7 @@ app.use("/api", pricingConfigRoutes);
  
 app.use("/api/admin/incentives", adminIncentivesrouter);
 app.use("/api/rider/incentives", riderIncentivesRouter);
-<<<<<<< Updated upstream
 app.use("/api", riderWeeklyRoutes);
-=======
- 
- 
->>>>>>> Stashed changes
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/rider/notifications", fcmTokenRoutes);
 app.use("/api/rider", require("./routes/rider.routes"));
@@ -159,7 +148,6 @@ app.use("/api", riderDailyIncentiveRoutes);
 app.use("/api/pincode", pinCodeRouter);
  
 app.use("/api/rider",riderRatingRouter)
-<<<<<<< Updated upstream
 
 
 app.use("/admin/incentives",peakSlot)
@@ -167,9 +155,6 @@ app.use("/admin/incentives",peakSlot)
 app.use("/rider",getPeakSlotProgresses)
 
 app.use("/api/rider/incentives-new",getPeakSlotIncentive)
-=======
- 
->>>>>>> Stashed changes
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");
 });
