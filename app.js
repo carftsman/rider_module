@@ -3,8 +3,11 @@ const { swaggerSetup } = require("./docs/swagger");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const cors = require("cors");
+<<<<<<< Updated upstream
 const adminWeeklyIncentiveRoutes = require("./routes/adminWeeklyIncentive.routes");
 const riderWeeklyRoutes = require("./routes/riderWeeklyIncentive.routes");
+=======
+>>>>>>> Stashed changes
 const riderRouter = require("./routes/riderRoute");
 const locationRouter = require("./routes/locationRoute");
 const aadharRoute = require("./routes/aadharRoutes");
@@ -22,13 +25,13 @@ const riderIncentiveProgressRoutes = require("./routes/riderIncentiveProgress.ro
 const kitRoutes = require("./routes/kitSelectionRoutes");
 
 // const webRiderRoutes = require("./routes/rider.routes");
-
+ 
 const riderEarningsRoutes = require("./routes/riderEarningsRoutes");
-
+ 
 const issueRouter = require("./routes/issueRoutes");
-
+ 
 const pricingConfigRoutes = require("./routes/pricingConfigRoutes");
-
+ 
 const notificationRoutes = require("./routes/notificationRoutes");
 const fcmTokenRoutes = require("./routes/fcmTokenRoutes");
 const riderStatusRoutes = require("./routes/riderStatus.routes");
@@ -44,13 +47,18 @@ const pinCodeRouter = require("./routes/pinCode.routes")
 // const offlineStoreRoute = require("./routes/offlineStoreRoute");
 const adminReferralRoutes = require("./routes/adminReferralRoutes");
 
+const adminDailyIncentiveRoutes = require("./routes/adminDailyIncentive.routes");
+const riderDailyIncentiveRoutes = require("./routes/riderDailyIncentive.routes");
+
+
+
 const riderRatingRouter= require("./routes/riderRatingRoutes")
 const peakSlot=require("./routes/peakSlotRoutes")
 const getPeakSlotProgresses=require("./routes/getPeakSlotProgressRoutes")
 
 const getPeakSlotIncentive=require("./routes/getRiderIncentiveRoutes")
 const app = express();
-
+ 
 // app.use(cors())
 app.use(
   cors({
@@ -68,65 +76,73 @@ app.use(
     credentials: false, // change to true ONLY if using cookies
   }),
 );
-
+ 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
+ 
 app.use(helmet());
 app.use(morgan("dev"));
 // app.use("/uploads", express.static("uploads"));
-
+ 
 // Swagger
 swaggerSetup(app);
-
+ 
 // Routes
 app.use("/api", riderRouter);
 app.use("/api/location", locationRouter);
 app.use("/aadhar", aadharRoute);
 app.use("/api/bank", bankDetailsRoutes);
-
+ 
 app.use("/api/mobile", staticRouter);
-
+ 
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin/incentives", adminRouterIncentives);
+<<<<<<< Updated upstream
 app.use("/api/admin/programs", adminWeeklyIncentiveRoutes);
+=======
+>>>>>>> Stashed changes
 app.use("/api/rider", kitRouter);
 app.use("/api/slots", slotRouter);
 app.use("/api/rider/assets", require("./routes/riderAssetsRoutes"));
-
+ 
 // app.use("/api/offline-stores", offlineStoreRoute);
-
+ 
 // app.use("/api/admin/offline-stores", offlineStoreRoute);
-
+ 
 app.use("/api/profile", profileRoutes);
-
+ 
 app.use("/api/home", incentiveRoutes);
-
+ 
 // app.use("/api/rider/incentives", riderIncentiveRoutes);
-
+ 
 app.use("/api/issues", issueRouter);
 app.use("/api/raw", rawPayloadRoutes);
-
+ 
 app.use("/api/rider/earnings", riderEarningsRoutes);
-
+ 
 app.use("/api/orders", require("./routes/orderRoutes"));
-
+ 
 app.use("/api/aerial", require("./routes/gpsRoutes"));
 app.use("/api/web", webIncentiveRoutes);
 // app.use("/api/web",webRiderRoutes)
-
+ 
 app.use("/api", pricingConfigRoutes);
-
-
+ 
+ 
 app.use("/api/admin/incentives", adminIncentivesrouter);
 app.use("/api/rider/incentives", riderIncentivesRouter);
+<<<<<<< Updated upstream
 app.use("/api", riderWeeklyRoutes);
+=======
+ 
+ 
+>>>>>>> Stashed changes
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/rider/notifications", fcmTokenRoutes);
 app.use("/api/rider", require("./routes/rider.routes"));
 app.use("/api/rider/status", riderStatusRoutes);
 app.use("/api", riderCashRoutes);
-
+ 
 //orderState Ready
 app.use("/api", orderStateReady);
 app.use("/api/rider-incentives", riderIncentiveProgressRoutes);
@@ -135,10 +151,15 @@ app.use("/api/kit", kitRoutes);
 app.use("/api/company", companySelectionRoutes);
 app.use("/api/status", todayRiderOnlineRoutes);
 app.use("/api/refer", adminReferralRoutes);
+
+app.use("/api/admin/incentive", adminDailyIncentiveRoutes);
+
+app.use("/api", riderDailyIncentiveRoutes);
 // pincode admin
 app.use("/api/pincode", pinCodeRouter);
-
+ 
 app.use("/api/rider",riderRatingRouter)
+<<<<<<< Updated upstream
 
 
 app.use("/admin/incentives",peakSlot)
@@ -146,8 +167,11 @@ app.use("/admin/incentives",peakSlot)
 app.use("/rider",getPeakSlotProgresses)
 
 app.use("/api/rider/incentives-new",getPeakSlotIncentive)
+=======
+ 
+>>>>>>> Stashed changes
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");
 });
-
+ 
 module.exports = app;
