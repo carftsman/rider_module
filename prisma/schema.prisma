@@ -109,6 +109,8 @@ model Rider {
   walletTransactions       RiderWalletTransaction[]
   programProgresses        ProgramProgress[]
   programPayouts           ProgramPayout[]
+  programEnrollments       ProgramEnrollment[]
+  programTaskProgresses    ProgramTaskProgress[]
 
   @@index([phoneNumber])
   @@index([isOnline])
@@ -1959,7 +1961,7 @@ model Program {
 
   daysOfWeek DayOfWeek[]
 
-  weekStartDay DayOfWeek
+  weekStartDay DayOfWeek?
 
   // constraints (moved here for global usage) 
 
@@ -2003,7 +2005,9 @@ model Program {
 
   payouts ProgramPayout[]
 
-  referrals Referral[]
+  referrals             Referral[]
+  programEnrollments    ProgramEnrollment[]
+  programTaskProgresses ProgramTaskProgress[]
 
   @@index([trackingType, cityId, isActive])
   @@index([programType])
@@ -2076,9 +2080,10 @@ model ProgramTask {
   minPeakSlots      Int?
   minEarnings       Float?
 
-  rewardAmount Float
-
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  rewardAmount          Float
+  taskType              TaskType @default(ORDERS)
+  program               Program               @relation(fields: [programId], references: [id], onDelete: Cascade)
+  programTaskProgresses ProgramTaskProgress[]
 
   @@index([programId])
 }
@@ -2229,6 +2234,7 @@ model ProgramProgress {
 
   program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
 
+  @@unique([riderId, programId, week])
   @@index([riderId, programId])
   @@index([date])
   @@index([week])
@@ -2250,11 +2256,11 @@ model ProgramPayout {
   walletTransactionId String?
   referenceId         String?
 
-  creditedAt DateTime?
-  createdAt  DateTime  @default(now())
-
-  rider   Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  creditedAt  DateTime?
+  createdAt   DateTime          @default(now())
+  triggerType PayoutTriggerType
+  rider       Rider             @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  program     Program           @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@index([riderId])
   @@index([status])
@@ -2285,4 +2291,63 @@ model RiderWalletTransaction {
   @@index([riderId])
   @@index([type])
   @@index([referenceId])
+}
+
+model ProgramEnrollment {
+  id String @id @default(uuid())
+
+  riderId   String
+  programId String
+
+  enrolledAt DateTime @default(now())
+  expiresAt  DateTime
+
+  status EnrollmentStatus @default(ACTIVE)
+
+  rider   Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+
+  @@unique([riderId, programId])
+  @@index([riderId])
+  @@index([programId])
+}
+
+model ProgramTaskProgress {
+  id           String  @id @default(uuid())
+  enrollmentId String?
+  riderId      String
+  programId    String
+  taskId       String
+
+  date      DateTime
+  dayNumber Int
+
+  isCompleted Boolean   @default(false)
+  completedAt DateTime?
+
+  progressValue Float @default(0) // dynamic tracking
+
+  rider   Rider       @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  program Program     @relation(fields: [programId], references: [id], onDelete: Cascade)
+  task    ProgramTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([riderId, taskId, date])
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  EXPIRED
+}
+
+enum PayoutTriggerType {
+  PROGRAM_COMPLETION
+  DAILY_TASK
+}
+
+enum TaskType {
+  ORDERS
+  ACCEPTANCE_RATE
+  PEAK_SLOTS
+  EARNINGS
 }

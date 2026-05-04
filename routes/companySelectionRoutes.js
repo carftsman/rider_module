@@ -105,13 +105,12 @@ router.post("/rider/type", riderAuthMiddleWare, selectRiderType);
 
 /**
  * @swagger
- * /api/company/rider/employee:
+ * /api/rider/employee-details:
  *   post:
- *     summary: Submit Employee Details (Company Rider)
+ *     summary: Submit company employee rider details
  *     description: >
- *       This API collects employee details for a company rider during onboarding.
- *       It updates Rider, RiderProfile, and RiderOnboarding tables
- *       and moves onboarding stage to DOCUMENT_DETAILS.
+ *       Saves employee details for a rider, applies referral code if provided,
+ *       updates rider profile, onboarding flags, and moves rider to document details stage.
  *     tags:
  *       - Rider Onboarding
  *     security:
@@ -129,28 +128,32 @@ router.post("/rider/type", riderAuthMiddleWare, selectRiderType);
  *             properties:
  *               companyName:
  *                 type: string
- *                 example: Swiggy
+ *                 example: "Swiggy"
  *               empId:
  *                 type: string
- *                 example: EMP123
+ *                 example: "EMP12345"
  *               fullName:
  *                 type: string
- *                 example: Ramu Kumar
+ *                 example: "Rahul Kumar"
  *               dob:
  *                 type: string
  *                 format: date
- *                 example: 1995-05-21
+ *                 example: "1998-05-20"
  *               gender:
  *                 type: string
  *                 enum: [male, female, other]
- *                 example: male
+ *                 example: "male"
  *               secondaryPhone:
  *                 type: string
- *                 example: "9123456780"
+ *                 example: "9876543210"
  *               email:
  *                 type: string
  *                 format: email
- *                 example: ramu@example.com
+ *                 example: "rahul@example.com"
+ *               referralCode:
+ *                 type: string
+ *                 description: Partner ID of existing rider used as referral code
+ *                 example: "P1001"
  *     responses:
  *       200:
  *         description: Employee details submitted successfully
@@ -164,12 +167,45 @@ router.post("/rider/type", riderAuthMiddleWare, selectRiderType);
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Employee details submitted
+ *                   example: "Employee details submitted"
  *                 nextStage:
  *                   type: string
- *                   example: DOCUMENT_DETAILS
+ *                   example: "DOCUMENT_DETAILS"
+ *                 referralApplied:
+ *                   type: boolean
+ *                   example: true
  *       400:
- *         description: Validation error
+ *         description: Validation error or invalid referral code
+ *         content:
+ *           application/json:
+ *             examples:
+ *               requiredFieldsMissing:
+ *                 summary: Required fields missing
+ *                 value:
+ *                   success: false
+ *                   message: "companyName, empId, fullName are required"
+ *               invalidGender:
+ *                 summary: Invalid gender
+ *                 value:
+ *                   success: false
+ *                   message: "Invalid gender"
+ *               duplicateEmpId:
+ *                 summary: Employee ID already exists
+ *                 value:
+ *                   success: false
+ *                   message: "Employee ID already exists"
+ *               invalidReferralCode:
+ *                 summary: Invalid referral code
+ *                 value:
+ *                   success: false
+ *                   message: "Invalid referral code"
+ *               ownReferralCode:
+ *                 summary: Own referral code used
+ *                 value:
+ *                   success: false
+ *                   message: "You cannot use your own referral code"
+ *       401:
+ *         description: Unauthorized rider
  *         content:
  *           application/json:
  *             schema:
@@ -180,7 +216,7 @@ router.post("/rider/type", riderAuthMiddleWare, selectRiderType);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: companyName, empId, fullName are required
+ *                   example: "Unauthorized"
  *       404:
  *         description: Rider not found
  *         content:
@@ -193,9 +229,20 @@ router.post("/rider/type", riderAuthMiddleWare, selectRiderType);
  *                   example: false
  *                 message:
  *                   type: string
- *                   example: Rider not found
+ *                   example: "Rider not found"
  *       500:
  *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: "Internal server error"
  */
 router.post("/rider/employee", riderAuthMiddleWare, employeeDetails);
 

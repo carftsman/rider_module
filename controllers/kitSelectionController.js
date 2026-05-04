@@ -631,26 +631,21 @@ exports.dispatchAsset = async (req, res) => {
       });
     }
 
-    const existingShipments = await prisma.shipment.findMany({
-      where: {
-        assetRequestId: { in: requestIds }
-      }
-    });
-
-    if (existingShipments.length > 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Shipment already created for some requests",
-        existingShipmentRequestIds: existingShipments.map(s => s.assetRequestId)
-      });
-    }
-
     const result = await prisma.$transaction(async (tx) => {
       const shipments = [];
 
       for (const request of requests) {
-        const shipment = await tx.shipment.create({
-          data: {
+        const shipment = await tx.shipment.upsert({
+          where: {
+            assetRequestId: request.id
+          },
+          update: {
+            courierName,
+            trackingId,
+            dispatchDate: new Date(),
+            deliveryStatus: "SHIPPED"
+          },
+          create: {
             assetRequestId: request.id,
             courierName,
             trackingId,
@@ -661,7 +656,9 @@ exports.dispatchAsset = async (req, res) => {
 
         await tx.assetRequest.update({
           where: { id: request.id },
-          data: { status: "DISPATCHED" }
+          data: {
+            status: "DISPATCHED"
+          }
         });
 
         shipments.push(shipment);
@@ -688,7 +685,6 @@ exports.dispatchAsset = async (req, res) => {
     });
   }
 };
-
 // exports.raiseIssue = async (req, res) => {
 //   try {
 //     const riderId = req.rider?.id;
@@ -1624,6 +1620,104 @@ exports.verifyIssue = async (req, res) => {
       success: false,
       message: "Something went wrong",
       error: error.message
+    });
+  }
+};
+exports.completePaymentAndReadyForDispatch = async (req, res) => {
+  try {
+    const riderId = req.rider?.id;
+    const { requestIds } = req.params;
+
+    if (!riderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized rider"
+      });
+    }
+
+    const requestIdArray = requestIds
+      ? requestIds.split(",").map(id => id.trim()).filter(Boolean)
+      : [];
+
+    if (requestIdArray.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "requestIds are required"
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const requests = await tx.assetRequest.findMany({
+        where: {
+          id: { in: requestIdArray },
+          riderId
+        },
+        include: {
+          Payment: true
+        }
+      });
+
+      if (requests.length !== requestIdArray.length) {
+        throw new Error("Some asset requests are invalid or do not belong to this rider");
+      }
+
+      const noPaymentRequest = requests.find((request) => {
+        if (Array.isArray(request.Payment)) {
+          return request.Payment.length === 0;
+        }
+
+        return !request.Payment;
+      });
+
+      if (noPaymentRequest) {
+        throw new Error("Payment record not found for some requests");
+      }
+
+      await tx.payment.updateMany({
+        where: {
+          assetRequestId: { in: requestIdArray },
+          status: "PENDING"
+        },
+        data: {
+          status: "SUCCESS",
+          paidAt: new Date()
+        }
+      });
+
+      await tx.assetRequest.updateMany({
+        where: {
+          id: { in: requestIdArray },
+          riderId
+        },
+        data: {
+          status: "READY_FOR_DISPATCH"
+        }
+      });
+
+      const updatedRequests = await tx.assetRequest.findMany({
+        where: {
+          id: { in: requestIdArray },
+          riderId
+        },
+        include: {
+          Payment: true
+        }
+      });
+
+      return updatedRequests;
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Payment completed successfully. Requests moved to ready for dispatch",
+      totalRequests: result.length,
+      data: result
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Something went wrong"
     });
   }
 };

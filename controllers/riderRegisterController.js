@@ -402,6 +402,7 @@ exports.savePersonalInfo = async (req, res) => {
       primaryPhone,
       secondaryPhone,
       email,
+      referralCode
     } = req.body;
 
     // ----- Basic required fields -------
@@ -411,7 +412,37 @@ exports.savePersonalInfo = async (req, res) => {
         message: "fullName and primaryPhone are required",
       });
     }
+    let referredByPartnerId = null;
 
+    if (referralCode) {
+      const referrer = await prisma.rider.findUnique({
+        where: {
+          partnerId: referralCode,
+        },
+      });
+
+      if (!referrer) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid referral code",
+        });
+      }
+      if (referrer.id === riderId) {
+        return res.status(400).json({
+          success: false,
+          message: "You cannot use your own referral code",
+        });
+      }
+
+      if (!referrer.isPartnerActive) {
+        return res.status(400).json({
+          success: false,
+          message: "Referral code is not active",
+        });
+      }
+
+      referredByPartnerId = referralCode;
+    }
     // Ensure onboarding exists
     let onboarding = await prisma.riderOnboarding.findUnique({
       where: { riderId },
@@ -447,6 +478,13 @@ exports.savePersonalInfo = async (req, res) => {
         primaryPhone,
         secondaryPhone,
         email,
+        
+      },
+    });
+    await prisma.rider.update({
+      where: { id: riderId },
+      data: {
+        referredByPartnerId,
       },
     });
 

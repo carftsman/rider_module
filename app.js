@@ -44,9 +44,15 @@ const riderIncentivesRouter = require("./routes/riderIncentive.routes")
 const pinCodeRouter = require("./routes/pinCode.routes")
 // const offlineStoreRoute = require("./routes/offlineStoreRoute");
 const adminReferralRoutes = require("./routes/adminReferralRoutes");
+<<<<<<< Updated upstream
 
 const adminDailyIncentiveRoutes = require("./routes/adminDailyIncentive.routes");
 const riderDailyIncentiveRoutes = require("./routes/riderDailyIncentive.routes");
+=======
+const riderReferralRoutes = require("./routes/riderReferralRoutes");
+const riderRatingRouter= require("./routes/riderRatingRoutes")
+const app = express();
+>>>>>>> Stashed changes
 
 
 
@@ -140,11 +146,16 @@ app.use("/api/rider", require("./routes/availableRidersRoutes"));
 app.use("/api/kit", kitRoutes);
 app.use("/api/company", companySelectionRoutes);
 app.use("/api/status", todayRiderOnlineRoutes);
+<<<<<<< Updated upstream
 app.use("/api/refer", adminReferralRoutes);
 
 app.use("/api/admin/incentive", adminDailyIncentiveRoutes);
 
 app.use("/api", riderDailyIncentiveRoutes);
+=======
+app.use("/api/refer/rider", adminReferralRoutes);
+app.use("/api/refer/", riderReferralRoutes);
+>>>>>>> Stashed changes
 // pincode admin
 app.use("/api/pincode", pinCodeRouter);
  

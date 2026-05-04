@@ -204,7 +204,8 @@ exports.employeeDetails = async (req, res) => {
       dob,
       gender,
       secondaryPhone,
-      email
+      email,
+      referralCode
     } = req.body;
 
     // ✅ 1. Validation
@@ -215,12 +216,6 @@ exports.employeeDetails = async (req, res) => {
       });
     }
 
-    // if (gender && !Object.values(Gender).includes(gender)) {
-    //   return res.status(400).json({
-    //     success: false,
-    //     message: "Invalid gender"
-    //   });
-    // }
      const allowedGenders = ["male", "female", "other"];
 
     if (gender && !allowedGenders.includes(gender)) {
@@ -255,7 +250,31 @@ exports.employeeDetails = async (req, res) => {
         message: "Employee ID already exists"
       });
     }
+    let referredByPartnerId = null;
 
+    if (referralCode) {
+      const referrer = await prisma.rider.findUnique({
+        where: {
+          partnerId: referralCode
+        }
+      });
+
+      if (!referrer) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid referral code"
+        });
+      }
+
+      if (referrer.id === riderId) {
+        return res.status(400).json({
+          success: false,
+          message: "You cannot use your own referral code"
+        });
+      }
+
+      referredByPartnerId = referrer.partnerId;
+    }
     // ✅ 4. Update Rider (Company fields)
     await prisma.rider.update({
       where: { id: riderId },
@@ -265,7 +284,8 @@ exports.employeeDetails = async (req, res) => {
         dob: dob ? new Date(dob) : null,
         email,
         riderType: RiderType.COMPANY_EMPLOYEE,
-        onboardingStage: OnboardingStage.EMPLOYEE_DETAILS
+        onboardingStage: OnboardingStage.EMPLOYEE_DETAILS,
+         referredByPartnerId
       }
     });
 
@@ -306,7 +326,8 @@ exports.employeeDetails = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Employee details submitted",
-      nextStage
+      nextStage,
+      referralApplied: referralCode ? true : false
     });
 
   } catch (error) {

@@ -9,7 +9,8 @@ const{createAsset,
     markAsDelivered,
     requestJoiningKit, 
     uploadIssueImage,
-    verifyIssue
+    verifyIssue,
+    completePaymentAndReadyForDispatch
 
 }=require('../controllers/kitSelectionController');
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
@@ -1063,7 +1064,11 @@ router.post('/admin/dispatch/:assetRequestIds', dispatchAsset)
 router.post('/admin/approve/:riderId', approveRequest)
 router.post("/issues/:issueId/verify",  verifyIssue);
 
-
+router.post(
+  "/payments/complete/:requestIds",
+  riderAuthMiddleWare,
+  completePaymentAndReadyForDispatch
+);
 
 
 module.exports = router

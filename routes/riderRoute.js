@@ -147,12 +147,12 @@ riderRouter.get("/auth/status", checkStatus);
  * @swagger
  * /api/rider/personal-info:
  *   post:
- *     tags: [Rider]
  *     summary: Save rider personal information
- *     description: Save personal information of the rider. fullName and primaryPhone are required.
+ *     description: Saves rider personal info and optional referral code.
+ *     tags:
+ *       - Rider
  *     security:
  *       - bearerAuth: []
- *
  *     requestBody:
  *       required: true
  *       content:
@@ -165,11 +165,11 @@ riderRouter.get("/auth/status", checkStatus);
  *             properties:
  *               fullName:
  *                 type: string
- *                 example: "Ramu Kumar"
+ *                 example: Ravi Kumar
  *               dob:
  *                 type: string
  *                 format: date
- *                 example: "1995-05-21"
+ *                 example: 1998-05-10
  *               gender:
  *                 type: string
  *                 enum: [male, female, other]
@@ -183,44 +183,65 @@ riderRouter.get("/auth/status", checkStatus);
  *               email:
  *                 type: string
  *                 format: email
- *                 example: "ramu@example.com"
- *
+ *                 example: ravi@gmail.com
+ *               referralCode:
+ *                 type: string
+ *                 description: Partner ID/referral code of existing active rider
+ *                 example: "PARTNER12345"
  *     responses:
  *       200:
  *         description: Personal info saved successfully
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: "Personal info saved successfully"
- *                 data:
- *                   type: object
- *                   properties:
- *                     riderId:
- *                       type: string
- *                     personalInfo:
- *                       type: object
- *                     onboardingProgress:
- *                       type: object
- *                     onboardingStage:
- *                       type: string
- *
+ *             example:
+ *               success: true
+ *               message: Personal info saved successfully
+ *               data:
+ *                 riderId: "rider-id"
+ *                 personalInfo:
+ *                   fullName: Ravi Kumar
+ *                   dob: "1998-05-10T00:00:00.000Z"
+ *                   gender: male
+ *                   primaryPhone: "9876543210"
+ *                   secondaryPhone: "9123456780"
+ *                   email: ravi@gmail.com
+ *                 onboardingStage: SELFIE
  *       400:
- *         description: Validation error
+ *         description: Validation or referral error
+ *         content:
+ *           application/json:
+ *             examples:
+ *               requiredFields:
+ *                 value:
+ *                   success: false
+ *                   message: fullName and primaryPhone are required
+ *               invalidReferral:
+ *                 value:
+ *                   success: false
+ *                   message: Invalid referral code
+ *               ownReferral:
+ *                 value:
+ *                   success: false
+ *                   message: You cannot use your own referral code
+ *               inactiveReferral:
+ *                 value:
+ *                   success: false
+ *                   message: Referral code is not active
  *       401:
- *         description: Unauthorized
- *       404:
- *         description: Rider not found
+ *         description: Unauthorized rider
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Unauthorized rider
  *       500:
  *         description: Server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Error saving personal info
  */
-
 riderRouter.post("/rider/personal-info", riderAuthMiddleWare, savePersonalInfo);
 
 // ============================================================
