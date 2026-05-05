@@ -13,41 +13,95 @@ const getEndOfDay = () => {
   return d;
 };
 
-// 1️⃣ Get Available Programs
+//Get Available Programs
 exports.getAvailablePrograms = async (req, res) => {
   try {
     const riderId = req.rider.id;
+    const now = new Date();
 
+    // ----------------------------
+    // GET RIDER LOCATION
+    // ----------------------------
     const location = await prisma.riderLocation.findUnique({
       where: { riderId }
     });
 
-    if (!location || !location.city || !location.pincode) {
+    if (!location?.city || !location?.pincode) {
       return res.status(400).json({
         success: false,
-        message: "Location not set"
+        message: "Rider location not set"
       });
     }
-    console.log(location)
+
+    // ----------------------------
+    // FETCH PROGRAMS
+    // ----------------------------
     const programs = await prisma.program.findMany({
       where: {
         isActive: true,
         programType: "JOINING_BONUS",
-        // cityId: { has: location.city },
-        // pincodeIds: { has: location.pincode }
       },
-      orderBy: { priority: "desc" }
+      orderBy: { priority: "desc" },
+      include: {
+        tasks: {
+        //   take: 2, //preview only (performance)
+          orderBy: { dayNumber: "asc" }
+        }
+      }
     });
 
-    res.json({
+    // ----------------------------
+    // GET ENROLLMENTS
+    // ----------------------------
+    const enrollments = await prisma.programEnrollment.findMany({
+      where: {
+        riderId,
+        programId: {
+          in: programs.map(p => p.id)
+        }
+      }
+    });
+
+    const enrollmentMap = {};
+    enrollments.forEach(e => {
+      enrollmentMap[e.programId] = e;
+    });
+
+    // ----------------------------
+    // FINAL RESPONSE
+    // ----------------------------
+    const response = programs.map(program => {
+      const enrollment = enrollmentMap[program.id];
+
+      return {
+        id: program.id,
+        name: program.name,
+        validityDays: program.validityDays,
+        rewardPreview: program.tasks.reduce(
+          (sum, t) => sum + t.rewardAmount,
+          0
+        ),
+
+        isEnrolled: !!enrollment,
+        enrollmentStatus: enrollment?.status || null,
+
+        tasksPreview: program.tasks
+      };
+    });
+
+    return res.status(200).json({
       success: true,
-      count: programs.length,
-      data: programs
+      count: response.length,
+      data: response
     });
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Server error" });
+  } catch (error) {
+    console.error("Get Available Programs Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
   }
 };
 
