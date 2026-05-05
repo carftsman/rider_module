@@ -2,9 +2,8 @@
 
 const prisma = require("../config/prisma");
 
-/////////////////////////////////////////////////////
-// ✅ DATE VALIDATION
-/////////////////////////////////////////////////////
+// DATE VALIDATION
+
 function isValidDateString(dateStr) {
   if (!dateStr) return false;
 
@@ -20,9 +19,8 @@ function isValidDateString(dateStr) {
   );
 }
 
-/////////////////////////////////////////////////////
-// ✅ CREATE DAILY INCENTIVE
-/////////////////////////////////////////////////////
+// CREATE DAILY INCENTIVE
+
 exports.createDailyIncentive = async (req, res) => {
   try {
     const {
@@ -41,9 +39,8 @@ exports.createDailyIncentive = async (req, res) => {
       isActive = true
     } = req.body;
 
-    /////////////////////////////////////////////////////
-    // 🔥 1. BASIC VALIDATION
-    /////////////////////////////////////////////////////
+    // BASIC VALIDATION
+   
 
     if (!name || !ruleType || !dateRange) {
       return res.status(400).json({
@@ -68,9 +65,8 @@ exports.createDailyIncentive = async (req, res) => {
 
     const { startDate, endDate } = dateRange;
 
-    /////////////////////////////////////////////////////
-    // 🔥 2. DATE VALIDATION
-    /////////////////////////////////////////////////////
+    // DATE VALIDATION
+    
 
     if (!isValidDateString(startDate) || !isValidDateString(endDate)) {
       return res.status(400).json({
@@ -102,9 +98,8 @@ exports.createDailyIncentive = async (req, res) => {
       });
     }
 
-    /////////////////////////////////////////////////////
-    // 🔥 3. RULE VALIDATION
-    /////////////////////////////////////////////////////
+    // RULE VALIDATION
+  
 
     if (!["SLAB", "FIXED_TARGET", "HYBRID"].includes(ruleType)) {
       return res.status(400).json({
@@ -138,20 +133,17 @@ exports.createDailyIncentive = async (req, res) => {
       }
     }
 
-    /////////////////////////////////////////////////////
-    // 🔥 4. DUPLICATE CHECK (FINAL FIX)
-    /////////////////////////////////////////////////////
-
-    // ✅ 1. SAME PINCODE BLOCK
+    // DUPLICATE CHECK (FINAL FIX)
+    // SAME PINCODE BLOCK
     if (pincodeIds && pincodeIds.length > 0) {
       const existingPincode = await prisma.program.findFirst({
         where: {
           programType: "INCENTIVE",
           trackingType: "DAILY",
-ruleType: {
-  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-},
-isActive: true,
+          ruleType: {
+            in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+          },
+          isActive: true,
           AND: [
             { validFrom: { lte: end } },
             { validTill: { gte: start } }
@@ -170,16 +162,16 @@ isActive: true,
       }
     }
 
-    // ✅ 2. CITY BLOCK (covers city + pincode conflicts)
+    // CITY BLOCK (covers city + pincode conflicts)
     if (cityId) {
       const existingCity = await prisma.program.findFirst({
         where: {
           programType: "INCENTIVE",
           trackingType: "DAILY",
-ruleType: {
-  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-},
-isActive: true,
+          ruleType: {
+            in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+          },
+          isActive: true,
           AND: [
             { validFrom: { lte: end } },
             { validTill: { gte: start } }
@@ -198,9 +190,8 @@ isActive: true,
       }
     }
 
-    /////////////////////////////////////////////////////
-    // 🔥 5. BUILD DATA
-    /////////////////////////////////////////////////////
+    // BUILD DATA
+
 
     const weekStartDay = daysOfWeek?.[0] || "MON";
 
@@ -223,9 +214,7 @@ isActive: true,
       isActive
     };
 
-    /////////////////////////////////////////////////////
-    // 🔥 6. RULE HANDLING
-    /////////////////////////////////////////////////////
+    // RULE HANDLING
 
     if (ruleType === "SLAB") {
       programData.slabs = {
@@ -265,9 +254,8 @@ isActive: true,
       }
     }
 
-    /////////////////////////////////////////////////////
-    // 🔥 7. CREATE
-    /////////////////////////////////////////////////////
+    // CREATE
+    
 
     const program = await prisma.program.create({
       data: programData
@@ -293,79 +281,215 @@ isActive: true,
 
 // UPDATE DAILY INCENTIVE
 exports.updateDailyIncentive = async (req, res) => {
-    try {
-        const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-        const updated = await prisma.program.update({
-            where: { id },
-            data: req.body
-        });
+    const updated = await prisma.program.update({
+      where: { id },
+      data: req.body
+    });
 
-        return res.json({
-            success: true,
-            message: "Daily incentive updated",
-            data: updated
-        });
-    } catch (error) {
-        console.error("UPDATE ERROR:", error);
-        res.status(500).json({ success: false, message: "Server error" });
-    }
+    return res.json({
+      success: true,
+      message: "Daily incentive updated",
+      data: updated
+    });
+  } catch (error) {
+    console.error("UPDATE ERROR:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
 };
 
 // GET ALL DAILY INCENTIVES
+
 exports.getAllDailyIncentives = async (req, res) => {
-    try {
-        const programs = await prisma.program.findMany({
-            where: {
-                programType: "INCENTIVE",
-                trackingType: "DAILY"
-            },
-            select: {
-                id: true,
-                name: true,
-                ruleType: true,
-                isActive: true
-            },
-            orderBy: { createdAt: "desc" }
-        });
+  try {
+    const programs = await prisma.program.findMany({
+      where: {
+        programType: "INCENTIVE",
+        trackingType: "DAILY",
 
-        res.json({
-            success: true,
-            data: programs
-        });
-    } catch (error) {
-        console.error("GET ALL ERROR:", error);
-        res.status(500).json({ success: false, message: "Server error" });
-    }
+        //  EXCLUDE PEAK SLOT PROGRAMS
+        slots: {
+          none: {}
+        }
+      },
+      select: {
+        id: true,
+        name: true,
+        ruleType: true,
+        isActive: true
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    res.json({
+      success: true,
+      data: programs
+    });
+
+  } catch (error) {
+    console.error("GET ALL ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
 };
-
 // GET DAILY INCENTIVE DETAILS
 exports.getDailyIncentiveById = async (req, res) => {
-    try {
-        const { id } = req.params;
+  try {
+    const { id } = req.params;
 
-        const program = await prisma.program.findUnique({
-            where: { id },
-            include: {
-                slabs: true,
-                rules: true,
-                targets: true
-            }
-        });
+    const program = await prisma.program.findFirst({
+      where: {
+        id,
+        programType: "INCENTIVE",
+        trackingType: "DAILY",
 
-        if (!program) {
-            return res.status(404).json({
-                success: false,
-                message: "Incentive not found"
-            });
-        }
+        //exclude peak slots
+        slots: { none: {} }
+      },
+      include: {
+        slabs: true,
+        rules: true,
+        targets: true
+      }
+    });
 
-        res.json({
-            success: true,
-            data: program
-        });
-    } catch (error) {
-        console.error("GET ONE ERROR:", error);
-        res.status(500).json({ success: false, message: "Server error" });
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        message: "Daily incentive not found"
+      });
     }
+    const formatDate = (date) =>
+      date ? date.toISOString().split("T")[0] : null;
+    // FORMAT RESPONSE
+    
+
+    const response = {
+      id: program.id,
+      name: program.name,
+      type: "DAILY",
+      cityId: program.cityId?.[0] || null,
+      pincodeIds: program.pincodeIds || [],
+
+      dateRange: {
+        startDate: formatDate(program.validFrom),
+        endDate: formatDate(program.validTill)
+      },
+
+      ruleType: program.ruleType,
+      isActive: program.isActive
+    };
+    if (program.maxPayoutPerDay != null) {
+      response.maxPayoutPerDay = program.maxPayoutPerDay;
+    }
+
+    // SLAB
+  
+    if (program.ruleType === "SLAB") {
+      response.slabs = program.slabs.map(s => ({
+        minOrders: s.minValue,
+        maxOrders: s.maxValue,
+        rewardAmount: s.rewardAmount
+      }));
+    }
+
+    // FIXED TARGET
+ 
+    if (program.ruleType === "FIXED_TARGET") {
+      response.target = {
+        orders: program.targets?.[0]?.targetOrders || null
+      };
+
+      response.reward = {
+        amount: program.targets?.[0]?.rewardAmount || null
+      };
+    }
+
+    // HYBRID
+   
+    if (program.ruleType === "HYBRID") {
+      response.conditions = {
+        minOrders: program.rules?.[0]?.minOrders || null,
+        minEarnings: program.rules?.[0]?.minEarnings || null,
+        minAcceptanceRate: program.minAcceptanceRate || null,
+        minCompletionRate: program.minCompletionRate || null
+      };
+
+      response.reward = {
+        amount: program.targets?.[0]?.rewardAmount || null
+      };
+    }
+
+    return res.json({
+      success: true,
+      data: response
+    });
+
+  } catch (error) {
+    console.error("GET ONE ERROR:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
+};
+
+exports.deleteDailyIncentive = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // 1. Fetch program
+    const program = await prisma.program.findUnique({
+      where: { id }
+    });
+
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        message: "Program not found"
+      });
+    }
+
+    const now = new Date();
+
+    // Start of today (00:00)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    // Start of tomorrow (00:00)
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+
+    /**
+     * RULE:
+     * Allow delete ONLY if program is for future (>= tomorrow)
+     */
+    if (program.validFrom < startOfTomorrow) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete today's or past incentives"
+      });
+    }
+
+    // 2. Delete
+    await prisma.program.delete({
+      where: { id }
+    });
+
+    return res.json({
+      success: true,
+      message: "Daily incentive deleted successfully"
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete daily incentive"
+    });
+  }
 };
