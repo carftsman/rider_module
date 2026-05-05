@@ -21,6 +21,7 @@ const webIncentiveRoutes = require("./routes/order.routes");
 const riderIncentiveProgressRoutes = require("./routes/riderIncentiveProgress.routes");
 const kitRoutes = require("./routes/kitSelectionRoutes");
 const internalIncentiveRoutes = require("./routes/internalIncentive.routes");
+const adminPayoutConfigRoutes = require("./routes/adminPayoutConfig.routes");
 
 // const webRiderRoutes = require("./routes/rider.routes");
  
@@ -50,6 +51,7 @@ const riderDailyIncentiveRoutes = require("./routes/riderDailyIncentive.routes")
 const riderReferralRoutes = require("./routes/riderReferralRoutes");
 const joiningBonusRouter = require("./routes/adminJoiningBonusRoutes")
 const riderJoiningBonusRouter = require("./routes/riderJoiningBonusRoutes")
+const bannerRouter = require("./routes/bannerRoutes")
 
 const riderRatingRouter= require("./routes/riderRatingRoutes")
 const app = express();
@@ -59,7 +61,6 @@ const app = express();
 const peakSlot=require("./routes/peakSlotRoutes")
 const getPeakSlotProgresses=require("./routes/getPeakSlotProgressRoutes")
 
-const getPeakSlotIncentive=require("./routes/getRiderIncentiveRoutes")
  
 const adminZoneRoutes=require('./routes/adminZoneRoutes');
 
@@ -151,6 +152,7 @@ app.use("/api/status", todayRiderOnlineRoutes);
 app.use("/api/refer", adminReferralRoutes);
 
 app.use("/api/admin/incentive", adminDailyIncentiveRoutes);
+app.use("/api", adminPayoutConfigRoutes);
 
 app.use("/api", riderDailyIncentiveRoutes);
 app.use("/api/refer/rider", adminReferralRoutes);
@@ -169,8 +171,8 @@ app.use("/api/rider",riderRatingRouter)
 app.use("/admin/incentives",peakSlot)
 
 app.use("/rider",getPeakSlotProgresses)
+app.use("/api/banner",bannerRouter)
 
-app.use("/api/rider/incentives-new",getPeakSlotIncentive)
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");
 });

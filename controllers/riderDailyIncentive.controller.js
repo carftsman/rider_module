@@ -4,8 +4,6 @@ const getDailyIncentive = async (req, res) => {
   try {
     const riderId = req.rider?.id;
 
-    // console.log("RiderId:", riderId);
-
     if (!riderId) {
       return res.status(400).json({
         message: "Rider ID missing in token",
@@ -24,14 +22,12 @@ const getDailyIncentive = async (req, res) => {
       where: {
         programType: "INCENTIVE",
         trackingType: "DAILY",
-ruleType: {
-  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-},
-isActive: true,
+        ruleType: {
+          in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+        },
+        isActive: true,
       },
     });
-
-    console.log(" Program:", program?.id);
 
     if (!program) {
       return res.json({
@@ -99,9 +95,8 @@ const getRiderDailyPrograms = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    /////////////////////////////////////////////////////
-    // 1️⃣ GET RIDER LOCATION
-    /////////////////////////////////////////////////////
+    // GET RIDER LOCATION
+
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId }
     });
@@ -110,9 +105,8 @@ const getRiderDailyPrograms = async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    /////////////////////////////////////////////////////
-    // 2️⃣ PREPARE VARIABLES
-    /////////////////////////////////////////////////////
+    // PREPARE VARIABLES
+
     const riderPincode = riderLocation.pincode
       ? String(riderLocation.pincode).trim()
       : null;
@@ -120,25 +114,19 @@ const getRiderDailyPrograms = async (req, res) => {
     const riderCityId = riderLocation.cityId || null;
 
     const now = new Date();
+    /// FETCH PROGRAMS (PINCODE FIRST)
 
-    console.log("riderPincode:", riderPincode);
-    console.log("riderCityId:", riderCityId);
-    console.log("now:", now);
-
-    /////////////////////////////////////////////////////
-    // 3️⃣ FETCH PROGRAMS (PINCODE FIRST)
-    /////////////////////////////////////////////////////
     let programs = [];
 
     if (riderPincode) {
       programs = await prisma.program.findMany({
         where: {
           programType: "INCENTIVE",
-         trackingType: "DAILY",
-ruleType: {
-  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-},
-isActive: true,
+          trackingType: "DAILY",
+          ruleType: {
+            in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+          },
+          isActive: true,
           validFrom: { lte: now },
           validTill: { gte: now },
           pincodeIds: { has: riderPincode }
@@ -152,18 +140,16 @@ isActive: true,
       });
     }
 
-    /////////////////////////////////////////////////////
-    // 4️⃣ FALLBACK TO CITY
-    /////////////////////////////////////////////////////
+    // FALLBACK TO CITY
     if (!programs.length && riderCityId) {
       programs = await prisma.program.findMany({
         where: {
           programType: "INCENTIVE",
-         trackingType: "DAILY",
-ruleType: {
-  in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-},
-isActive: true,
+          trackingType: "DAILY",
+          ruleType: {
+            in: ["SLAB", "FIXED_TARGET", "HYBRID"]
+          },
+          isActive: true,
           validFrom: { lte: now },
           validTill: { gte: now },
           cityId: { has: riderCityId }
@@ -177,103 +163,89 @@ isActive: true,
       });
     }
 
-    console.log("RAW PROGRAMS:", programs);
-
-    /////////////////////////////////////////////////////
-    // 5️⃣ FILTER VALID RULE TYPES
-    /////////////////////////////////////////////////////
+    //  FILTER VALID RULE TYPES
     programs = programs.filter(p =>
       ["SLAB", "FIXED_TARGET", "HYBRID", "PER_ORDER"].includes(p.ruleType)
     );
 
 
-/////////////////////////////////////////////////////
-// 6️⃣ FORMAT RESPONSE (ADMIN STYLE)
-/////////////////////////////////////////////////////
-const response = programs.map((p) => {
+    // FORMAT RESPONSE (ADMIN STYLE)
 
-  /////////////////////////////////////////////////////
-  // MAX PAYOUT FIX
-  /////////////////////////////////////////////////////
-  let maxPayoutPerDay = p.maxPayoutPerDay;
+    const response = programs.map((p) => {
 
-  if (maxPayoutPerDay === null) {
+      let maxPayoutPerDay = p.maxPayoutPerDay;
 
-    if (p.ruleType === "SLAB" && p.slabs?.length) {
-      maxPayoutPerDay = Math.max(...p.slabs.map(s => s.rewardAmount));
-    }
+      if (maxPayoutPerDay === null) {
 
-    else if (["FIXED_TARGET", "HYBRID"].includes(p.ruleType) && p.targets?.[0]) {
-      maxPayoutPerDay = p.targets[0].rewardAmount;
-    }
-  }
+        if (p.ruleType === "SLAB" && p.slabs?.length) {
+          maxPayoutPerDay = Math.max(...p.slabs.map(s => s.rewardAmount));
+        }
 
-  /////////////////////////////////////////////////////
-  // BASE RESULT
-  /////////////////////////////////////////////////////
-  const result = {
-    name: p.name,
+        else if (["FIXED_TARGET", "HYBRID"].includes(p.ruleType) && p.targets?.[0]) {
+          maxPayoutPerDay = p.targets[0].rewardAmount;
+        }
+      }
 
-    cityId: p.cityId?.[0] || null,
 
-    dateRange: {
-      startDate: p.validFrom,
-      endDate: p.validTill
-    },
+      const result = {
+        name: p.name,
 
-    ruleType: p.ruleType,
+        cityId: p.cityId?.[0] || null,
 
-    maxPayoutPerDay,
+        dateRange: {
+          startDate: p.validFrom,
+          endDate: p.validTill
+        },
 
-    isActive: p.isActive
-  };
+        ruleType: p.ruleType,
 
-  ////////////////////////////////////////////////
-  // SLAB
-  ////////////////////////////////////////////////
-  if (p.ruleType === "SLAB" && p.slabs?.length) {
-    result.slabs = p.slabs.map(s => ({
-      minOrders: s.minValue,
-      maxOrders: s.maxValue,
-      rewardAmount: s.rewardAmount
-    }));
-  }
+        maxPayoutPerDay,
 
-  ////////////////////////////////////////////////
-  // FIXED TARGET
-  ////////////////////////////////////////////////
-  if (p.ruleType === "FIXED_TARGET") {
-    result.target = {
-      orders: p.targets?.[0]?.targetOrders || null
-    };
+        isActive: p.isActive
+      };
 
-    result.reward = {
-      amount: p.targets?.[0]?.rewardAmount || null
-    };
-  }
+      // SLAB
 
-  ////////////////////////////////////////////////
-  // HYBRID
-  ////////////////////////////////////////////////
-  if (p.ruleType === "HYBRID") {
-    result.conditions = {
-      minOrders: p.rules?.[0]?.minOrders || null,
-      minEarnings: p.rules?.[0]?.minEarnings || null,
-      minAcceptanceRate: p.minAcceptanceRate || null,
-      minCompletionRate: p.minCompletionRate || null
-    };
+      if (p.ruleType === "SLAB" && p.slabs?.length) {
+        result.slabs = p.slabs.map(s => ({
+          minOrders: s.minValue,
+          maxOrders: s.maxValue,
+          rewardAmount: s.rewardAmount
+        }));
+      }
 
-    result.reward = {
-      amount: p.targets?.[0]?.rewardAmount || null
-    };
-  }
+      // FIXED TARGET
 
-  return result; // ✅ NOW correct place
-});
+      if (p.ruleType === "FIXED_TARGET") {
+        result.target = {
+          orders: p.targets?.[0]?.targetOrders || null
+        };
 
-    /////////////////////////////////////////////////////
-    // 7️⃣ RESPONSE
-    /////////////////////////////////////////////////////
+        result.reward = {
+          amount: p.targets?.[0]?.rewardAmount || null
+        };
+      }
+
+      // HYBRID
+
+      if (p.ruleType === "HYBRID") {
+        result.conditions = {
+          minOrders: p.rules?.[0]?.minOrders || null,
+          minEarnings: p.rules?.[0]?.minEarnings || null,
+          minAcceptanceRate: p.minAcceptanceRate || null,
+          minCompletionRate: p.minCompletionRate || null
+        };
+
+        result.reward = {
+          amount: p.targets?.[0]?.rewardAmount || null
+        };
+      }
+
+      return result;
+    });
+
+    // RESPONSE
+
     return res.json({
       success: true,
       data: response

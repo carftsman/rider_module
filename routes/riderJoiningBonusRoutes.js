@@ -8,31 +8,124 @@ const riderJoiningBonusRouter = express.Router();
  * @swagger
  * /api/rider/joining/bonus/programs:
  *   get:
- *     summary: Get available joining bonus programs for rider
- *     tags: [Rider Joining Bonus]
+ *     tags:
+ *       - Rider Joining Bonus
  *     security:
  *       - bearerAuth: []
+ *     summary: Get available programs for rider
+ *     description: >
+ *       Fetches all active JOINING_BONUS programs available for the logged-in rider.
+ *       
+ *       Logic:
+ *       - Filters only active programs
+ *       - Filters based on current date (validFrom - validTill)
+ *       - Filters based on rider's city & pincode
+ *       - Returns only preview of tasks (first 2 tasks)
+ *       - Includes enrollment status if rider already joined
+ *
  *     responses:
+ *
  *       200:
- *         description: Programs fetched successfully
+ *         description: Available programs fetched successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *
  *                 success:
  *                   type: boolean
+ *                   example: true
+ *
  *                 count:
- *                   type: integer
+ *                   type: number
+ *                   example: 2
+ *
  *                 data:
  *                   type: array
  *                   items:
  *                     type: object
+ *                     properties:
+ *
+ *                       id:
+ *                         type: string
+ *                         example: PROG12345
+ *
+ *                       name:
+ *                         type: string
+ *                         example: Joining Bonus Program
+ *
+ *                       validityDays:
+ *                         type: number
+ *                         example: 7
+ *
+ *                       rewardPreview:
+ *                         type: number
+ *                         example: 300
+ *
+ *                       isEnrolled:
+ *                         type: boolean
+ *                         example: true
+ *
+ *                       enrollmentStatus:
+ *                         type: string
+ *                         example: ACTIVE
+ *
+ *                       tasksPreview:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *
+ *                             id:
+ *                               type: string
+ *                               example: TASK123
+ *
+ *                             dayNumber:
+ *                               type: number
+ *                               example: 1
+ *
+ *                             taskType:
+ *                               type: string
+ *                               example: ORDERS
+ *
+ *                             rewardAmount:
+ *                               type: number
+ *                               example: 100
+ *
  *       400:
- *         description: Location not set
+ *         description: Rider location not set
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Rider location not set
+ *
  *       500:
- *         description: Server error
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Server error
  */
+
 riderJoiningBonusRouter.get("/programs", riderAuthMiddleWare,getAvailablePrograms);
 
 /**

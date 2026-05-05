@@ -9,13 +9,128 @@ function toMinutes(time) {
 const createPerOrderPeakSlot = async (req, res) => {
   try {
     const body = req.body;
+
+
+if (!body.cityName) {
+  return res.status(400).json({
+    success: false,
+    message: "cityName is required",
+  });
+}
+
+const city = await prisma.city.findFirst({
+  where: {
+    name: {
+      equals: body.cityName,
+      mode: "insensitive",
+    },
+  },
+});
+
+if (!city) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid cityName",
+  });
+}
  
+if (!body.name) {
+  return res.status(400).json({
+    success: false,
+    message: "Name is required",
+  });
+}
+
+if (!body.dateRange?.startDate || !body.dateRange?.endDate) {
+  return res.status(400).json({
+    success: false,
+    message: "dateRange is required",
+  });
+}
+
+if (!Array.isArray(body.slots) || body.slots.length === 0) {
+  return res.status(400).json({
+    success: false,
+    message: "Slots are required",
+  });
+}
+
+for (const slot of body.slots) {
+  const startMin = toMinutes(slot.startTime);
+  const endMin = toMinutes(slot.endTime);
+
+  if (startMin >= endMin) {
+    return res.status(400).json({
+      success: false,
+      message: "Invalid slot time (start must be before end)",
+    });
+  }
+
+  if (!slot.reward?.amount) {
+    return res.status(400).json({
+      success: false,
+      message: "Reward amount is required",
+    });
+  }
+}
+
     const start = new Date(body.dateRange.startDate);
     const end = new Date(body.dateRange.endDate);
  
 const pincodeIds = Array.isArray(body.pincodeIds)
   ? body.pincodeIds.map(String)
   : [String(body.pincodeIds)];
+
+  const existingPrograms = await prisma.program.findMany({
+  where: {
+    pincodeIds: {
+  equals: pincodeIds,
+},
+    isActive: true,
+    validFrom: {
+      lte: end,
+    },
+    validTill: {
+      gte: start,
+    },
+  },
+  include: {
+    slots: true,
+  },
+});
+
+const conflict = existingPrograms.some(program =>
+  program.slots.some(existingSlot =>
+    body.slots.some(newSlot => {
+
+      const newStart = toMinutes(newSlot.startTime);
+      const newEnd = toMinutes(newSlot.endTime);
+
+      const existingStart = existingSlot.startMinutes;
+      const existingEnd = existingSlot.endMinutes;
+
+      const timeOverlap =
+        newStart < existingEnd &&
+        newEnd > existingStart;
+
+      const existingDays = existingSlot.daysOfWeek || [];
+      const newDays = newSlot.daysOfWeek || [];
+
+      const dayOverlap = existingDays.some(day =>
+        newDays.includes(day)
+      );
+
+      return timeOverlap && dayOverlap;
+    })
+  )
+);
+
+if (conflict) {
+  return res.status(400).json({
+    success: false,
+    message: "Slot already exists for this time range and pincode",
+  });
+}
  
 const program = await prisma.program.create({
   data: {
@@ -28,8 +143,7 @@ const program = await prisma.program.create({
     validTill: end,
  
     // ✅ FIXED
-    cityId: body.cityId ? [String(body.cityId)] : [],
- 
+cityId: [String(city.id)], 
     pincodeIds,
  
     isActive: body.isActive ?? true,
@@ -138,6 +252,63 @@ const createSlabPeakSlot = async (req, res) => {
       }
     }
  
+      
+
+const start = new Date(body.dateRange.startDate);
+const end = new Date(body.dateRange.endDate);
+
+const existingPrograms = await prisma.program.findMany({
+  where: {
+    pincodeIds: {
+      hasSome: pincodeIds, // better than equals
+    },
+    isActive: true,
+    validFrom: {
+      lte: end,
+    },
+    validTill: {
+      gte: start,
+    },
+  },
+  include: {
+    slots: true,
+  },
+});
+
+// 🔥 CONFLICT CHECK
+const conflict = existingPrograms.some(program =>
+  program.slots.some(existingSlot =>
+    body.slots.some(newSlot => {
+
+      const newStart = toMinutes(newSlot.startTime);
+      const newEnd = toMinutes(newSlot.endTime);
+
+      const existingStart = existingSlot.startMinutes;
+      const existingEnd = existingSlot.endMinutes;
+
+      const timeOverlap =
+        newStart < existingEnd &&
+        newEnd > existingStart;
+
+      const existingDays = existingSlot.daysOfWeek || [];
+      const newDays = newSlot.daysOfWeek || [];
+
+      const dayOverlap = existingDays.some(day =>
+        newDays.includes(day)
+      );
+
+      return timeOverlap && dayOverlap;
+    })
+  )
+);
+
+if (conflict) {
+  return res.status(400).json({
+    success: false,
+    message: "Slot already exists for this time range and pincode",
+  });
+}
+
     // 5. Create program
     const program = await prisma.program.create({
       data: {
@@ -208,7 +379,7 @@ const getAllPeakSlots = async (req, res) => {
         programType: "INCENTIVE"
       },
       include: {
-        slots: true   // ✅ FIXED (matches schema)
+        slots: true   
       },
       orderBy: {
         createdAt: "desc"

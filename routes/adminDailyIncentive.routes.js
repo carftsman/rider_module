@@ -182,4 +182,54 @@ router.get("/daily", controller.getAllDailyIncentives);
  */
 router.get("/daily/:id", controller.getDailyIncentiveById);
 
+
+/**
+ * @swagger
+ * /api/admin/incentive/daily/{id}:
+ *   delete:
+ *     summary: Delete a daily incentive (Admin only)
+ *     description: >
+ *       Allows admin to delete a daily incentive program **only if it is scheduled for future (next day or later)**.
+ *       Deletion of today's or past incentives is not allowed.
+ *     tags: [Admin Daily Incentives]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Incentive program ID
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Daily incentive deleted successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Daily incentive deleted successfully
+ *       400:
+ *         description: Cannot delete today's or past incentives
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Cannot delete today's or past incentives
+ *       404:
+ *         description: Program not found
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Program not found
+ *       500:
+ *         description: Server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Failed to delete daily incentive
+ */
+router.delete("/daily/:id", controller.deleteDailyIncentive);
+
+
 module.exports = router;

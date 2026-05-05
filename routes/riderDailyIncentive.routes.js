@@ -13,7 +13,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  * /api/rider/program/daily/progress:
  *   get:
  *     summary: Get daily incentive for logged-in rider
- *     tags: [Rider Incentives]
+ *     tags: [Rider Daily Incentives]
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -31,7 +31,7 @@ router.get("/rider/program/daily/progress", riderAuthMiddleWare, getDailyIncenti
  *   get:
  *     summary: Get daily incentives for logged-in rider
  *     description: Returns active daily incentive programs based on rider location (pincode and city).
- *     tags: [Rider Incentives]
+ *     tags: [Rider Daily Incentives]
  *     security:
  *       - bearerAuth: []
  *
