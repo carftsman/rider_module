@@ -275,8 +275,236 @@ const getPayoutConfigHistory = async (req, res) => {
   }
 };
 
+
+const updateBasePay = async (req, res) => {
+  try {
+   const id = req.body.id || req.body.configId;
+const basePay = req.body.basePay;
+const reason = req.body.reason;
+
+    console.log("BODY:", req.body);
+
+    console.log("REQ BODY TYPE:", typeof req.body);
+
+console.log("ID:", req.body?.id);
+console.log("BASEPAY:", req.body?.basePay);
+
+    if (!id || basePay === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "id and basePay are required",
+      });
+    }
+
+    const newBasePay = Number(basePay);
+
+    if (isNaN(newBasePay)) {
+      return res.status(400).json({
+        success: false,
+        message: "basePay must be a valid number",
+      });
+    }
+
+    // 1. check existing config
+    const existingConfig = await prisma.payoutConfig.findUnique({
+      where: { id },
+    });
+
+    if (!existingConfig) {
+      return res.status(404).json({
+        success: false,
+        message: "Payout config not found",
+      });
+    }
+
+    if (!existingConfig.isActive) {
+  return res.status(403).json({
+    success: false,
+    message: "Cannot update inactive payout config",
+  });
+}
+
+    const oldValue = existingConfig.basePay;
+
+    // 2. update ONLY basePay
+    const updatedConfig = await prisma.payoutConfig.update({
+      where: { id },
+      data: {
+        basePay: newBasePay,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Base pay updated successfully",
+      data: {
+        id: updatedConfig.id,
+        updatedField: "basePay",
+        oldValue,
+        newValue: updatedConfig.basePay,
+        reason: reason || null,
+      },
+    });
+  } catch (error) {
+    console.error("🔥 Prisma Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+
+
+
+
+
+const updateDistancePay = async (req, res) => {
+  try {
+    const cityId = req.body.cityId;
+    const perKmRate = req.body.perKmRate;
+
+    console.log("BODY:", req.body);
+
+    // 1. Validation
+    if (!cityId || perKmRate === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "cityId and perKmRate are required",
+      });
+    }
+
+    const newRate = Number(perKmRate);
+
+    if (isNaN(newRate)) {
+      return res.status(400).json({
+        success: false,
+        message: "perKmRate must be a valid number",
+      });
+    }
+
+    // 2. Find config by cityId
+   const existingConfig = await prisma.payoutConfig.findFirst({
+  where: {
+    cityId,
+    isActive: true
+  },
+});
+
+    if (!existingConfig) {
+      return res.status(404).json({
+        success: false,
+        message: "Payout config not found for this city",
+      });
+    }
+
+    const oldValue = existingConfig.perKmRate;
+
+    // 3. Update ONLY perKmRate
+    const updatedConfig = await prisma.payoutConfig.update({
+      where: { id: existingConfig.id },
+      data: {
+        perKmRate: newRate,
+        version: existingConfig.version + 1,
+      },
+    });
+
+    // 4. Response
+    return res.status(200).json({
+      success: true,
+      message: "Distance pay updated",
+      data: {
+        cityId: updatedConfig.id,
+        version: updatedConfig.version,
+        updatedField: "perKmRate",
+        oldValue,
+        newValue: updatedConfig.perKmRate,
+      },
+    });
+  } catch (error) {
+    console.error("🔥 Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+
+
+const updateSurgeConfig = async (req, res) => {
+  try {
+    const cityId = req.body.cityId;
+    const surgeConfig = req.body.surgeConfig;
+
+    console.log("BODY:", req.body);
+
+    // 1. Validation
+    if (!cityId || !surgeConfig) {
+      return res.status(400).json({
+        success: false,
+        message: "cityId and surgeConfig are required",
+      });
+    }
+
+    // 2. Find active config for city
+    const existingConfig = await prisma.payoutConfig.findFirst({
+      where: {
+        cityId,
+        isActive: true,
+      },
+    });
+
+    if (!existingConfig) {
+      return res.status(404).json({
+        success: false,
+        message: "Payout config not found for this city",
+      });
+    }
+
+    const oldValue = existingConfig.surgeConfig;
+
+    // 3. Update only surgeConfig
+    const updatedConfig = await prisma.payoutConfig.update({
+      where: { id: existingConfig.id },
+      data: {
+        surgeConfig,
+        version: existingConfig.version + 1,
+      },
+    });
+
+    // 4. Response
+    return res.status(200).json({
+      success: true,
+      message: "Surge config updated",
+      data: {
+        configId: updatedConfig.id,
+        version: updatedConfig.version,
+        updatedField: "surgeConfig",
+        oldValue,
+        newValue: updatedConfig.surgeConfig,
+      },
+    });
+
+  } catch (error) {
+    console.error("🔥 Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 module.exports = {
     createPayoutConfig,
     getActivePayoutConfig,
-    getPayoutConfigHistory
+    getPayoutConfigHistory,
+    updateBasePay,
+    updateSurgeConfig,
+    updateDistancePay
 };
