@@ -1,26 +1,49 @@
 const express = require("express");
 const router = express.Router();
-const{getReferralProgress,getReferralRewards,getReferralCampaign,shareReferralByCode,referRider,getMyReferralSummary}=require('../controllers/riderReferralController')
+const{getReferralProgress,getReferralRewards,getReferralCampaign,shareReferralByCode,referRider,getMyReferralSummary,
+  getReferralProgressByNewRider
+}=require('../controllers/riderReferralController')
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 /**
  * @swagger
- * /api/refer/rider/{riderId}/referrals:
+ * /api/refer/rider/all/referrals:
  *   get:
- *     summary: Get rider referral progress
- *     description: >
- *       Fetch referral progress for a rider using riderId.
- *       Shows referred riders, completed order count, target status,
- *       reward amount, and total referral earnings.
- *     tags:
- *       - Rider Referral
+ *     summary: Get referral progress for logged-in rider
+ *     tags: [Referral]
+ *     description: |
+ *       Fetch referral progress including:
+ *       - Active referral program details
+ *       - Referred riders list
+ *       - Order completion status
+ *       - Earnings summary
+ *       - Optional filtering by status and date
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
  *     parameters:
- *       - in: path
- *         name: riderId
- *         required: true
+ *       - in: query
+ *         name: status
  *         schema:
  *           type: string
- *           example: "r1"
- *         description: Rider ID of the referrer
+ *           enum: [all, pending, completed]
+ *           default: all
+ *         description: Filter referrals by target status
+ *
+ *       - in: query
+ *         name: fromDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter referred riders created from this date (YYYY-MM-DD)
+ *
+ *       - in: query
+ *         name: toDate
+ *         schema:
+ *           type: string
+ *           format: date
+ *         description: Filter referred riders created till this date (YYYY-MM-DD)
+ *
  *     responses:
  *       200:
  *         description: Referral progress fetched successfully
@@ -32,37 +55,77 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                 success:
  *                   type: boolean
  *                   example: true
+ *
  *                 message:
  *                   type: string
  *                   example: Referral progress fetched successfully
+ *
+ *                 filters:
+ *                   type: object
+ *                   properties:
+ *                     status:
+ *                       type: string
+ *                       example: all
+ *                     fromDate:
+ *                       type: string
+ *                       nullable: true
+ *                       example: "2026-05-01"
+ *                     toDate:
+ *                       type: string
+ *                       nullable: true
+ *                       example: "2026-05-05"
+ *
+ *                 program:
+ *                   type: object
+ *                   properties:
+ *                     programId:
+ *                       type: string
+ *                       example: "uuid"
+ *                     programName:
+ *                       type: string
+ *                       example: "Refer & Earn May Campaign"
+ *                     validFrom:
+ *                       type: string
+ *                       format: date-time
+ *                     validTill:
+ *                       type: string
+ *                       format: date-time
+ *
  *                 referrer:
  *                   type: object
  *                   properties:
  *                     riderId:
  *                       type: string
- *                       example: "r1"
+ *                       example: "rider-uuid"
  *                     partnerId:
  *                       type: string
  *                       example: "P1001"
  *                     name:
  *                       type: string
- *                       nullable: true
  *                       example: "Ramu Kumar"
+ *
  *                 summary:
  *                   type: object
  *                   properties:
- *                     totalRidersOnboarded:
- *                       type: integer
- *                       example: 2
- *                     targetReachedRiders:
- *                       type: integer
- *                       example: 1
- *                     targetPendingRiders:
- *                       type: integer
- *                       example: 1
- *                     totalEarnings:
+ *                     referralAmountPerRider:
  *                       type: number
  *                       example: 500
+ *                     targetOrdersPerRider:
+ *                       type: number
+ *                       example: 10
+ *                     totalRidersOnboarded:
+ *                       type: number
+ *                       example: 5
+ *                     targetReachedRiders:
+ *                       type: number
+ *                       example: 2
+ *                     targetPendingRiders:
+ *                       type: number
+ *                       example: 3
+ *                     totalEarnings:
+ *                       type: number
+ *                       example: 1000
+ *
  *                 referredRiders:
  *                   type: array
  *                   items:
@@ -70,69 +133,87 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                     properties:
  *                       newRiderId:
  *                         type: string
- *                         example: "51820218-8472-49b8-a158-632f85063bdc"
  *                       newRiderName:
  *                         type: string
  *                         nullable: true
- *                         example: "Suresh Kumar"
  *                       newRiderPartnerId:
  *                         type: string
  *                         nullable: true
- *                         example: "PID960488"
  *                       usedReferralCode:
  *                         type: string
- *                         example: "P1001"
+ *
+ *                       referredAt:
+ *                         type: string
+ *                         format: date-time
+ *                       referredDate:
+ *                         type: string
+ *                         example: "2026-05-05"
+ *                       referredAtIST:
+ *                         type: string
+ *                         example: "05/05/2026, 11:30:00 AM"
+ *
  *                       ordersCompleted:
- *                         type: integer
- *                         example: 10
+ *                         type: number
+ *                         example: 6
  *                       targetOrders:
- *                         type: integer
+ *                         type: number
  *                         example: 10
+ *
  *                       targetStatus:
  *                         type: string
- *                         enum:
- *                           - TARGET_REACHED
- *                           - TARGET_PENDING
- *                         example: TARGET_REACHED
+ *                         enum: [TARGET_REACHED, TARGET_PENDING]
+ *
  *                       remainingOrders:
- *                         type: integer
- *                         example: 0
+ *                         type: number
+ *                         example: 4
+ *
  *                       rewardAmount:
  *                         type: number
  *                         example: 500
  *                       rewardEarned:
  *                         type: number
- *                         example: 500
+ *                         example: 0
+ *
  *       400:
- *         description: Rider does not have partnerId
+ *         description: Invalid configuration or missing partnerId
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Rider does not have partnerId
+ *             example:
+ *               success: false
+ *               message: Referral program targetOrders or rewardAmount not configured properly
+ *
+ *       401:
+ *         description: Unauthorized rider
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Unauthorized rider
+ *
  *       404:
- *         description: Rider not found
+ *         description: Rider or program not found
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Rider not found
+ *             examples:
+ *               riderNotFound:
+ *                 value:
+ *                   success: false
+ *                   message: Rider not found
+ *               programNotFound:
+ *                 value:
+ *                   success: false
+ *                   message: No active referral program found
+ *
  *       500:
  *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Internal server error
+ *               error: Something went wrong
  */
-router.get("/rider/:riderId/referrals", getReferralProgress);
+router.get("/rider/all/referrals",riderAuthMiddleWare, getReferralProgress);
 router.get(
   "/rewards",
   riderAuthMiddleWare,
@@ -247,7 +328,7 @@ router.post("/share", riderAuthMiddleWare, shareReferralByCode);
  *     summary: Refer a new rider
  *     description: Existing logged-in rider can refer a new rider using their partnerId.
  *     tags:
- *       - Rider Referral
+ *       - [Referral]
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -464,5 +545,86 @@ router.post("/rider/refer", riderAuthMiddleWare, referRider);
  *               error: Something went wrong
  */
 router.get("/summary", riderAuthMiddleWare, getMyReferralSummary);
-
+/**
+ * @swagger
+ * /api/refer/referral/progress/{newRiderId}:
+ *   get:
+ *     summary: Get referral progress by new referred rider
+ *     tags: [Referral]
+ *     description: Fetch referral progress, active referral program details, completed orders, target status, and reward details for a specific referred rider.
+ *     parameters:
+ *       - in: path
+ *         name: newRiderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID of the newly referred rider
+ *         example: "51820218-8472-49b8-a158-632f85063bdc"
+ *     responses:
+ *       200:
+ *         description: New referred rider details fetched successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: New referred rider details fetched successfully
+ *               program:
+ *                 programId: "ddcffcd4-52dc-4ce6-a475-9ce79a61a5b8"
+ *                 programName: "Refer and Earn May Offer"
+ *                 validFrom: "2026-05-01T00:00:00.000Z"
+ *                 validTill: "2026-05-31T23:59:59.000Z"
+ *               data:
+ *                 newRiderId: "51820218-8472-49b8-a158-632f85063bdc"
+ *                 newRiderName: "Ramu Kumar"
+ *                 newRiderPartnerId: "PID960488"
+ *                 usedReferralCode: "P1001"
+ *                 referredAt: "2026-05-05T06:12:27.583Z"
+ *                 referredDate: "2026-05-05"
+ *                 referredAtIST: "5/5/2026, 11:42:27 am"
+ *                 ordersCompleted: 6
+ *                 targetOrders: 10
+ *                 targetStatus: TARGET_PENDING
+ *                 remainingOrders: 4
+ *                 rewardAmount: 500
+ *                 rewardEarned: 0
+ *       400:
+ *         description: Bad request
+ *         content:
+ *           application/json:
+ *             examples:
+ *               missingNewRiderId:
+ *                 value:
+ *                   success: false
+ *                   message: newRiderId is required
+ *               notReferred:
+ *                 value:
+ *                   success: false
+ *                   message: This rider was not referred by anyone
+ *               configError:
+ *                 value:
+ *                   success: false
+ *                   message: Referral program targetOrders or rewardAmount not configured properly
+ *       404:
+ *         description: Not found
+ *         content:
+ *           application/json:
+ *             examples:
+ *               programNotFound:
+ *                 value:
+ *                   success: false
+ *                   message: No active referral program found
+ *               riderNotFound:
+ *                 value:
+ *                   success: false
+ *                   message: Referred rider not found
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Internal server error
+ *               error: Something went wrong
+ */
+router.get("/referral/progress/:newRiderId", getReferralProgressByNewRider);
 module.exports=router;

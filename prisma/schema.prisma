@@ -2363,3 +2363,51 @@ model OrderChat {
 
   order Order @relation(fields: [orderId], references: [orderId])
 }
+
+model ProcessedOrder {
+  id        String   @id @default(uuid())
+  orderId   String   @unique
+  createdAt DateTime @default(now())
+}
+
+model PayoutConfig {
+  id String @id @default(uuid())
+
+  name         String
+  scenarioType String
+
+  cityId     String?
+  pincodeIds String[]
+
+  vehicleType VehicleType?
+
+  // core values
+  basePay   Float
+  perKmRate Float
+
+  // configs
+  surgeConfig   Json
+  weatherConfig Json?
+  peakConfig    Json?
+
+  // versioning
+  version  Int
+  isActive Boolean @default(true)
+
+  // new fields
+  applicableFrom DateTime?
+  applicableTill DateTime?
+
+  isDefault Boolean @default(false)
+
+  notes     String?
+  createdBy String?
+
+  meta Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([cityId, isActive])
+  @@index([scenarioType])
+}
