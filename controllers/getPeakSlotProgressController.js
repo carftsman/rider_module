@@ -72,4 +72,218 @@ function minutesToTime(mins) {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
-module.exports = { getPeakSlotProgress };
+const getRiderPeakSlotPrograms = async (req, res) => {
+  try {
+    const riderId = req.rider.id;
+
+    /////////////////////////////////////////////////////
+    // 1️⃣ GET RIDER LOCATION
+    /////////////////////////////////////////////////////
+    const riderLocation = await prisma.riderLocation.findUnique({
+      where: { riderId }
+    });
+
+    if (!riderLocation) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const riderPincode = riderLocation.pincode?.trim();
+    const riderCityId = riderLocation.cityId || null;
+
+    const now = new Date();
+
+    /////////////////////////////////////////////////////
+    // 2️⃣ FETCH PROGRAMS (PINCODE FIRST)
+    /////////////////////////////////////////////////////
+    let programs = [];
+
+    const baseQuery = {
+      programType: "INCENTIVE",
+      isActive: true,
+      validFrom: { lte: now },
+      validTill: { gte: now }
+    };
+
+    if (riderPincode) {
+      programs = await prisma.program.findMany({
+        where: {
+          ...baseQuery,
+          pincodeIds: { has: riderPincode }
+        },
+        include: {
+          slots: {
+            include: {
+              slabs: true
+            }
+          }
+        }
+      });
+    }
+
+    /////////////////////////////////////////////////////
+    // 3️⃣ FALLBACK TO CITY
+    /////////////////////////////////////////////////////
+    if (!programs.length && riderCityId) {
+      programs = await prisma.program.findMany({
+        where: {
+          ...baseQuery,
+          cityId: { has: riderCityId }
+        },
+        include: {
+          slots: {
+            include: {
+              slabs: true
+            }
+          }
+        }
+      });
+    }
+
+    /////////////////////////////////////////////////////
+    // 4️⃣ REMOVE DUPLICATES
+    /////////////////////////////////////////////////////
+    const uniquePrograms = Array.from(
+      new Map(programs.map(p => [p.id, p])).values()
+    );
+
+    /////////////////////////////////////////////////////
+    // 5️⃣ FETCH CITY NAMES (FROM cityId)
+    /////////////////////////////////////////////////////
+    const allCityIds = [
+      ...new Set(uniquePrograms.flatMap(p => p.cityId || []))
+    ];
+
+    const cities = await prisma.city.findMany({
+      where: { id: { in: allCityIds } },
+      select: { id: true, name: true }
+    });
+
+    const cityMap = {};
+    cities.forEach(c => {
+      cityMap[c.id] = c.name;
+    });
+
+    /////////////////////////////////////////////////////
+    // 6️⃣ FETCH PINCODE → CITY
+    /////////////////////////////////////////////////////
+    const allPincodes = [
+      ...new Set(uniquePrograms.flatMap(p => p.pincodeIds || []))
+    ];
+
+const pincodes = await prisma.pincode.findMany({
+  where: {
+    code: { in: allPincodes },
+    ...(riderCityId && { cityId: riderCityId }) //  ADD THIS
+  },
+  include: { city: true }
+});
+
+   const pincodeCityMap = {};
+
+for (const p of pincodes) {
+  // only assign if not already set
+  if (!pincodeCityMap[p.code]) {
+    pincodeCityMap[p.code] = p.city?.name || null;
+  }
+}
+
+    /////////////////////////////////////////////////////
+    // 7️⃣ FORMAT RESPONSE
+    /////////////////////////////////////////////////////
+    const response = uniquePrograms
+      .map(program => {
+        // filter only PER_ORDER + SLAB slots
+        const validSlots = program.slots.filter(slot =>
+          ["PER_ORDER", "SLAB"].includes(slot.ruleType)
+        );
+
+        if (!validSlots.length) return null;
+
+        /////////////////////////////////////////////////////
+        // CITY NAME LOGIC
+        /////////////////////////////////////////////////////
+        let cityName = null;
+
+        if (program.cityId?.length) {
+          cityName = cityMap[program.cityId[0]] || null;
+        } else if (program.pincodeIds?.length) {
+          cityName =
+            pincodeCityMap[program.pincodeIds[0]] || null;
+        }
+
+        return {
+          name: program.name,
+
+          cityName,
+
+          pincodeIds: program.pincodeIds || [],
+
+          dateRange: {
+            startDate: program.validFrom,
+            endDate: program.validTill
+          },
+
+          slots: validSlots.map(slot => {
+            const formattedSlot = {
+              startTime: minutesToTime(slot.startMinutes),
+              endTime: minutesToTime(slot.endMinutes),
+              daysOfWeek: slot.daysOfWeek,
+              ruleType: slot.ruleType
+            };
+
+            ////////////////////////////////////////////
+            // PER ORDER
+            ////////////////////////////////////////////
+            if (slot.ruleType === "PER_ORDER") {
+              formattedSlot.reward = {
+                amount: slot.rewardPerOrder || 0
+              };
+            }
+
+            ////////////////////////////////////////////
+            // SLAB
+            ////////////////////////////////////////////
+            if (slot.ruleType === "SLAB") {
+              formattedSlot.slabs = slot.slabs.map(s => ({
+                minOrders: s.minOrders,
+                maxOrders: s.maxOrders,
+                rewardAmount: s.rewardAmount
+              }));
+            }
+
+            return formattedSlot;
+          }),
+
+          isActive: program.isActive
+        };
+      })
+      .filter(Boolean);
+
+    /////////////////////////////////////////////////////
+    // 8️⃣ RESPONSE
+    /////////////////////////////////////////////////////
+    return res.json({
+      success: true,
+      data: response
+    });
+
+  } catch (error) {
+    console.error("Peak slot programs error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch peak slot programs"
+    });
+  }
+};
+
+/////////////////////////////////////////////////////
+// 🔧 HELPER
+/////////////////////////////////////////////////////
+// const minutesToTime = (minutes) => {
+//   const h = String(Math.floor(minutes / 60)).padStart(2, "0");
+//   const m = String(minutes % 60).padStart(2, "0");
+//   return `${h}:${m}`;
+// };
+
+module.exports = { getPeakSlotProgress, getRiderPeakSlotPrograms };

@@ -758,6 +758,7 @@ model Order {
 
   OrderSettlement OrderSettlement?
   totalWeight     Float?
+  chats           OrderChat[]
 
   @@index([orderStatus])
   @@index([riderId])
@@ -2081,7 +2082,7 @@ model ProgramTask {
   minEarnings       Float?
 
   rewardAmount          Float
-  taskType              TaskType @default(ORDERS)
+  taskType              TaskType              @default(ORDERS)
   program               Program               @relation(fields: [programId], references: [id], onDelete: Cascade)
   programTaskProgresses ProgramTaskProgress[]
 
@@ -2350,4 +2351,15 @@ enum TaskType {
   ACCEPTANCE_RATE
   PEAK_SLOTS
   EARNINGS
+}
+
+model OrderChat {
+  id         String   @id @default(cuid())
+  orderId    String
+  senderId   String
+  senderRole String // RIDER | CUSTOMER
+  message    String
+  createdAt  DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [orderId])
 }
