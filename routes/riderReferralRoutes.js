@@ -132,7 +132,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *       500:
  *         description: Internal server error
  */
-router.get("/rider/{riderId}/referrals", getReferralProgress);
+router.get("/rider/:riderId/referrals", getReferralProgress);
 router.get(
   "/rewards",
   riderAuthMiddleWare,
