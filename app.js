@@ -21,6 +21,7 @@ const webIncentiveRoutes = require("./routes/order.routes");
 const riderIncentiveProgressRoutes = require("./routes/riderIncentiveProgress.routes");
 const kitRoutes = require("./routes/kitSelectionRoutes");
 const internalIncentiveRoutes = require("./routes/internalIncentive.routes");
+const adminPayoutConfigRoutes = require("./routes/adminPayoutConfig.routes");
 
 // const webRiderRoutes = require("./routes/rider.routes");
  
@@ -147,6 +148,7 @@ app.use("/api/status", todayRiderOnlineRoutes);
 app.use("/api/refer", adminReferralRoutes);
 
 app.use("/api/admin/incentive", adminDailyIncentiveRoutes);
+app.use("/api", adminPayoutConfigRoutes);
 
 app.use("/api", riderDailyIncentiveRoutes);
 app.use("/api/refer/rider", adminReferralRoutes);
