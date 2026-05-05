@@ -585,7 +585,63 @@ router.patch("/admin/distance-pay",controller.updateDistancePay)
 
 router.patch("/admin/surge",controller.updateSurgeConfig)
 
+/**
+ * @swagger
+ * /api/admin/{id}/rollback:
+ *   post:
+ *     summary: Rollback payout config
+ *     tags: [Admin Payout Config]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: cfg_122
+ *     responses:
+ *       200:
+ *         description: Rollback successful
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Rollback successful
+ *               data:
+ *                 configId: cfg_122
+ *                 version: 2
+ *                 isActive: true
+ *                 rolledBackAt: 2026-05-05T11:00:00Z
+ */
+router.post("/admin/:id/rollback", controller.rollbackPayoutConfig);
 
-
-
+/**
+ * @swagger
+ * /api/admin/{id}/status:
+ *   patch:
+ *     summary: Toggle payout config status
+ *     tags: [Admin Payout Config]
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         example: cfg_123
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               isActive:
+ *                 type: boolean
+ *                 example: false
+ *     responses:
+ *       200:
+ *         description: Status updated
+ *       400:
+ *         description: Cannot deactivate only active config
+ */
+router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
 module.exports = router;

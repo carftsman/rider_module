@@ -6,16 +6,27 @@ const controller = require("../controllers/internalIncentive.controller");
  * @swagger
  * tags:
  *   name: Internal Incentive System
- *   description: Internal APIs for processing incentives (Not for frontend)
+ *   description: Internal APIs for processing incentives (Not exposed to frontend)
  */
 
 /**
  * @swagger
- * /internal/incentive/process-order:
+ * /api/internal/incentive/process-order:
  *   post:
  *     summary: Process incentive on order completion
- *     description: Internal API that updates progress, checks eligibility, unlocks reward, and credits wallet.
+ *     description: |
+ *       Internal system API.
+ *       This API is triggered when an order is delivered.
+ *       It performs:
+ *       - Progress update (daily/weekly/peak)
+ *       - Eligibility check
+ *       - Reward unlock
+ *       - Wallet credit
+ *
+ *       ⚠️ Not for frontend usage
+ *
  *     tags: [Internal Incentive System]
+ *
  *     requestBody:
  *       required: true
  *       content:
@@ -23,6 +34,7 @@ const controller = require("../controllers/internalIncentive.controller");
  *           example:
  *             riderId: "r1"
  *             orderId: "ord_101"
+ *
  *     responses:
  *       200:
  *         description: Incentive processed successfully
@@ -31,8 +43,10 @@ const controller = require("../controllers/internalIncentive.controller");
  *             example:
  *               success: true
  *               message: "Incentive processed successfully"
+ *
  *       400:
- *         description: Invalid request
+ *         description: Invalid request / order not delivered
+ *
  *       500:
  *         description: Internal server error
  */
