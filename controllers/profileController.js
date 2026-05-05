@@ -793,10 +793,11 @@ exports.getRiderOrderHistory = async (req, res) => {
       const now = new Date();
 
       const firstDayOfWeek = new Date(now);
-      const day = now.getDay(); // 0 (Sun) - 6 (Sat)
+      const day = now.getDay();
 
       const diff =
-        now.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+        now.getDate() - day + (day === 0 ? -6 : 1);
+
       firstDayOfWeek.setDate(diff);
       firstDayOfWeek.setHours(0, 0, 0, 0);
 
@@ -808,17 +809,16 @@ exports.getRiderOrderHistory = async (req, res) => {
     }
 
     if (filter === "monthly") {
-  const now = new Date();
+      const now = new Date();
 
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-  dateFilter = {
-    gte: start,
-    lt: nextMonth, // ✅ safest approach
-  };
-}
+      dateFilter = {
+        gte: start,
+        lt: nextMonth,
+      };
+    }
 
     // ---------- FETCH ORDERS ----------
     const orders = await prisma.order.findMany({
@@ -833,29 +833,42 @@ exports.getRiderOrderHistory = async (req, res) => {
         OrderTracking: true,
         OrderPickupAddress: true,
         OrderDeliveryAddress: true,
+        OrderRiderEarning: true, // ✅ correct relation
       },
       orderBy: {
         createdAt: "desc",
       },
     });
 
+    // ---------- RIDER EARNING LOGIC ----------
+const getRiderEarning = (order) => {
+  // ✅ Use stored earning only if amount is greater than 0
+  const storedEarning = Number(order.OrderRiderEarning?.amount || 0);
+
+  if (storedEarning > 0) {
+    return storedEarning;
+  }
+
+  // ✅ Fallback calculation
+  const deliveryFee = Number(order.OrderPricing?.deliveryFee || 0);
+  const commission = Number(order.OrderPricing?.platformCommission || 0);
+
+  return deliveryFee - commission;
+};
     // ---------- TOTALS ----------
     const totalOrders = orders.length;
 
-    const totalEarnings = orders.reduce((sum, o) => {
-      const pricing = o.OrderPricing;
-
-      const riderEarning =
-        (pricing?.deliveryFee || 0) -
-        (pricing?.platformCommission || 0);
-
-      return sum + riderEarning;
-    }, 0);
+    const totalRiderEarnings = Number(
+      orders
+        .reduce((sum, order) => sum + getRiderEarning(order), 0)
+        .toFixed(2)
+    );
 
     const totalDistance = Number(
       orders
         .reduce(
-          (sum, o) => sum + (o.OrderTracking?.distanceInKm || 0),
+          (sum, order) =>
+            sum + Number(order.OrderTracking?.distanceInKm || 0),
           0
         )
         .toFixed(2)
@@ -867,17 +880,16 @@ exports.getRiderOrderHistory = async (req, res) => {
 
     const avgRating = ratings.length
       ? Number(
-          (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
+          (
+            ratings.reduce((a, b) => a + b, 0) / ratings.length
+          ).toFixed(1)
         )
       : null;
 
-    // ---------- RESPONSE ----------
+    // ---------- RESPONSE DATA ----------
     const data = orders.map((order) => {
       const pricing = order.OrderPricing;
-
-      const riderEarning =
-        (pricing?.deliveryFee || 0) -
-        (pricing?.platformCommission || 0);
+      const riderEarning = Number(getRiderEarning(order).toFixed(2));
 
       return {
         orderId: order.orderId,
@@ -896,7 +908,9 @@ exports.getRiderOrderHistory = async (req, res) => {
           tax: pricing?.tax || 0,
           platformCommission: pricing?.platformCommission || 0,
           totalAmount: pricing?.totalAmount || 0,
-          riderEarning: riderEarning,
+
+          // ✅ Correct rider earning
+          riderEarning,
         },
 
         distanceTravelled: order.OrderTracking?.distanceInKm || 0,
@@ -914,7 +928,10 @@ exports.getRiderOrderHistory = async (req, res) => {
       success: true,
       filter,
       totalOrders,
-      totalEarnings,
+
+      // ✅ final field you wanted
+      totalRiderEarnings,
+
       totalDistance,
       avgRating,
       data,
@@ -924,10 +941,10 @@ exports.getRiderOrderHistory = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error",
+      error: err.message,
     });
   }
 };
-
 // exports.getRiderOrderHistory = async (req, res) => {
 //   try {
 //     const riderId = req.rider?.id;
