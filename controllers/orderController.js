@@ -1135,7 +1135,7 @@ async function cancelOrder(req, res) {
     const order = await prisma.order.findUnique({
       where: { orderId }
     });
-
+    
     if (!order) {
       return res.status(404).json({
         success: false,
@@ -1190,14 +1190,14 @@ async function cancelOrder(req, res) {
   });
 
   await tx.orderCancelIssue.upsert({
-    where: { orderId: order.id }, 
+    where: { orderId:  order.orderId }, 
     update: {
       cancelledBy: "RIDER",
       reasonCode,
       reasonText
     },
     create: {
-      orderId: order.id, 
+      orderId:  order.orderId, 
       cancelledBy: "RIDER",
       reasonCode,
       reasonText
