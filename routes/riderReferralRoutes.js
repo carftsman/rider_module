@@ -235,6 +235,8 @@ router.get(
  *     description: Generate a shareable referral message and link using partnerId
  *     tags:
  *       - Referral
+ *     security:
+ *       - bearerAuth: [] 
  *     requestBody:
  *       required: true
  *       content:

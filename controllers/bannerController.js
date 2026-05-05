@@ -57,9 +57,7 @@ const getRiderHomeBanners = async (req, res) => {
 
     const showKitBanner = !kitDelivered;
 
-    // ✅ Joining bonus only for riders joined with referral code
-    const joinedWithReferral = !!rider.referredByPartnerId;
-
+    // ✅ Joining bonus active for all new riders until payout is completed
     const joiningBonusPayout = await prisma.programPayout.findFirst({
       where: {
         riderId,
@@ -71,9 +69,7 @@ const getRiderHomeBanners = async (req, res) => {
     });
 
     const joiningBonusCompleted = !!joiningBonusPayout;
-
-    const showJoiningBonusBanner =
-      joinedWithReferral && !joiningBonusCompleted;
+    const showJoiningBonusBanner = !joiningBonusCompleted;
 
     const banners = [
       {
@@ -101,7 +97,7 @@ const getRiderHomeBanners = async (req, res) => {
         imageUrl: null,
         redirectTo: "JOINING_BONUS",
         isEnabled: showJoiningBonusBanner,
-        status: showJoiningBonusBanner ? "ACTIVE" : "DISABLED"
+        status: showJoiningBonusBanner ? "ACTIVE" : "COMPLETED"
       },
       {
         key: "REFER_AND_EARN",
@@ -123,7 +119,6 @@ const getRiderHomeBanners = async (req, res) => {
           bankAdded,
           bankVerified,
           kitDelivered,
-          joinedWithReferral,
           joiningBonusCompleted
         },
         banners

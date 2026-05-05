@@ -2236,6 +2236,7 @@ model ProgramProgress {
   program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@unique([riderId, programId, week])
+  @@unique([riderId, programId, date])
   @@index([riderId, programId])
   @@index([date])
   @@index([week])
@@ -2289,6 +2290,7 @@ model RiderWalletTransaction {
 
   rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
 
+  @@unique([riderId, referenceId, type])
   @@index([riderId])
   @@index([type])
   @@index([referenceId])
@@ -2410,4 +2412,75 @@ model PayoutConfig {
 
   @@index([cityId, isActive])
   @@index([scenarioType])
+}
+
+model Zone {
+  id String @id @default(cuid())
+
+  name String
+
+  city String
+
+  state String
+
+  isActive Boolean @default(true)
+
+  // relations
+
+  zonePoints ZonePoint[]
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  zonePincodes ZonePincode[]
+}
+
+model ZonePoint {
+  id String @id @default(cuid())
+
+  name String
+
+  addressLine1 String
+
+  addressLine2 String?
+
+  city String
+
+  state String
+
+  pincode String
+
+  latitude Float
+
+  longitude Float
+
+  radiusInMeters Int @default(3000)
+
+  // relation
+
+  zoneId String
+
+  zone Zone @relation(fields: [zoneId], references: [id])
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  @@index([pincode])
+  @@index([latitude, longitude])
+}
+
+model ZonePincode {
+  id String @id @default(cuid())
+
+  pincode String
+
+  zoneId String
+
+  zone Zone @relation(fields: [zoneId], references: [id])
+
+  @@unique([pincode, zoneId])
 }
