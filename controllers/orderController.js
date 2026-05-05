@@ -9,7 +9,6 @@ const { getLatLng } = require("../services/geocodeService");
 const Incentive = require("../models/IncentiveSchema");
 const RiderIncentiveProgress = require("../models/RiderIncentiveProgressSchema");
 const prisma=require('../config/prisma');
-
 // 👉 Dummy transaction generator
 function generateTxn() {
   return "TXN_" + crypto.randomBytes(6).toString("hex");
@@ -430,6 +429,9 @@ async function confirmOrder(req, res) {
     });
   }
 }
+
+
+
 
 
 async function acceptOrder(req, res) {
@@ -1135,7 +1137,7 @@ async function cancelOrder(req, res) {
     const order = await prisma.order.findUnique({
       where: { orderId }
     });
-    
+
     if (!order) {
       return res.status(404).json({
         success: false,

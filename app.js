@@ -61,6 +61,8 @@ const getPeakSlotProgresses=require("./routes/getPeakSlotProgressRoutes")
 
 const getPeakSlotIncentive=require("./routes/getRiderIncentiveRoutes")
  
+const adminZoneRoutes=require('./routes/adminZoneRoutes');
+
 // app.use(cors())
 app.use(
   cors({
@@ -100,6 +102,8 @@ app.use("/api/mobile", staticRouter);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin/incentives", adminRouterIncentives);
 app.use("/api/admin/programs", adminWeeklyIncentiveRoutes);
+
+app.use("/api/admin/zones",adminZoneRoutes);
 app.use("/api/rider", kitRouter);
 app.use("/api/slots", slotRouter);
 app.use("/api/rider/assets", require("./routes/riderAssetsRoutes"));
