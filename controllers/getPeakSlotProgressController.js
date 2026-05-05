@@ -1,10 +1,16 @@
 const prisma = require("../config/prisma");
 
+function minutesToTime(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
 const getPeakSlotProgress = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    // 1. Get rider pincode
+    // 1️⃣ Get rider pincode
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId },
       select: { pincode: true },
@@ -18,14 +24,19 @@ const getPeakSlotProgress = async (req, res) => {
     }
 
     const riderPincode = riderLocation.pincode;
+    const today = new Date();
 
-    // 2. Get programs for rider pincode
+    // 2️⃣ Get active programs for rider
     const programs = await prisma.program.findMany({
       where: {
         isActive: true,
+        programType: "INCENTIVE",
+        trackingType: "DAILY",
         pincodeIds: {
           has: riderPincode,
         },
+        validFrom: { lte: today },
+        validTill: { gte: today },
       },
       select: {
         id: true,
@@ -40,16 +51,58 @@ const getPeakSlotProgress = async (req, res) => {
       });
     }
 
-    // 3. Flatten all slots from programs
-    const allSlots = programs.flatMap((p) =>
-      p.slots.map((slot) => ({
-        slotId: slot.id,
-        time: `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
-        reward: slot.rewardPerOrder || 0,
-        status: "IN_PROGRESS", // you can later calculate real status
-        ordersCompleted: 0, // attach from progress table later if needed
-      }))
-    );
+    // 3️⃣ Create / Fetch progress (LAZY UPSERT STYLE)
+    const progressMap = {};
+
+    for (const p of programs) {
+      let progProgress = await prisma.programProgress.findFirst({
+        where: {
+          riderId,
+          programId: p.id,
+        },
+      });
+
+      // 🔥 If not exists → create zero progress
+      if (!progProgress) {
+        progProgress = await prisma.programProgress.create({
+          data: {
+            riderId,
+            programId: p.id,
+            totalOrders: 0,
+            totalEarnings: 0,
+            rewardAmount: 0,
+            achieved: false,
+          },
+        });
+      }
+
+      progressMap[p.id] = progProgress;
+    }
+
+    // 4️⃣ Build response
+  const allSlots = programs.flatMap((p) =>
+  p.slots.map((slot) => {
+    const progProgress = progressMap[p.id];
+    const orders = progProgress?.totalOrders || 0;
+
+    return {
+      slotId: slot.id,
+      time: `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
+
+      ordersCompleted: orders,
+
+      reward: orders > 0
+        ? orders * (slot.rewardPerOrder || 0)
+        : 0,
+
+      status: progProgress?.achieved
+        ? "ACHIEVED"
+        : orders > 0
+        ? "IN_PROGRESS"
+        : "NOT_STARTED",
+    };
+  })
+);
 
     return res.status(200).json({
       success: true,
@@ -57,13 +110,16 @@ const getPeakSlotProgress = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("Peak slot progress error:", error);
+
     return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
+
+
 
 // helper
 function minutesToTime(mins) {
