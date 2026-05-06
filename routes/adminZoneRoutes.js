@@ -98,25 +98,53 @@ adminZoneRoutes.post("/create/zone-point", createZone);
  *             properties:
  *               name:
  *                 type: string
+ *                 example: PB House
  *               addressLine1:
  *                 type: string
+ *                 example: No.7, HUDA Techno Enclave
  *               addressLine2:
  *                 type: string
+ *                 example: 1st Floor, Near Cyber Towers
  *               city:
  *                 type: string
+ *                 example: Hyderabad
  *               state:
  *                 type: string
+ *                 example: Telangana
  *               pincode:
  *                 type: string
+ *                 example: "500081"
  *               latitude:
  *                 type: number
+ *                 example: 17.448294
  *               longitude:
  *                 type: number
+ *                 example: 78.391487
  *               zoneId:
  *                 type: string
+ *                 example: cmabc123zoneid
  *     responses:
  *       201:
  *         description: Address created successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Address created successfully
+ *               data:
+ *                 id: cmzp123456
+ *                 name: PB House
+ *                 addressLine1: No.7, HUDA Techno Enclave
+ *                 addressLine2: 1st Floor, Near Cyber Towers
+ *                 city: Hyderabad
+ *                 state: Telangana
+ *                 pincode: "500081"
+ *                 latitude: 17.448294
+ *                 longitude: 78.391487
+ *                 zoneId: cmabc123zoneid
+ *                 isActive: true
+ *                 createdAt: 2026-05-06T10:00:00.000Z
+ *                 updatedAt: 2026-05-06T10:00:00.000Z
  */
 adminZoneRoutes.post("/zone-point", createZonePoint);
 
