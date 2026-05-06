@@ -24,7 +24,6 @@ const {
 } = require("../controllers/riderRegisterController");
 
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
-const {getWeeklyIncentiveForRider} = require("../controllers/riderIncentiveController");
 const {upload} = require("../utils/azureUpload");
 // const uploadDriving=require('../utils/multerDL')
 
@@ -1275,81 +1274,5 @@ riderRouter.patch(
   riderAuthMiddleWare,
    updateGPS
 );
-
-/**
- * @swagger
- * /api/incentives/get_weekly:
- *   get:
- *     summary: Get weekly incentive details for rider
- *     description: Returns active weekly incentive configuration along with rider progress for the current week.
- *     tags:
- *       - Rider Incentives
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Weekly incentive fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 data:
- *                   type: object
- *                   nullable: true
- *                   properties:
- *                     incentiveId:
- *                       type: string
- *                       example: 6970ad9c46aa02fad3554ca7
- *                     title:
- *                       type: string
- *                       example: WEEKLY_TARGET
- *                     description:
- *                       type: string
- *                       example: Complete daily targets to earn weekly bonus
- *                     weeklyRules:
- *                       type: object
- *                       properties:
- *                         totalDaysInWeek:
- *                           type: number
- *                           example: 7
- *                         minOrdersPerDay:
- *                           type: number
- *                           example: 10
- *                         allowPartialDays:
- *                           type: boolean
- *                           example: true
- *                     maxRewardPerWeek:
- *                       type: number
- *                       example: 500
- *                     progress:
- *                       type: object
- *                       properties:
- *                         eligibleDays:
- *                           type: number
- *                           example: 3
- *                         totalDaysRequired:
- *                           type: number
- *                           example: 7
- *                         totalOrders:
- *                           type: number
- *                           example: 34
- *                         isEligible:
- *                           type: boolean
- *                           example: true
- *       401:
- *         description: Unauthorized – invalid or missing token
- *       500:
- *         description: Internal server error
- */
-
-riderRouter.get("/incentives/get_weekly", riderAuthMiddleWare, getWeeklyIncentiveForRider);
-
-
-
-
 
 module.exports = riderRouter;

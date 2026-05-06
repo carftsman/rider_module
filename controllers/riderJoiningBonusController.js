@@ -106,7 +106,7 @@ exports.getAvailablePrograms = async (req, res) => {
 };
 
 
-// 2️⃣ Get Program Details
+// Get Program Details
 exports.getProgramDetails = async (req, res) => {
   try {
     const { programId } = req.params;
@@ -133,7 +133,7 @@ exports.getProgramDetails = async (req, res) => {
 };
 
 
-// 3️⃣ Join Program (SAFE)
+// Join Program (SAFE)
 exports.joinProgram = async (req, res) => {
   try {
     const riderId = req.rider.id;
@@ -210,7 +210,7 @@ exports.joinProgram = async (req, res) => {
 };
 
 
-// 4️⃣ My Programs
+//  My Programs
 exports.getMyPrograms = async (req, res) => {
   try {
     const riderId = req.rider.id;
@@ -381,7 +381,7 @@ exports.getMyProgramProgress = async (req, res) => {
 };
 
 
-// 6️⃣ Get Today Task (FIXED LOGIC 🔥)
+//  Get Today Task 
 exports.getTodayTask = async (req, res) => {
   try {
     const riderId = req.rider.id;

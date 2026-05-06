@@ -1,5 +1,3 @@
-const RiderDailyEarnings = require("../models/RiderDailyEarnings");
-
 const prisma=require('../config/prisma');
 
 const { getISOWeekRange , getCurrentISOWeek} = require("../helpers/getWeekNumber");

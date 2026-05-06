@@ -3,7 +3,6 @@ const router=express.Router();
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 const {getProfile}=require('../controllers/profileController')
 const {getBankDetails}=require('../controllers/bankDetailsController')
-const {getKitAddress}=require('../controllers/kitAddressController')
 const uploadSelfie = require("../middleware/uploadSelfie");
 const { upload } = require("../utils/azureUpload");
 
@@ -279,7 +278,6 @@ router.get("/rider/profile", riderAuthMiddleWare, getProfile);
  */
 
 router.get("/bank-details", riderAuthMiddleWare, getBankDetails_profile);
-// Get kit address
  
 /**
  * @swagger
@@ -747,149 +745,6 @@ router.put(
   ]),
   updateDocuments
 );
-// /**
-//  * @swagger
-//  * /api/profile/orders/history:
-//  *   get:
-//  *     tags:
-//  *       - Profile
-//  *     summary: Get rider delivered order history
-//  *     description: >
-//  *       Fetch delivered order history of the logged-in rider.
-//  *       Supports multiple time-based filters.
-//  *
-//  *       **Filters**
-//  *       - `all` → All delivered orders
-//  *       - `daily` → Today’s delivered orders
-//  *       - `weekly` → Last 7 days delivered orders
-//  *       - `monthly` → Current month delivered orders
-//  *
-//  *     security:
-//  *       - bearerAuth: []
-//  *
-//  *     parameters:
-//  *       - in: query
-//  *         name: filter
-//  *         required: false
-//  *         schema:
-//  *           type: string
-//  *           enum: [all, daily, weekly, monthly]
-//  *           default: all
-//  *         description: Filter order history by date range
-//  *
-//  *     responses:
-//  *       200:
-//  *         description: Rider order history fetched successfully
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 success:
-//  *                   type: boolean
-//  *                   example: true
-//  *                 filter:
-//  *                   type: string
-//  *                   example: weekly
-//  *                 totalOrders:
-//  *                   type: integer
-//  *                   example: 15
-//  *                 totalEarnings:
-//  *                   type: number
-//  *                   example: 2450
-//  *                 totalDistance:
-//  *                   type: number
-//  *                   example: 72.3
-//  *                 avgRating:
-//  *                   type: string
-//  *                   example: "4.5"
-//  *                 data:
-//  *                   type: array
-//  *                   items:
-//  *                     type: object
-//  *                     properties:
-//  *                       orderId:
-//  *                         type: string
-//  *                         example: ORD-123456
-//  *                       items:
-//  *                         type: array
-//  *                         items:
-//  *                           type: object
-//  *                           properties:
-//  *                             itemName:
-//  *                               type: string
-//  *                               example: Veg Burger
-//  *                             quantity:
-//  *                               type: integer
-//  *                               example: 2
-//  *                             price:
-//  *                               type: number
-//  *                               example: 120
-//  *                             total:
-//  *                               type: number
-//  *                               example: 240
-//  *                       pricing:
-//  *                         type: object
-//  *                         properties:
-//  *                           itemTotal:
-//  *                             type: number
-//  *                             example: 240
-//  *                           deliveryFee:
-//  *                             type: number
-//  *                             example: 40
-//  *                           tax:
-//  *                             type: number
-//  *                             example: 12
-//  *                           platformCommission:
-//  *                             type: number
-//  *                             example: 18
-//  *                           totalAmount:
-//  *                             type: number
-//  *                             example: 310
-//  *                       customerTip:
-//  *                         type: number
-//  *                         example: 20
-//  *                       distanceTravelled:
-//  *                         type: number
-//  *                         example: 5.6
-//  *                       durationInMin:
-//  *                         type: number
-//  *                         example: 28
-//  *                       pickupAddress:
-//  *                         type: string
-//  *                         example: MG Road, Bengaluru
-//  *                       deliveredAddress:
-//  *                         type: string
-//  *                         example: Whitefield, Bengaluru
-//  *                       rating:
-//  *                         type: number
-//  *                         example: 5
-//  *                       deliveredAt:
-//  *                         type: string
-//  *                         format: date-time
-//  *                         example: "2026-01-07T10:15:00.000Z"
-//  *
-//  *       400:
-//  *         description: Rider ID missing
-//  *         content:
-//  *           application/json:
-//  *             schema:
-//  *               type: object
-//  *               properties:
-//  *                 success:
-//  *                   type: boolean
-//  *                   example: false
-//  *                 message:
-//  *                   type: string
-//  *                   example: Rider ID missing
-//  *
-//  *       401:
-//  *         description: Unauthorized
-//  *
-//  *       500:
-//  *         description: Server error
-//  */
-
 
 /**
  * @swagger

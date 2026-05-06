@@ -1,9 +1,9 @@
 const prisma=require('../config/prisma');
 const geocodeAddress = require("../utils/geocode");
 
-/////////////////////////////////////////////////////
+
 // CREATE ADDRESS (ADMIN)
-/////////////////////////////////////////////////////
+
 
 exports.createZone = async (req, res) => {
   try {
@@ -16,9 +16,9 @@ exports.createZone = async (req, res) => {
       });
     }
 
-    //////////////////////////////////////////////////////
+    
     // CUSTOM ZONE ID
-    //////////////////////////////////////////////////////
+  
     const zoneId = `zone${Math.floor(1000 + Math.random() * 90000)}`;
 
     const zone = await prisma.zone.create({
@@ -61,9 +61,9 @@ exports.createZonePoint = async (req, res) => {
       zoneId
     } = req.body;
 
-    //////////////////////////////////////////////////////
+    
     // CHECK ZONE
-    //////////////////////////////////////////////////////
+    
     const zone = await prisma.zone.findUnique({
       where: { id: zoneId }
     });
@@ -75,9 +75,9 @@ exports.createZonePoint = async (req, res) => {
       });
     }
 
-    //////////////////////////////////////////////////////
+    
     // FULL ADDRESS
-    //////////////////////////////////////////////////////
+    
     const fullAddress = `
       ${addressLine1},
       ${addressLine2 || ""},
@@ -85,16 +85,10 @@ exports.createZonePoint = async (req, res) => {
       ${state},
       ${pincode}
     `;
-
-    //////////////////////////////////////////////////////
-    // AUTO LAT LNG
-    //////////////////////////////////////////////////////
     const { latitude, longitude } =
       await geocodeAddress(fullAddress);
 
-    //////////////////////////////////////////////////////
-    // CREATE
-    //////////////////////////////////////////////////////
+    
     const zonePoint = await prisma.zonePoint.create({
       data: {
         name,
@@ -125,68 +119,12 @@ exports.createZonePoint = async (req, res) => {
   }
 };
 
-/////////////////////////////////////////////////////
-// GET ALL ADDRESSES (FOR UI LIST)
-/////////////////////////////////////////////////////
-// exports.getZonePoints = async (req, res) => {
-//   try {
-
-//     const { zoneId, pincode } = req.query;
-
-//     const zonePoints = await prisma.zonePoint.findMany({
-//       where: {
-//         isActive: true,
-//         ...(zoneId && { zoneId }),
-//         ...(pincode && { pincode })
-//       },
-
-//       //////////////////////////////////////////////////////
-//       // HIDE LATITUDE & LONGITUDE
-//       //////////////////////////////////////////////////////
-//       select: {
-//         id: true,
-//         name: true,
-//         addressLine1: true,
-//         addressLine2: true,
-//         city: true,
-//         state: true,
-//         pincode: true,
-//         radiusInMeters: true,
-//         zoneId: true,
-//         isActive: true,
-//         createdAt: true,
-//         updatedAt: true
-//       },
-
-//       orderBy: {
-//         createdAt: "desc"
-//       }
-//     });
-
-//     return res.status(200).json({
-//       success: true,
-//       data: zonePoints
-//     });
-
-//   } catch (error) {
-
-//     console.error(error);
-
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal server error"
-//     });
-//   }
-// };
-
 exports.getZonePoints = async (req, res) => {
   try {
 
     const { pincode } = req.query;
 
-    //////////////////////////////////////////////////////
-    // PINCODE REQUIRED
-    //////////////////////////////////////////////////////
+    
     if (!pincode) {
       return res.status(400).json({
         success: false,
@@ -194,20 +132,14 @@ exports.getZonePoints = async (req, res) => {
       });
     }
 
-    //////////////////////////////////////////////////////
-    // GET ALL ZONES WITH THIS PINCODE
-    //////////////////////////////////////////////////////
+    
     const zonePoints = await prisma.zonePoint.findMany({
 
       where: {
         isActive: true,
         pincode
       },
-
-      //////////////////////////////////////////////////////
-      // RETURN CLEAN DATA
-      //////////////////////////////////////////////////////
-      select: {
+select: {
 
         id: true,
 
@@ -223,9 +155,7 @@ exports.getZonePoints = async (req, res) => {
 
         pincode: true,
 
-        //////////////////////////////////////////////////
-        // INCLUDE ZONE DETAILS
-        //////////////////////////////////////////////////
+     
         zone: {
           select: {
             id: true,
@@ -258,9 +188,7 @@ exports.getZonePoints = async (req, res) => {
   }
 };
 
-/////////////////////////////////////////////////////
-// UPDATE ADDRESS
-/////////////////////////////////////////////////////
+
 exports.updateZonePoint = async (req, res) => {
   try {
     const { id } = req.params;
@@ -281,9 +209,7 @@ exports.updateZonePoint = async (req, res) => {
   }
 };
 
-/////////////////////////////////////////////////////
-// DELETE (SOFT DELETE)
-/////////////////////////////////////////////////////
+
 exports.deleteZonePoint = async (req, res) => {
   try {
     const { id } = req.params;
