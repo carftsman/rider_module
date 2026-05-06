@@ -66,80 +66,6 @@ exports.sendOtp = async (req, res) => {
   }
 };
 
-// ============================================================
-// VERIFY OTP
-// ============================================================
-// exports.verifyOtp = async (req, res) => {
-//   try {
-//     let { phone, otp } = req.body;
-
-//     if (!phone || !otp)
-//       return res.status(400).json({ success: false, message: "Phone & OTP required" });
-
-//     // Normalize phone format
-//     let formattedPhone = phone;
-//     if (!phone.startsWith("+") && phone.length === 10) {
-//       formattedPhone = `+91${phone}`;
-//     }
-
-//     // Find rider
-//     const rider = await Rider.findOne({
-//       "phone.number": formattedPhone.replace("+91", ""),
-//     });
-
-//     if (!rider)
-//       return res.status(404).json({ success: false, message: "Rider not found" });
-
-//     // Check if OTP exists
-//     if (!rider.otp || !rider.otp.code)
-//       return res.status(400).json({ success: false, message: "OTP not generated" });
-
-//     // Check expiry
-//     if (new Date() > rider.otp.expiresAt)
-//       return res.status(401).json({ success: false, message: "OTP expired" });
-
-//     // Check OTP match
-//     if (otp !== rider.otp.code)
-//       return res.status(401).json({ success: false, message: "Incorrect OTP" });
-
-//     // Update phone status
-//     rider.phone.isVerified = true;
-//     rider.lastOtpVerifiedAt = new Date();
-
-//     // Update onboarding
-//     rider.onboardingProgress.phoneVerified = true;
-
-//     if (rider.onboardingStage === "PHONE_VERIFICATION") {
-//       rider.onboardingStage = "APP_PERMISSIONS"; // next onboarding step
-//     }
-
-//     // Remove OTP from DB
-//     rider.otp = undefined;
-
-//     await rider.save();
-
-//     // Generate JWT
-//     const token = jwt.sign(
-//       {
-//         riderId: rider._id,
-//         phone: rider.phone.number,
-//       },
-//       process.env.JWT_SECRET,
-//       { expiresIn: "7d" }
-//     );
-
-//     res.json({
-//       success: true,
-//       message: "OTP Verified",
-//       isNewUser: rider.isFullyRegistered === false,
-//       nextStage: rider.onboardingStage,
-//       token,
-//     });
-//   } catch (error) {
-//     console.error("Verify OTP ERROR →", error);
-//     res.status(500).json({ success: false, message: "Server error verifying OTP" });
-//   }
-// };
 
 
 exports.verifyOtp = async (req, res) => {
@@ -203,91 +129,6 @@ exports.verifyOtp = async (req, res) => {
   }
 };
 
-
-// ===============================
-// SAVE RIDER LOCATION
-// ===============================
-// exports.updateLocation = async (req, res) => {
-//   try {
-//     const riderId = req.rider.id;
-
-//     const { city, area } = req.body;
-
-//     if (!city || !area) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "City & area required",
-//       });
-//     }
-
-//     // Validate city
-//     const foundCity = citiesData.find(
-//       (item) => item.city.toLowerCase() === city.toLowerCase()
-//     );
-
-//     if (!foundCity) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Invalid city",
-//       });
-//     }
-
-//     if (!foundCity.areas.includes(area)) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Invalid area",
-//       });
-//     }
-
-//     // UPSERT location
-//     const location = await prisma.riderLocation.upsert({
-//       where: { riderId },
-//       update: {
-//         city,
-//         area,
-//       },
-//       create: {
-//         riderId,
-//         city,
-//         area,
-//       },
-//     });
-
-//     // Update onboarding
-//     await prisma.riderOnboarding.update({
-//       where: { riderId },
-//       data: {
-//         citySelected: true,
-//       },
-//     });
-
-//     // Update stage
-//     const rider = await prisma.rider.update({
-//       where: { id: riderId },
-//       data: {
-//         onboardingStage: "SELECT_VEHICLE",
-//       },
-//     });
-
-//     return res.json({
-//       success: true,
-//       message: "Location updated",
-//       location: {
-//         city: location.city,
-//         area: location.area,
-//       },
-//       nextStage: rider.onboardingStage,
-//     });
-
-//   } catch (err) {
-//     console.log(err);
-
-//     res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//     });
-//   }
-// };
 
 exports.updateLocation = async (req, res) => {
   try {
@@ -642,28 +483,6 @@ exports.uploadSelfieController = async (req, res) => {
   }
 };
 
-// ------------------ KYC -------------------
-
-// exports.uploadPan = async (req, res) => {
-//   try {
-//     if (!req.file)
-//       return res.status(400).json({ message: "PAN image required" });
-
-//     const url = await uploadToAzure(req.file, "pan");
-
-//     await Rider.findByIdAndUpdate(req.rider._id, {
-//       "kyc.pan.image": url,
-//       "kyc.pan.status": "pending",
-//       "onboardingProgress.panUploaded": true,
-//       onboardingStage: "DL_UPLOAD"
-//     });
-
-//     res.json({ success: true, message: "PAN uploaded", url });
-//   } catch (err) {
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
-
 exports.uploadPan = async (req, res) => {
   try {
     const riderId = req.rider.id;
@@ -783,130 +602,11 @@ exports.uploadDL = async (req, res) => {
   }
 };
 
-// exports.savePermissions = async (req, res) => {
-//   try {
-//     const riderId = req.rider.id; // Prisma uses id (String UUID)
-
-
-//     if (!riderId) {
-//       return res.status(401).json({ message: "Unauthorized" });
-//     }
-
-//     const { camera, foregroundLocation, backgroundLocation } = req.body;
-
-//     // Validate input
-//     const isBoolean = (v) => typeof v === "boolean";
-
-//     if (!isBoolean(camera) || !isBoolean(foregroundLocation) || !isBoolean(backgroundLocation)) {
-//       return res.status(400).json({
-//         message: "camera, foregroundLocation, backgroundLocation must be boolean values",
-//       });
-//     }
-
-//     // Check rider exists with onboarding
-//     const rider = await prisma.rider.findUnique({
-//       where: { id: riderId },
-//       include: {
-//         onboarding: true,
-//         permissions: true,
-//       },
-//     });
-
-    
-//     if (!rider) {
-//       return res.status(404).json({ message: "Rider not found" });
-//     }
-
-//     // Phone verification check
-//     if (!rider.onboarding?.phoneVerified) {
-//       return res.status(400).json({
-//         message: "Phone verification required before permissions",
-//       });
-//     }
-
-//     // Calculate all granted
-//     const allGranted = camera && foregroundLocation && backgroundLocation;
-
-//     // UPSERT permissions
-//     const permissions = await prisma.riderPermissions.upsert({
-//       where: { riderId },
-//       update: {
-//         camera,
-//         foregroundLocation,
-//         backgroundLocation,
-//       },
-//       create: {
-//         riderId,
-//         camera,
-//         foregroundLocation,
-//         backgroundLocation,
-//       },
-//     });
-
-//     // Update onboarding progress
-//     const onboarding = await prisma.riderOnboarding.update({
-//       where: { riderId },
-//       data: {
-//         appPermissionDone: allGranted,
-//       },
-//     });
-
-//     // Update onboarding stage if all granted
-//     let updatedStage = rider.onboardingStage;
-
-//     if (allGranted && rider.onboardingStage === "APP_PERMISSIONS") {
-//       const updatedRider = await prisma.rider.update({
-//         where: { id: riderId },
-//         data: {
-//           onboardingStage: "SELECT_LOCATION",
-//         },
-//       });
-
-//       updatedStage = updatedRider.onboardingStage;
-//     }
-
-//     // Response SAME as Swagger
-//     return res.json({
-//       success: true,
-//       message: "Permissions saved successfully",
-//       allPermissionsGranted: allGranted,
-//       data: {
-//         permissions: {
-//           camera: permissions.camera,
-//           foregroundLocation: permissions.foregroundLocation,
-//           backgroundLocation: permissions.backgroundLocation,
-//         },
-//         onboardingProgress: {
-//           phoneVerified: onboarding.phoneVerified,
-//           appPermissionDone: onboarding.appPermissionDone,
-//           citySelected: onboarding.citySelected,
-//           vehicleSelected: onboarding.vehicleSelected,
-//           personalInfoSubmitted: onboarding.personalInfoSubmitted,
-//           selfieUploaded: onboarding.selfieUploaded,
-//           aadharVerified: onboarding.aadharVerified,
-//           panUploaded: onboarding.panUploaded,
-//           dlUploaded: onboarding.dlUploaded,
-//           kycCompleted: onboarding.kycCompleted,
-//         },
-//         onboardingStage: updatedStage,
-//       },
-//     });
-
-//   } catch (error) {
-//     console.error("Permission API Error:", error);
-//     res.status(500).json({
-//       message: "Server error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-
 // ------------------ PROFILE -------------------
 
 exports.saveAppPermissions = async (req, res) => {
   try {
-    const riderId = req.rider?.id; // ✅ FIXED
+    const riderId = req.rider?.id; 
 
     if (!riderId) {
       return res.status(401).json({
@@ -970,7 +670,7 @@ exports.saveAppPermissions = async (req, res) => {
 
     let updatedStage = rider.onboardingStage;
 
-    // 🔥 CHANGED STAGE HERE
+    //  CHANGED STAGE HERE
     if (
       allGranted &&
       rider.onboardingStage === "APP_PERMISSIONS"
@@ -978,14 +678,14 @@ exports.saveAppPermissions = async (req, res) => {
       const updatedRider = await prisma.rider.update({
         where: { id: riderId },
         data: {
-          onboardingStage: "EMPLOYEE_TYPE", // 👈 changed
+          onboardingStage: "EMPLOYEE_TYPE", 
         },
       });
 
       updatedStage = updatedRider.onboardingStage;
     }
 
-    // ✅ FINAL CLEAN RESPONSE (ONLY 4 FIELDS)
+    //  FINAL CLEAN RESPONSE (ONLY 4 FIELDS)
     return res.status(200).json({
       success: true,
       message: "Permissions saved successfully",
@@ -1055,49 +755,6 @@ exports.logoutOrDelete = async (req, res) => {
   }
 };
 
-//onboardingstatus
-// exports.onboardingStatus = async (req, res) => {
-//   try {
-//     if (!req.rider?.id) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "Unauthorized: Rider token invalid",
-//       });
-//     }
-
-//     const rider = await prisma.rider.findUnique({
-//       where: { id: req.rider.id },
-//       select: {
-//         onboardingStage: true,
-//         isFullyRegistered: true,
-//         onboarding: true,
-//       },
-//     });
-
-//     if (!rider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found",
-//       });
-//     }
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Onboarding status fetched successfully",
-//       onboardingStage: rider.onboardingStage,
-//       onboardingProgress: rider.onboarding,
-//       isFullyRegistered: rider.isFullyRegistered,
-//     });
-
-//   } catch (error) {
-//     console.error("OnboardingStatus Error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error while fetching onboarding status",
-//     });
-//   }
-// };
-
 
 
 exports.onboardingStatus = async (req, res) => {
@@ -1130,7 +787,7 @@ exports.onboardingStatus = async (req, res) => {
 
     let filteredProgress = {};
 
-    // ✅ INDIVIDUAL RIDER RESPONSE
+    //  INDIVIDUAL RIDER RESPONSE
     if (rider.riderType === RiderType.INDIVIDUAL_EMPLOYEE) {
       filteredProgress = {
         riderId: onboarding.riderId,
@@ -1148,7 +805,7 @@ exports.onboardingStatus = async (req, res) => {
       };
     }
 
-    // ✅ COMPANY EMPLOYEE RESPONSE
+    //  COMPANY EMPLOYEE RESPONSE
     if (rider.riderType === RiderType.COMPANY_EMPLOYEE) {
       filteredProgress = {
         riderId: onboarding.riderId,
@@ -1180,188 +837,6 @@ exports.onboardingStatus = async (req, res) => {
 };
 
 
-
-// exports.completeKyc = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     console.log(riderId)
-
-//     const rider = await Rider.findById(riderId);
-//     console.log(rider)
-
-
-
-//     if (!rider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found",
-//       });
-//     }
-
-//     const progress = rider.onboardingProgress;
-
-//     // ✅ STEP 1: Validate onboarding completion
-//     const allStepsCompleted =
-//       progress.phoneVerified &&
-//       progress.appPermissionDone &&
-//       progress.citySelected &&
-//       progress.vehicleSelected &&
-//       progress.personalInfoSubmitted &&
-//       progress.selfieUploaded &&
-//       progress.aadharVerified &&
-//       progress.panUploaded &&
-//       progress.dlUploaded;
-
-//     if (!allStepsCompleted) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Onboarding steps not completed",
-//       });
-//     }
-
-//     // ✅ STEP 2: Update flags
-//     rider.onboardingProgress.kycCompleted = true;
-//     rider.isFullyRegistered = true;
-//     rider.onboardingStage = "COMPLETED";
-
-//     await rider.save();
-    
-//     const updatedRider = await ensurePartnerId(rider._id);
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "KYC completed and rider fully registered",
-//       partnerId: updatedRider?.partnerId || null,
- 
-//       onboardingStage: rider.onboardingStage,
-//       onboardingProgress: rider.onboardingProgress,
-//       isFullyRegistered: rider.isFullyRegistered,
-//     });
-
-//   } catch (error) {
-//     console.error("CompleteKyc Error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error while completing KYC",
-//     });
-//   }
-// };
-
-
-
-// exports.completeKyc = async (req, res) => {
-//   try {
-//     const riderId = req.rider.id;
-
-//     if (!riderId) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "Unauthorized rider"
-//       });
-//     }
-
-//     // 1️⃣ Fetch onboarding
-//     const onboarding = await prisma.riderOnboarding.findUnique({
-//       where: { riderId }
-//     });
-
-//     if (!onboarding) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Onboarding record not found"
-//       });
-//     }
-
-//     // 2️⃣ Validate all required steps
-//     const requiredSteps = [
-//       "phoneVerified",
-//       "appPermissionDone",
-//       "citySelected",
-//       "vehicleSelected",
-//       "personalInfoSubmitted",
-//       "selfieUploaded",
-//       "aadharVerified",
-//       "panUploaded",
-//       "dlUploaded"
-//     ];
-
-//     const missingSteps = requiredSteps.filter(
-//       (step) => onboarding[step] !== true
-//     );
-
-//     if (missingSteps.length > 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Onboarding steps not completed",
-//         missingSteps
-//       });
-//     }
-
-//     // 3️⃣ Complete KYC + update rider inside transaction
-//     const result = await prisma.$transaction(async (tx) => {
-
-//       // Update onboarding
-//       await tx.riderOnboarding.update({
-//         where: { riderId },
-//         data: { kycCompleted: true }
-//       });
-
-//       // Get rider
-//       const rider = await tx.rider.findUnique({
-//         where: { id: riderId }
-//       });
-
-//       if (!rider) {
-//         throw new Error("Rider not found during transaction");
-//       }
-
-//       let partnerId = rider.partnerId;
-
-//       // 4️⃣ Generate partnerId if not exists
-//       if (!partnerId) {
-//         partnerId = generatePartnerId();
-
-//         // ensure uniqueness
-//         const existing = await tx.rider.findUnique({
-//           where: { partnerId }
-//         });
-
-//         if (existing) {
-//           partnerId = generatePartnerId(); // regenerate once
-//         }
-//       }
-
-//       // Update rider
-//       const updatedRider = await tx.rider.update({
-//         where: { id: riderId },
-//         data: {
-//           isFullyRegistered: true,
-//           onboardingStage: "COMPLETED",
-//           partnerId,
-//           isPartnerActive: true
-//         }
-//       });
-
-//       return updatedRider;
-//     });
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "KYC completed and rider fully registered",
-//       partnerId: result.partnerId,
-//       onboardingStage: result.onboardingStage,
-//       isFullyRegistered: result.isFullyRegistered
-//     });
-
-//   } catch (error) {
-//     console.error("CompleteKyc Error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error while completing KYC"
-//     });
-//   }
-// };
 
 
 exports.completeKyc = async (req, res) => {

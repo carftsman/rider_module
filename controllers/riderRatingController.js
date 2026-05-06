@@ -2,7 +2,7 @@ const prisma = require("../config/prisma");
 
 exports.submitRiderRating = async (req, res) => {
   try {
-    const riderIdFromToken = req.rider.id; // ✅ from middleware
+    const riderIdFromToken = req.rider.id; 
 
     const { orderId, rating, review } = req.body;
 
@@ -90,7 +90,7 @@ exports.submitRiderRating = async (req, res) => {
 
 exports.getRiderRatings = async (req, res) => {
   try {
-    const riderId = req.rider.id; // 🔥 from token
+    const riderId = req.rider.id; 
 
     const ratings = await prisma.riderRating.findMany({
       where: { riderId },
@@ -114,7 +114,7 @@ exports.getRiderRatings = async (req, res) => {
       ratings,
     });
   } catch (err) {
-      console.error("🔥 REAL ERROR:", err);
+      console.error(" REAL ERROR:", err);
 
     return res.status(500).json({
       success: false,

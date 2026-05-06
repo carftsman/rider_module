@@ -5,7 +5,7 @@ const prisma=require('../config/prisma');
 exports.markDelivered = async (req, res) => {
   try {
 
-    // ✅ KEEP AS ObjectId
+    // KEEP AS ObjectId
     const riderId = req.rider._id;
     const { orderId } = req.body;
 
@@ -276,7 +276,7 @@ exports.getCashInHand = async (req, res) => {
       where: {
         riderId,
         OrderPayment: {
-          mode: "COD", // ✅ relation filter (correct way)
+          mode: "COD", 
         },
       },
       include: {
@@ -387,7 +387,7 @@ exports.getWallet = async (req, res) => {
   try {
     const riderId = req.rider._id;
 
-    // 1️⃣ Fetch rider info
+    // 1️Fetch rider info
     const rider = await Rider.findById(riderId)
       .select("wallet cashInHand bankDetails")
       .lean();
@@ -399,7 +399,7 @@ exports.getWallet = async (req, res) => {
       });
     }
 
-    // 2️⃣ Calculate pending COD from delivered orders
+    // Calculate pending COD from delivered orders
     const codOrders = await Order.find({
       riderId,
       "payment.mode": "COD",
@@ -412,7 +412,7 @@ exports.getWallet = async (req, res) => {
       0
     );
 
-    // 3️⃣ Determine actions
+    // Determine actions
     const actions = {
       canWithdraw: rider.wallet.balance >= 500, // Minimum withdrawal threshold
       canAddMoney: true,
@@ -423,7 +423,7 @@ exports.getWallet = async (req, res) => {
       )
     };
 
-    // 4️⃣ Build response
+    //  Build response
     return res.status(200).json({
       success: true,
       data: {

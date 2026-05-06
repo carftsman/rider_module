@@ -1866,7 +1866,7 @@ model RiderRating {
   review String?
 
   createdAt DateTime @default(now())
-  
+
   rider  Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
   orders Order[]
 
@@ -2240,7 +2240,7 @@ model ProgramProgress {
   program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@unique([riderId, programId, week])
-  @@unique([riderId, programId, date])
+  @@unique([riderId, programId, slotId, date])
   @@index([riderId, programId])
   @@index([date])
   @@index([week])
