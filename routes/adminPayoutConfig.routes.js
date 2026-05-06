@@ -3,6 +3,8 @@
 const express = require("express");
 const router = express.Router();
 const controller = require("../controllers/adminPayoutConfig.controller");
+const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
+
 /**
  * @swagger
  * tags:
@@ -644,4 +646,55 @@ router.post("/admin/:id/rollback", controller.rollbackPayoutConfig);
  *         description: Cannot deactivate only active config
  */
 router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
+
+/**
+ * @swagger
+ * /api/rider/payout/surge-status:
+ *   get:
+ *     summary: Get rider surge status
+ *     tags: [Surge]
+ *     description: Fetches current surge status based on authenticated rider location
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     responses:
+ *       200:
+ *         description: Surge status fetched successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               data:
+ *                 isSurgeActive: true
+ *                 scenarioType: HIGH_DEMAND
+ *                 multiplier: 1.8
+ *                 minDemand: 50
+ *
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Unauthorized
+ *
+ *       404:
+ *         description: No active config found
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: No active config found
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Internal server error
+ */
+
+router.get("/rider/payout/surge-status",riderAuthMiddleWare,controller.getSurgeStatus);
 module.exports = router;

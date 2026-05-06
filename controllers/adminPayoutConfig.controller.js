@@ -1,130 +1,130 @@
 const prisma = require("../config/prisma");
 
 const createPayoutConfig = async (req, res) => {
-    try {
-        const {
-            name,
-            scenarioType,
-            cityId,
-            pincodeIds,
-            vehicleType,
-            basePay,
-            perKmRate,
-            surgeConfig,
-            peakConfig,
-            weatherConfig,
-            notes,
-            applicableFrom,
-            applicableTill
-        } = req.body;
+  try {
+    const {
+      name,
+      scenarioType,
+      cityId,
+      pincodeIds,
+      vehicleType,
+      basePay,
+      perKmRate,
+      surgeConfig,
+      peakConfig,
+      weatherConfig,
+      notes,
+      applicableFrom,
+      applicableTill
+    } = req.body;
 
-        // ---------------- VALIDATION ----------------
-        if (!scenarioType || !name) {
-            return res.status(400).json({
-                success: false,
-                message: "scenarioType and name are required"
-            });
-        }
-
-        if (!basePay || basePay <= 0) {
-            return res.status(400).json({
-                success: false,
-                message: "Base pay must be greater than 0"
-            });
-        }
-
-        if (perKmRate < 0) {
-            return res.status(400).json({
-                success: false,
-                message: "perKmRate must be >= 0"
-            });
-        }
-
-        if (!surgeConfig) {
-            return res.status(400).json({
-                success: false,
-                message: "surgeConfig is required"
-            });
-        }
-        if (applicableFrom && applicableTill) {
-            if (new Date(applicableFrom) > new Date(applicableTill)) {
-                return res.status(400).json({
-                    success: false,
-                    message: "applicableFrom cannot be greater than applicableTill"
-                });
-            }
-        }
-
-        // ---------------- CHECK EXISTING ----------------
-        const existingConfig = await prisma.payoutConfig.findFirst({
-            where: {
-                cityId,
-                scenarioType,
-                vehicleType,
-                isActive: true,
-                pincodeIds: {
-                    hasSome: pincodeIds
-                }
-            }
-        });
-
-        if (existingConfig) {
-            return res.status(400).json({
-                success: false,
-                message:
-                    "Config already exists for this segment. Delete or deactivate it before creating a new one.",
-                data: {
-                    existingConfigId: existingConfig.id
-                }
-            });
-        }
-
-        // ---------------- CREATE NEW CONFIG ----------------
-        const newConfig = await prisma.payoutConfig.create({
-            data: {
-                name,
-                scenarioType,
-                cityId,
-                pincodeIds,
-                vehicleType,
-                basePay,
-                perKmRate,
-                surgeConfig,
-                peakConfig,
-                weatherConfig,
-                version: 1, // static now
-                isActive: true,
-                notes,
-                createdBy: "admin",
-                applicableFrom: applicableFrom ? new Date(applicableFrom) : null,
-                applicableTill: applicableTill ? new Date(applicableTill) : null
-            }
-        });
-
-        // ---------------- RESPONSE ----------------
-        return res.status(201).json({
-            success: true,
-            message: "Payout config created successfully",
-            data: {
-                configId: newConfig.id,
-                version: newConfig.version,
-                isActive: newConfig.isActive,
-                scenarioType: newConfig.scenarioType,
-                cityId: newConfig.cityId,
-                createdAt: newConfig.createdAt,
-                applicableFrom: newConfig.applicableFrom,
-                applicableTill: newConfig.applicableTill
-            }
-        });
-
-    } catch (error) {
-        console.error("Create Payout Config Error:", error);
-
-        return res.status(500).json({
-            success: false,
-            message: "Internal server error"
-        });
+    // ---------------- VALIDATION ----------------
+    if (!scenarioType || !name) {
+      return res.status(400).json({
+        success: false,
+        message: "scenarioType and name are required"
+      });
     }
+
+    if (!basePay || basePay <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Base pay must be greater than 0"
+      });
+    }
+
+    if (perKmRate < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "perKmRate must be >= 0"
+      });
+    }
+
+    if (!surgeConfig) {
+      return res.status(400).json({
+        success: false,
+        message: "surgeConfig is required"
+      });
+    }
+    if (applicableFrom && applicableTill) {
+      if (new Date(applicableFrom) > new Date(applicableTill)) {
+        return res.status(400).json({
+          success: false,
+          message: "applicableFrom cannot be greater than applicableTill"
+        });
+      }
+    }
+
+    // ---------------- CHECK EXISTING ----------------
+    const existingConfig = await prisma.payoutConfig.findFirst({
+      where: {
+        cityId,
+        scenarioType,
+        vehicleType,
+        isActive: true,
+        pincodeIds: {
+          hasSome: pincodeIds
+        }
+      }
+    });
+
+    if (existingConfig) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Config already exists for this segment. Delete or deactivate it before creating a new one.",
+        data: {
+          existingConfigId: existingConfig.id
+        }
+      });
+    }
+
+    // ---------------- CREATE NEW CONFIG ----------------
+    const newConfig = await prisma.payoutConfig.create({
+      data: {
+        name,
+        scenarioType,
+        cityId,
+        pincodeIds,
+        vehicleType,
+        basePay,
+        perKmRate,
+        surgeConfig,
+        peakConfig,
+        weatherConfig,
+        version: 1, // static now
+        isActive: true,
+        notes,
+        createdBy: "admin",
+        applicableFrom: applicableFrom ? new Date(applicableFrom) : null,
+        applicableTill: applicableTill ? new Date(applicableTill) : null
+      }
+    });
+
+    // ---------------- RESPONSE ----------------
+    return res.status(201).json({
+      success: true,
+      message: "Payout config created successfully",
+      data: {
+        configId: newConfig.id,
+        version: newConfig.version,
+        isActive: newConfig.isActive,
+        scenarioType: newConfig.scenarioType,
+        cityId: newConfig.cityId,
+        createdAt: newConfig.createdAt,
+        applicableFrom: newConfig.applicableFrom,
+        applicableTill: newConfig.applicableTill
+      }
+    });
+
+  } catch (error) {
+    console.error("Create Payout Config Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
 };
 
 const getActivePayoutConfig = async (req, res) => {
@@ -228,7 +228,7 @@ const getPayoutConfigHistory = async (req, res) => {
     const configs = await prisma.payoutConfig.findMany({
       where: {
         cityId,
-        ...(scenarioType && { scenarioType }) 
+        ...(scenarioType && { scenarioType })
       },
       orderBy: [
         { createdAt: "desc" } // latest first
@@ -278,16 +278,9 @@ const getPayoutConfigHistory = async (req, res) => {
 
 const updateBasePay = async (req, res) => {
   try {
-   const id = req.body.id || req.body.configId;
-const basePay = req.body.basePay;
-const reason = req.body.reason;
-
-    console.log("BODY:", req.body);
-
-    console.log("REQ BODY TYPE:", typeof req.body);
-
-console.log("ID:", req.body?.id);
-console.log("BASEPAY:", req.body?.basePay);
+    const id = req.body.id || req.body.configId;
+    const basePay = req.body.basePay;
+    const reason = req.body.reason;
 
     if (!id || basePay === undefined) {
       return res.status(400).json({
@@ -318,11 +311,11 @@ console.log("BASEPAY:", req.body?.basePay);
     }
 
     if (!existingConfig.isActive) {
-  return res.status(403).json({
-    success: false,
-    message: "Cannot update inactive payout config",
-  });
-}
+      return res.status(403).json({
+        success: false,
+        message: "Cannot update inactive payout config",
+      });
+    }
 
     const oldValue = existingConfig.basePay;
 
@@ -366,8 +359,6 @@ const updateDistancePay = async (req, res) => {
     const cityId = req.body.cityId;
     const perKmRate = req.body.perKmRate;
 
-    console.log("BODY:", req.body);
-
     // 1. Validation
     if (!cityId || perKmRate === undefined) {
       return res.status(400).json({
@@ -386,12 +377,12 @@ const updateDistancePay = async (req, res) => {
     }
 
     // 2. Find config by cityId
-   const existingConfig = await prisma.payoutConfig.findFirst({
-  where: {
-    cityId,
-    isActive: true
-  },
-});
+    const existingConfig = await prisma.payoutConfig.findFirst({
+      where: {
+        cityId,
+        isActive: true
+      },
+    });
 
     if (!existingConfig) {
       return res.status(404).json({
@@ -440,9 +431,6 @@ const updateSurgeConfig = async (req, res) => {
   try {
     const cityId = req.body.cityId;
     const surgeConfig = req.body.surgeConfig;
-
-    console.log("BODY:", req.body);
-
     // 1. Validation
     if (!cityId || !surgeConfig) {
       return res.status(400).json({
@@ -660,13 +648,107 @@ const togglePayoutConfigStatus = async (req, res) => {
     });
   }
 };
+
+//rider getsurgestatus
+const getSurgeStatus = async (req, res) => {
+  try {
+    //  rider auth
+    const riderId = req.rider?.id;
+
+    if (!riderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized",
+      });
+    }
+
+    //  fetch rider location
+    const rider = await prisma.rider.findUnique({
+      where: {
+        id: riderId,
+      },
+      select: {
+        location: {
+          select: {
+            city: true,
+            pincode: true,
+          },
+        },
+      },
+    });
+
+    if (!rider || !rider.location) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider location not found",
+      });
+    }
+
+    //  location values
+    const cityId = rider.location.city;
+    const pincode = rider.location.pincode;
+
+    //  active config
+    const config = await prisma.payoutConfig.findFirst({
+      where: {
+        isActive: true,
+        pincodeIds: {
+          has: pincode,
+        },
+      },
+      orderBy: {
+        version: "desc",
+      },
+    });
+
+    if (!config) {
+      return res.status(404).json({
+        success: false,
+        message: "No active config found",
+      });
+    }
+
+    const surge = config.surgeConfig || {};
+
+    // pincode validation
+    const isPincodeAllowed =
+      !config.pincodeIds?.length ||
+      config.pincodeIds.includes(pincode);
+
+    //  surge status
+    const isSurgeActive =
+      surge.enabled === true &&
+      isPincodeAllowed;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        isSurgeActive,
+        scenarioType: config.scenarioType,
+        multiplier: isSurgeActive
+          ? surge.multiplier
+          : 1,
+        minDemand: surge.minDemand || null,
+      },
+    });
+  } catch (err) {
+    console.error(" Surge Status Error:", err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
 module.exports = {
-    createPayoutConfig,
-    getActivePayoutConfig,
-    getPayoutConfigHistory,
-    updateBasePay,
-    updateSurgeConfig,
-    updateDistancePay,
-    rollbackPayoutConfig,          
-    togglePayoutConfigStatus       
+  createPayoutConfig,
+  getActivePayoutConfig,
+  getPayoutConfigHistory,
+  updateBasePay,
+  updateSurgeConfig,
+  updateDistancePay,
+  rollbackPayoutConfig,
+  togglePayoutConfigStatus,
+  getSurgeStatus
 };
