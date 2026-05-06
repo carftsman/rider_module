@@ -2,8 +2,8 @@ const prisma = require("../config/prisma");
 
 const getDailyIncentive = async (req, res) => {
   try {
-    const riderId = req.rider?.id;
-
+const riderId =
+  req.rider?.id || req.rider?.riderId;
     if (!riderId) {
       return res.status(400).json({
         message: "Rider ID missing in token",
@@ -17,17 +17,74 @@ const getDailyIncentive = async (req, res) => {
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
 
-    // 1. Find active DAILY program
-    const program = await prisma.program.findFirst({
-      where: {
-        programType: "DAILY_TARGET",
-        trackingType: "DAILY",
-        ruleType: {
-          in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-        },
-        isActive: true,
-      },
-    });
+// GET RIDER LOCATION
+
+const riderLocation =
+  await prisma.riderLocation.findUnique({
+    where: { riderId }
+  });
+
+if (!riderLocation) {
+  return res.json({
+    programId: null,
+    type: "DAILY",
+    ordersCompleted: 0,
+    rewardEarned: 0,
+    status: "NO_ACTIVE_PROGRAM",
+  });
+}
+
+const riderPincode =
+  riderLocation.pincode
+    ? String(riderLocation.pincode).trim()
+    : null;
+
+const riderCityId =
+  riderLocation.cityId || null;
+
+const now = new Date();
+
+let program = null;
+
+// PINCODE FIRST
+
+if (riderPincode) {
+  program = await prisma.program.findFirst({
+    where: {
+      programType: "DAILY_TARGET",
+      trackingType: "DAILY",
+      isActive: true,
+      validFrom: { lte: now },
+      validTill: { gte: now },
+      pincodeIds: {
+        has: riderPincode
+      }
+    },
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
+}
+
+// FALLBACK CITY
+
+if (!program && riderCityId) {
+  program = await prisma.program.findFirst({
+    where: {
+      programType: "DAILY_TARGET",
+      trackingType: "DAILY",
+      isActive: true,
+      validFrom: { lte: now },
+      validTill: { gte: now },
+      cityId: {
+        has: riderCityId
+      }
+    },
+    orderBy: {
+      createdAt: "desc"
+    }
+  });
+}
 
     if (!program) {
       return res.json({
@@ -50,29 +107,24 @@ const getDailyIncentive = async (req, res) => {
         },
       },
     });
-
-    // 3. Create if not exists
-    if (!progress) {
-      progress = await prisma.programProgress.create({
-        data: {
-          riderId, //  NOW WILL NOT BE UNDEFINED
-          programId: program.id,
-          date: new Date(),
-          totalOrders: 0,
-          rewardAmount: 0,
-          achieved: false,
-        },
-      });
-    }
-
-
     let status = "NOT_STARTED";
 
-    if (progress.achieved) {
-      status = "ACHIEVED";
-    } else if (progress.totalOrders > 0) {
-      status = "IN_PROGRESS";
-    }
+   if (!progress) {
+  return res.json({
+    programId: program.id,
+    type: "DAILY",
+    ordersCompleted: 0,
+    rewardEarned: 0,
+    status: "NOT_STARTED",
+  });
+}
+
+if (progress.achieved) {
+  status = "ACHIEVED";
+}
+else if (progress.totalOrders > 0) {
+  status = "IN_PROGRESS";
+}
 
     return res.json({
       programId: progress.programId,
@@ -93,7 +145,8 @@ const getDailyIncentive = async (req, res) => {
 
 const getRiderDailyPrograms = async (req, res) => {
   try {
-    const riderId = req.rider.id;
+    const riderId =
+  req.rider?.id || req.rider?.riderId;
 
     // GET RIDER LOCATION
 
@@ -123,9 +176,6 @@ const getRiderDailyPrograms = async (req, res) => {
         where: {
           programType: "DAILY_TARGET",
           trackingType: "DAILY",
-          ruleType: {
-            in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-          },
           isActive: true,
           validFrom: { lte: now },
           validTill: { gte: now },
@@ -146,9 +196,6 @@ const getRiderDailyPrograms = async (req, res) => {
         where: {
           programType: "DAILY_TARGET",
           trackingType: "DAILY",
-          ruleType: {
-            in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-          },
           isActive: true,
           validFrom: { lte: now },
           validTill: { gte: now },
@@ -162,11 +209,6 @@ const getRiderDailyPrograms = async (req, res) => {
         orderBy: { createdAt: "desc" }
       });
     }
-
-    //  FILTER VALID RULE TYPES
-    programs = programs.filter(p =>
-      ["SLAB", "FIXED_TARGET", "HYBRID", "PER_ORDER"].includes(p.ruleType)
-    );
 
 
     // FORMAT RESPONSE (ADMIN STYLE)
