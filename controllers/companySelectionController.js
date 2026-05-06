@@ -2,90 +2,6 @@ const prisma = require("../config/prisma");
 const { RiderType, OnboardingStage } = require("@prisma/client");
 const { uploadToAzure } = require("../utils/azureUpload");
 
-// exports.selectRiderType = async (req, res) => {
-//   try {
-//     const riderId = req.rider?.id;
-//     const { riderType } = req.body;
-
-//     if (!riderId) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "Unauthorized"
-//       });
-//     }
-
-//     if (!riderType) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "riderType is required"
-//       });
-//     }
-
-//     if (
-//       riderType !== "INDIVIDUAL_EMPLOYEE" &&
-//       riderType !== "COMPANY_EMPLOYEE"
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid riderType. Allowed values: INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE"
-//       });
-//     }
-
-//     const existingRider = await prisma.rider.findUnique({
-//       where: { id: riderId }
-//     });
-
-//     if (!existingRider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found"
-//       });
-//     }
-
-//     const existingOnboarding = await prisma.riderOnboarding.findUnique({
-//       where: { riderId }
-//     });
-
-//     if (!existingOnboarding) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider onboarding record not found"
-//       });
-//     }
-
-//     const updatedOnboarding = await prisma.riderOnboarding.update({
-//       where: { riderId },
-//       data: {
-//         riderType: true
-//       },
-//       select: {
-//         id: true,
-//         riderId: true,
-//         riderType: true,
-//         appPermissionDone: true
-//       }
-//     });
-
-//     const nextStage =
-//       riderType === "COMPANY_EMPLOYEE"
-//         ? "EMPLOYEE_DETAILS"
-//         : "SELECT_LOCATION";
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Rider type selected successfully",
-//       data: updatedOnboarding,
-//       selectedType: riderType,
-//       nextStage
-//     });
-//   } catch (error) {
-//     console.error("Error selecting rider type:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message || "Internal server error"
-//     });
-//   }
-// };
 
 exports.selectRiderType = async (req, res) => {
   try {
@@ -208,7 +124,7 @@ exports.employeeDetails = async (req, res) => {
       referralCode
     } = req.body;
 
-    // ✅ 1. Validation
+    //  1. Validation
     if (!companyName || !empId || !fullName) {
       return res.status(400).json({
         success: false,
@@ -227,7 +143,7 @@ exports.employeeDetails = async (req, res) => {
 
 
 
-    // ✅ 2. Check rider exists
+    //  2. Check rider exists
     const rider = await prisma.rider.findUnique({
       where: { id: riderId }
     });
@@ -239,7 +155,7 @@ exports.employeeDetails = async (req, res) => {
       });
     }
 
-    // ✅ 3. Prevent duplicate empId
+    //  3. Prevent duplicate empId
     const existingEmp = await prisma.rider.findFirst({
       where: { empId }
     });
@@ -275,7 +191,7 @@ exports.employeeDetails = async (req, res) => {
 
       referredByPartnerId = referrer.partnerId;
     }
-    // ✅ 4. Update Rider (Company fields)
+    //  4. Update Rider (Company fields)
     await prisma.rider.update({
       where: { id: riderId },
       data: {
@@ -289,7 +205,7 @@ exports.employeeDetails = async (req, res) => {
       }
     });
 
-    // ✅ 5. Upsert Profile
+    //  5. Upsert Profile
     await prisma.riderProfile.upsert({
       where: { riderId },
       update: {
@@ -307,7 +223,7 @@ exports.employeeDetails = async (req, res) => {
       }
     });
 
-    // ✅ 6. Update Onboarding Flags
+    //  6. Update Onboarding Flags
     await prisma.riderOnboarding.upsert({
       where: { riderId },
       update: {
@@ -319,10 +235,10 @@ exports.employeeDetails = async (req, res) => {
       }
     });
 
-    // ✅ 7. Decide NEXT STAGE (as per your flow)
+    //  7. Decide NEXT STAGE (as per your flow)
     const nextStage = OnboardingStage.DOCUMENT_DETAILS;
 
-    // ✅ 8. Response
+    //  8. Response
     return res.status(200).json({
       success: true,
       message: "Employee details submitted",
@@ -349,7 +265,7 @@ exports.documentDetails = async (req, res) => {
 
     const file = req.file;
 
-    // ✅ Validation
+    //  Validation
     if (!dlNumber || !panNumber || !type || !file) {
       return res.status(400).json({
         success: false,
@@ -366,7 +282,7 @@ exports.documentDetails = async (req, res) => {
       });
     }
 
-    // ✅ Check rider
+    //  Check rider
     const rider = await prisma.rider.findUnique({
       where: { id: riderId }
     });
@@ -378,24 +294,24 @@ exports.documentDetails = async (req, res) => {
       });
     }
 
-    // 🔥 ✅ Upload to Azure
+    //  Upload to Azure
     const selfieUrl = await uploadToAzure(file, "rider-selfies");
 
-    // ✅ KYC
+    //  KYC
     await prisma.riderKyc.upsert({
       where: { riderId },
       update: { dlNumber, panNumber },
       create: { riderId, dlNumber, panNumber }
     });
 
-    // ✅ Vehicle
+    //  Vehicle
     await prisma.riderVehicle.upsert({
       where: { riderId },
       update: { type },
       create: { riderId, type }
     });
 
-    // ✅ Selfie
+    //  Selfie
     await prisma.riderSelfie.upsert({
       where: { riderId },
       update: {
@@ -409,7 +325,7 @@ exports.documentDetails = async (req, res) => {
       }
     });
 
-    // ✅ Onboarding flags
+    //  Onboarding flags
     await prisma.riderOnboarding.upsert({
       where: { riderId },
       update: {
@@ -427,7 +343,7 @@ exports.documentDetails = async (req, res) => {
       }
     });
 
-    // 🔥 ✅ Dynamic NEXT STAGE
+    //  Dynamic NEXT STAGE
     let nextStage;
 
     if (rider.riderType === RiderType.COMPANY_EMPLOYEE) {
@@ -436,17 +352,17 @@ exports.documentDetails = async (req, res) => {
       nextStage = OnboardingStage.COMPLETED;
     }
 
-    // ✅ Update stage
+    //  Update stage
     await prisma.rider.update({
       where: { id: riderId },
       data: { onboardingStage: nextStage }
     });
 
-    // ✅ Response
+    //  Response
     return res.status(200).json({
       success: true,
       message: "Documents uploaded",
-      selfieUrl, // 👈 Azure URL
+      selfieUrl, 
       nextStage
     });
 
@@ -514,7 +430,7 @@ exports.onboardingStatus = async (req, res) => {
  
     const { phoneVerified, appPermissionDone, riderType } = onboarding;
  
-    // ✅ Step 1: Basic checks
+    //  Step 1: Basic checks
 
     if (!phoneVerified || !appPermissionDone) {
 
@@ -540,7 +456,7 @@ exports.onboardingStatus = async (req, res) => {
 
     }
  
-    // ✅ Step 2: Rider type selection pending
+    //  Step 2: Rider type selection pending
 
     if (!riderType) {
 
@@ -570,7 +486,7 @@ exports.onboardingStatus = async (req, res) => {
  
     let responseData;
  
-    // ✅ Step 3: INDIVIDUAL
+    //  Step 3: INDIVIDUAL
 
     if (riderTypeValue === "INDIVIDUAL_EMPLOYEE") {
 
@@ -604,7 +520,7 @@ exports.onboardingStatus = async (req, res) => {
 
     }
  
-    // ✅ Step 4: COMPANY
+    //  Step 4: COMPANY
 
     else if (riderTypeValue === "COMPANY_EMPLOYEE") {
 

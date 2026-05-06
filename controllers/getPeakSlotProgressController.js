@@ -10,7 +10,7 @@ const getPeakSlotProgress = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    // 1️⃣ Get rider pincode
+    //  Get rider pincode
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId },
       select: { pincode: true },
@@ -26,7 +26,7 @@ const getPeakSlotProgress = async (req, res) => {
     const riderPincode = riderLocation.pincode;
     const today = new Date();
 
-    // 2️⃣ Get active programs for rider
+    //  Get active programs for rider
     const programs = await prisma.program.findMany({
       where: {
         isActive: true,
@@ -51,7 +51,7 @@ const getPeakSlotProgress = async (req, res) => {
       });
     }
 
-    // 3️⃣ Create / Fetch progress (LAZY UPSERT STYLE)
+    // Create / Fetch progress
     const progressMap = {};
 
     for (const p of programs) {
@@ -62,7 +62,7 @@ const getPeakSlotProgress = async (req, res) => {
         },
       });
 
-      // 🔥 If not exists → create zero progress
+      // If not exists → create zero progress
       if (!progProgress) {
         progProgress = await prisma.programProgress.create({
           data: {
@@ -79,7 +79,7 @@ const getPeakSlotProgress = async (req, res) => {
       progressMap[p.id] = progProgress;
     }
 
-    // 4️⃣ Build response
+    //Build response
   const allSlots = programs.flatMap((p) =>
   p.slots.map((slot) => {
     const progProgress = progressMap[p.id];
@@ -132,9 +132,9 @@ const getRiderPeakSlotPrograms = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    /////////////////////////////////////////////////////
-    // 1️⃣ GET RIDER LOCATION
-    /////////////////////////////////////////////////////
+    
+    //  GET RIDER LOCATION
+   
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId }
     });
@@ -148,9 +148,8 @@ const getRiderPeakSlotPrograms = async (req, res) => {
 
     const now = new Date();
 
-    /////////////////////////////////////////////////////
-    // 2️⃣ FETCH PROGRAMS (PINCODE FIRST)
-    /////////////////////////////////////////////////////
+    // FETCH PROGRAMS 
+    
     let programs = [];
 
     const baseQuery = {
@@ -176,9 +175,8 @@ const getRiderPeakSlotPrograms = async (req, res) => {
       });
     }
 
-    /////////////////////////////////////////////////////
-    // 3️⃣ FALLBACK TO CITY
-    /////////////////////////////////////////////////////
+    // FALLBACK TO CITY
+    
     if (!programs.length && riderCityId) {
       programs = await prisma.program.findMany({
         where: {
@@ -195,16 +193,14 @@ const getRiderPeakSlotPrograms = async (req, res) => {
       });
     }
 
-    /////////////////////////////////////////////////////
-    // 4️⃣ REMOVE DUPLICATES
-    /////////////////////////////////////////////////////
+    //REMOVE DUPLICATES
+    
     const uniquePrograms = Array.from(
       new Map(programs.map(p => [p.id, p])).values()
     );
 
-    /////////////////////////////////////////////////////
-    // 5️⃣ FETCH CITY NAMES (FROM cityId)
-    /////////////////////////////////////////////////////
+    // FETCH CITY NAMES (FROM cityId)
+    
     const allCityIds = [
       ...new Set(uniquePrograms.flatMap(p => p.cityId || []))
     ];
@@ -219,9 +215,8 @@ const getRiderPeakSlotPrograms = async (req, res) => {
       cityMap[c.id] = c.name;
     });
 
-    /////////////////////////////////////////////////////
-    // 6️⃣ FETCH PINCODE → CITY
-    /////////////////////////////////////////////////////
+    // FETCH PINCODE → CITY
+    
     const allPincodes = [
       ...new Set(uniquePrograms.flatMap(p => p.pincodeIds || []))
     ];
@@ -243,9 +238,8 @@ for (const p of pincodes) {
   }
 }
 
-    /////////////////////////////////////////////////////
-    // 7️⃣ FORMAT RESPONSE
-    /////////////////////////////////////////////////////
+    // FORMAT RESPONSE
+    
     const response = uniquePrograms
       .map(program => {
         // filter only PER_ORDER + SLAB slots
@@ -255,9 +249,8 @@ for (const p of pincodes) {
 
         if (!validSlots.length) return null;
 
-        /////////////////////////////////////////////////////
         // CITY NAME LOGIC
-        /////////////////////////////////////////////////////
+        
         let cityName = null;
 
         if (program.cityId?.length) {
@@ -287,18 +280,16 @@ for (const p of pincodes) {
               ruleType: slot.ruleType
             };
 
-            ////////////////////////////////////////////
             // PER ORDER
-            ////////////////////////////////////////////
+            
             if (slot.ruleType === "PER_ORDER") {
               formattedSlot.reward = {
                 amount: slot.rewardPerOrder || 0
               };
             }
 
-            ////////////////////////////////////////////
             // SLAB
-            ////////////////////////////////////////////
+            
             if (slot.ruleType === "SLAB") {
               formattedSlot.slabs = slot.slabs.map(s => ({
                 minOrders: s.minOrders,
@@ -315,9 +306,8 @@ for (const p of pincodes) {
       })
       .filter(Boolean);
 
-    /////////////////////////////////////////////////////
-    // 8️⃣ RESPONSE
-    /////////////////////////////////////////////////////
+    // RESPONSE
+    
     return res.json({
       success: true,
       data: response
@@ -332,14 +322,5 @@ for (const p of pincodes) {
     });
   }
 };
-
-/////////////////////////////////////////////////////
-// 🔧 HELPER
-/////////////////////////////////////////////////////
-// const minutesToTime = (minutes) => {
-//   const h = String(Math.floor(minutes / 60)).padStart(2, "0");
-//   const m = String(minutes % 60).padStart(2, "0");
-//   return `${h}:${m}`;
-// };
 
 module.exports = { getPeakSlotProgress, getRiderPeakSlotPrograms };

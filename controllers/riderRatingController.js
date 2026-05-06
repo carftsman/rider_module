@@ -2,11 +2,11 @@ const prisma = require("../config/prisma");
 
 exports.submitRiderRating = async (req, res) => {
   try {
-    const riderIdFromToken = req.rider.id; // ✅ from middleware
+    const riderIdFromToken = req.rider.id; 
 
     const { orderId, rating, review } = req.body;
 
-    // 1. Validate rating
+    //  Validate rating
     if (rating < 0 || rating > 5) {
       return res.status(400).json({
         success: false,
@@ -14,7 +14,7 @@ exports.submitRiderRating = async (req, res) => {
       });
     }
 
-    // 2. Find order
+    // Find order
     const order = await prisma.order.findUnique({
       where: { orderId }
     });
@@ -26,7 +26,7 @@ exports.submitRiderRating = async (req, res) => {
       });
     }
 
-    // 3. Status checks
+    //  Status checks
     if (order.orderStatus === "CANCELLED") {
       return res.status(400).json({
         success: false,
@@ -41,7 +41,7 @@ exports.submitRiderRating = async (req, res) => {
       });
     }
 
-    // 4. Ensure rider matches (IMPORTANT)
+    // Ensure rider matches
     if (order.riderId !== riderIdFromToken) {
       return res.status(403).json({
         success: false,
@@ -49,7 +49,7 @@ exports.submitRiderRating = async (req, res) => {
       });
     }
 
-    // 5. Duplicate check
+    //  Duplicate check
     const existingRating = await prisma.riderRating.findFirst({
       where: { orderId }
     });
@@ -61,7 +61,7 @@ exports.submitRiderRating = async (req, res) => {
       });
     }
 
-    // 6. Save rating
+    // Save rating
     const ratingData = await prisma.riderRating.create({
       data: {
         orderId,
@@ -90,8 +90,7 @@ exports.submitRiderRating = async (req, res) => {
 
 exports.getRiderRatings = async (req, res) => {
   try {
-    const riderId = req.rider.id; // 🔥 from token
-
+    const riderId = req.rider.id; 
     const ratings = await prisma.riderRating.findMany({
       where: { riderId },
       orderBy: { createdAt: "desc" },
@@ -114,7 +113,7 @@ exports.getRiderRatings = async (req, res) => {
       ratings,
     });
   } catch (err) {
-      console.error("🔥 REAL ERROR:", err);
+      console.error(" REAL ERROR:", err);
 
     return res.status(500).json({
       success: false,
@@ -135,9 +134,6 @@ exports.getRiderWeeklyStats = async (req, res) => {
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 7);
-
-    console.log("START:", startDate);
-    console.log("END:", endDate);
 
     // orders
     const orders = await prisma.order.findMany({

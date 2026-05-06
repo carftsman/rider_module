@@ -105,7 +105,7 @@ router.post("/rider/type", riderAuthMiddleWare, selectRiderType);
 
 /**
  * @swagger
- * /api/rider/employee-details:
+ * /api/company/rider/employee:
  *   post:
  *     summary: Submit company employee rider details
  *     description: >

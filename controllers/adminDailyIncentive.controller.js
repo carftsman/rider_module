@@ -133,12 +133,11 @@ exports.createDailyIncentive = async (req, res) => {
       }
     }
 
-    // DUPLICATE CHECK (FINAL FIX)
     // SAME PINCODE BLOCK
     if (pincodeIds && pincodeIds.length > 0) {
       const existingPincode = await prisma.program.findFirst({
         where: {
-          programType: "WEEKLY_TARGET",
+          programType: "DAILY_TARGET",
           trackingType: "DAILY",
           ruleType: {
             in: ["SLAB", "FIXED_TARGET", "HYBRID"]
@@ -166,7 +165,7 @@ exports.createDailyIncentive = async (req, res) => {
     if (cityId) {
       const existingCity = await prisma.program.findFirst({
         where: {
-          programType: "WEEKLY_TARGET",
+          programType: "DAILY_TARGET",
           trackingType: "DAILY",
           ruleType: {
             in: ["SLAB", "FIXED_TARGET", "HYBRID"]
@@ -197,7 +196,7 @@ exports.createDailyIncentive = async (req, res) => {
 
     const programData = {
       name,
-      programType: "WEEKLY_TARGET",
+      programType: "DAILY_TARGET",
       trackingType: "DAILY",
       ruleType,
       cityId: cityId ? [cityId] : [],
@@ -306,7 +305,7 @@ exports.getAllDailyIncentives = async (req, res) => {
   try {
     const programs = await prisma.program.findMany({
       where: {
-        programType: "WEEKLY_TARGET",
+        programType: "DAILY_TARGET",
         trackingType: "DAILY",
 
         //  EXCLUDE PEAK SLOT PROGRAMS
@@ -344,7 +343,7 @@ exports.getDailyIncentiveById = async (req, res) => {
     const program = await prisma.program.findFirst({
       where: {
         id,
-        programType: "WEEKLY_TARGET",
+        programType: "DAILY_TARGET",
         trackingType: "DAILY",
 
         //exclude peak slots
@@ -475,7 +474,7 @@ exports.deleteDailyIncentive = async (req, res) => {
       });
     }
 
-    // 2. Delete
+    //  Delete
     await prisma.program.delete({
       where: { id }
     });

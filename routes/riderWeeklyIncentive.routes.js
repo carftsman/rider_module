@@ -10,10 +10,6 @@ const controller = require("../controllers/riderWeeklyIncentive.controller");
  *   description: Rider APIs for Weekly Programs (Incentives)
  */
 
-//////////////////////////////////////////////////////////
-// ✅ 1. ACTIVE INCENTIVES (CATALOG)
-//////////////////////////////////////////////////////////
-
 /**
  * @swagger
  * /api/rider/programs/weekly:
@@ -44,9 +40,7 @@ router.get("/rider/programs/weekly",
   controller.getRiderWeeklyPrograms
 );
 
-//////////////////////////////////////////////////////////
-// ✅ 2. PROGRESS API
-//////////////////////////////////////////////////////////
+
 
 /**
  * @swagger

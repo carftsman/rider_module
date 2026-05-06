@@ -22,11 +22,7 @@ function getWeekKey(date = new Date()) {
   return `${year}-W${week}`;
 }
 
-function isPeakSlot(date) {
-  const hour = new Date(date).getHours();
 
-  return hour >= 6 && hour < 10;
-}
 
 /* =========================================================
    MAIN API
@@ -116,7 +112,12 @@ exports.processOrderIncentive = async (req, res) => {
     // DATE HELPERS
     ////////////////////////////////////////////////////////
 const now = new Date();
-
+const currentDay = now
+  .toLocaleDateString("en-US", {
+    weekday: "short"
+  })
+  .toUpperCase()
+  .slice(0, 3);
 const today = new Date(
   now.getFullYear(),
   now.getMonth(),
@@ -124,7 +125,6 @@ const today = new Date(
 );
     const weekKey = getWeekKey(today);
 
-    const peakOrder = isPeakSlot(new Date());
 
     const orderAmount =
       order.OrderPricing?.totalAmount || 0;
@@ -181,7 +181,12 @@ const today = new Date(
     ////////////////////////////////////////////////////////
 
     for (const program of programs) {
-
+if (
+  program.daysOfWeek.length > 0 &&
+  !program.daysOfWeek.includes(currentDay)
+) {
+  continue;
+}
       /* =====================================================
          DAILY / WEEKLY INCENTIVES
       ===================================================== */
@@ -260,22 +265,33 @@ const today = new Date(
         // UPDATE PROGRESS
         //////////////////////////////////////////////////////
 
-        progress =
-          await prisma.programProgress.update({
-            where: {
-              id: progress.id
-            },
+      progress =
+  await prisma.programProgress.update({
+    where: {
+      id: progress.id
+    },
 
-            data: {
-              totalOrders: {
-                increment: 1
-              },
+    data: {
+      totalOrders: {
+        increment: 1
+      },
 
-              totalEarnings: {
-                increment: orderAmount
-              }
-            }
-          });
+      totalEarnings: {
+        increment: orderAmount
+      }
+    }
+  });
+
+////////////////////////////////////////////////////
+// REFETCH UPDATED PROGRESS
+////////////////////////////////////////////////////
+
+progress =
+  await prisma.programProgress.findUnique({
+    where: {
+      id: progress.id
+    }
+  });
 
         //////////////////////////////////////////////////////
         // CHECK REWARD
@@ -290,8 +306,7 @@ const today = new Date(
         if (program.ruleType === "SLAB") {
 
           const updatedOrders =
-            progress.totalOrders;
-
+  Number(progress.totalOrders);
           const slab = program.slabs.find(s =>
             updatedOrders >= s.minValue &&
             updatedOrders <= s.maxValue
@@ -403,17 +418,21 @@ const today = new Date(
          PEAK SLOT INCENTIVE
       ===================================================== */
 
-      if (
-  program.programType === "PEAK_SLOT" &&
-  peakOrder
-)
+   if (program.programType === "PEAK_SLOT")
 {
 
         for (const slot of program.slots) {
+if (
+  slot.daysOfWeek.length > 0 &&
+  !slot.daysOfWeek.includes(currentDay)
+) {
+  continue;
+}
+        const orderTime =
+  new Date(order.updatedAt);
 
-          const orderHour =
-            new Date().getHours();
-
+const orderHour =
+  orderTime.getHours();
           const startHour =
             Math.floor(slot.startMinutes / 60);
 

@@ -27,7 +27,7 @@ const getRiderHomeBanners = async (req, res) => {
       });
     }
 
-    // ✅ Bank banner condition
+    // Bank banner condition
     const bankAdded =
       !!rider.bankDetails?.accountNumber &&
       !!rider.bankDetails?.ifscCode;
@@ -37,7 +37,7 @@ const getRiderHomeBanners = async (req, res) => {
 
     const showBankBanner = !bankAdded || !bankVerified;
 
-    // ✅ Kit delivered condition
+    // Kit delivered condition
     const deliveredKitRequests = await prisma.assetRequest.findMany({
       where: {
         riderId,
@@ -57,7 +57,7 @@ const getRiderHomeBanners = async (req, res) => {
 
     const showKitBanner = !kitDelivered;
 
-    // ✅ Joining bonus active for all new riders until payout is completed
+    //  Joining bonus active for all new riders until payout is completed
     const joiningBonusPayout = await prisma.programPayout.findFirst({
       where: {
         riderId,

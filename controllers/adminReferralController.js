@@ -384,7 +384,6 @@ exports.getAllReferralConfigs = async (req, res) => {
     });
   }
 };
-// controllers/adminReferralController.js
 
 exports.updateReferralConfigStatus = async (req, res) => {
   try {
@@ -434,7 +433,7 @@ exports.updateReferralConfigStatus = async (req, res) => {
     });
   }
 };
-// controllers/adminReferralController.js
+
 
 exports.getAllReferrals = async (req, res) => {
   try {
@@ -522,7 +521,7 @@ exports.getAllReferrals = async (req, res) => {
     });
   }
 };
-// controllers/adminReferralController.js
+
 
 exports.creditReferralReward = async (req, res) => {
     

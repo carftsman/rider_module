@@ -398,7 +398,6 @@ exports.getReferralCampaign = async (req, res) => {
     });
   }
 };
-// controllers/riderReferralController.js
 
 
 exports.shareReferralByCode = async (req, res) => {
@@ -427,7 +426,7 @@ exports.shareReferralByCode = async (req, res) => {
       });
     }
 
-    // 📩 Create share message (you can customize)
+    // Create share message (you can customize)
     const shareMessage = `🚴 Join our platform using my referral code *${partnerId}* and earn rewards!\n\nDownload app: https://yourapp.link/referral?code=${partnerId}`;
 
     return res.status(200).json({
@@ -451,11 +450,9 @@ exports.shareReferralByCode = async (req, res) => {
     });
   }
 };
-// controllers/riderReferralController.js
 
 
 
-// controllers/riderReferralController.js
 
 
 exports.referRider = async (req, res) => {
@@ -555,7 +552,6 @@ exports.referRider = async (req, res) => {
     });
   }
 };
-// controllers/riderReferralController.js
 
 
 
@@ -666,7 +662,7 @@ exports.getReferralProgressByNewRider = async (req, res) => {
       });
     }
 
-    // ✅ Get active referral program created by admin
+    // Get active referral program created by admin
     const now = new Date();
 
     const program = await prisma.program.findFirst({
@@ -698,7 +694,7 @@ exports.getReferralProgressByNewRider = async (req, res) => {
       });
     }
 
-    // ✅ Admin configured values
+    //  Admin configured values
     const targetOrders =
       program.targets?.[0]?.targetOrders ||
       program.tasks?.[0]?.minOrders ||

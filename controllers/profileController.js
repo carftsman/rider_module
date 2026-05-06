@@ -330,13 +330,13 @@ exports.getMyAssetsSummary = async (req, res) => {
       });
     }
 
-    // 🔹 Count BAD assets
+    //  Count BAD assets
     const badConditionCount = (doc.assets || []).reduce(
       (count, asset) => (asset.condition === "BAD" ? count + 1 : count),
       0,
     );
 
-    // 🔹 OPTIONAL: return only OPEN issues
+    //  OPTIONAL: return only OPEN issues
     const issues = (doc.issues || []).filter(
       (issue) => issue.status === "OPEN",
     );
@@ -613,155 +613,6 @@ const normalizeDate = (inputDate) => {
   return d.toISOString().slice(0, 10);
 };
 
-// exports.getSlotHistory = async (req, res) => {
-//   try {
-//     const riderId = req.rider.id;
-//     const { filter, date, month, year } = req.query;
-
-//     let dateFilter = {};
-
-//     if (filter === "daily") {
-//       const start = new Date();
-//       start.setHours(0, 0, 0, 0);
-
-//       const end = new Date();
-//       end.setHours(23, 59, 59, 999);
-
-//       dateFilter.slotStartAt = {
-//         gte: start,
-//         lte: end,
-//       };
-//     } else if (filter === "weekly") {
-//       const start = new Date();
-//       start.setDate(start.getDate() - 6);
-//       start.setHours(0, 0, 0, 0);
-
-//       dateFilter.slotStartAt = {
-//         gte: start,
-//         lte: new Date(),
-//       };
-//     } else if (filter === "monthly") {
-//       const y = Number(year) || new Date().getFullYear();
-//       const m = Number(month) - 1 || new Date().getMonth(); // IMPORTANT: month index fix
-
-//       const start = new Date(y, m, 1);
-//       const end = new Date(y, m + 1, 0, 23, 59, 59);
-
-//       dateFilter.slotStartAt = {
-//         gte: start,
-//         lte: end,
-//       };
-//     }
-//     const bookings = await prisma.slotBooking.findMany({
-//       where: {
-//         riderId,
-//         ...dateFilter,
-//       },
-//     });
-
-//     if (!bookings.length) {
-//       return res.json({
-//         success: true,
-//         filter: filter || "all",
-//         totalSlots: 0,
-//         totalEarnings: 0,
-//         data: [],
-//       });
-//     }
-//     const dates = bookings.map((b) => b.date).sort();
-
-//     const dayStart = new Date(`${dates[0]}T00:00:00.000Z`);
-//     const dayEnd = new Date(`${dates[dates.length - 1]}T23:59:59.999Z`);
-
-//     const allOrders = await prisma.order.findMany({
-//       where: {
-//         riderId,
-//         createdAt: { gte: dayStart, lte: dayEnd },
-//       },
-//       include: {
-//         OrderRiderEarning: true,
-//       },
-//     });
-
-//     const ordersByDate = {};
-
-//     allOrders.forEach((order) => {
-//       const d = new Date(order.createdAt).toISOString().slice(0, 10);
-
-//       if (!ordersByDate[d]) {
-//         ordersByDate[d] = [];
-//       }
-
-//       ordersByDate[d].push(order);
-//     });
-
-//     let totalEarnings = 0;
-//     const data = [];
-
-//     for (const booking of bookings) {
-//       // const orders = ordersByDate[booking.date] || [];
-//       const slotStart = booking.slotStartAt;
-//       const slotEnd = booking.slotEndAt;
-
-//       const slotOrders = allOrders.filter((order) => {
-//         const orderTime = order.createdAt;
-//         return orderTime >= slotStart && orderTime <= slotEnd;
-//       });
-//       const completed = slotOrders.filter(
-//         (o) => o.orderStatus?.toUpperCase() === "DELIVERED",
-//       );
-
-//       const canceled = slotOrders.filter(
-//         (o) => o.orderStatus?.toUpperCase() === "CANCELLED",
-//       );
-
-//       const slotEarnings = completed.reduce(
-//         (sum, o) => sum + Number(o.OrderRiderEarning?.totalEarning || 0),
-//         0,
-//       );
-
-//       totalEarnings += slotEarnings;
-
-//       let slotStatus = "ACTIVE";
-
-//       if (
-//         booking.status === "CANCELLED_BY_RIDER" ||
-//         booking.status === "CANCELLED_BY_SYSTEM"
-//       ) {
-//         slotStatus = "CANCELLED";
-//       } else if (booking.slotEndAt < new Date()) {
-//         slotStatus = "COMPLETED";
-//       }
-
-//       data.push({
-//         slotBookingId: booking.id,
-//         date: booking.date,
-//         startTime: booking.startTime,
-//         endTime: booking.endTime,
-//         slotStatus,
-//         totalOrders: slotOrders.length,
-//         completedOrders: completed.length,
-//         canceledOrders: canceled.length,
-//         slotEarnings: Number(slotEarnings.toFixed(2)),
-//       });
-//     }
-
-//     return res.json({
-//       success: true,
-//       filter: filter || "all",
-//       totalSlots: data.length,
-//       totalEarnings,
-//       data,
-//     });
-//   } catch (err) {
-//     console.error("Slot History Error:", err);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message,
-//     });
-//   }
-// };
 exports.getSlotHistory = async (req, res) => {
   try {
     const riderId = req.rider?.id;
@@ -933,187 +784,6 @@ exports.getSlotHistory = async (req, res) => {
   }
 };
 
-// exports.getRiderOrderHistory = async (req, res) => {
-//   try {
-//     const riderId = req.rider?.id;
-
-//     if (!riderId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Rider ID missing",
-//       });
-//     }
-
-//     const { filter = "all" } = req.query;
-//     let dateFilter = {};
-
-//     // ---------- DATE FILTERS ----------
-//     if (filter === "daily") {
-//       const start = new Date();
-//       start.setHours(0, 0, 0, 0);
-
-//       const end = new Date();
-//       end.setHours(23, 59, 59, 999);
-
-//       dateFilter = { gte: start, lte: end };
-//     }
-
-//     if (filter === "weekly") {
-//       const now = new Date();
-
-//       const firstDayOfWeek = new Date(now);
-//       const day = now.getDay();
-
-//       const diff =
-//         now.getDate() - day + (day === 0 ? -6 : 1);
-
-//       firstDayOfWeek.setDate(diff);
-//       firstDayOfWeek.setHours(0, 0, 0, 0);
-
-//       const lastDayOfWeek = new Date(firstDayOfWeek);
-//       lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 6);
-//       lastDayOfWeek.setHours(23, 59, 59, 999);
-
-//       dateFilter = { gte: firstDayOfWeek, lte: lastDayOfWeek };
-//     }
-
-//     if (filter === "monthly") {
-//       const now = new Date();
-
-//       const start = new Date(now.getFullYear(), now.getMonth(), 1);
-//       const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-
-//       dateFilter = {
-//         gte: start,
-//         lt: nextMonth,
-//       };
-//     }
-
-//     // ---------- FETCH ORDERS ----------
-//     const orders = await prisma.order.findMany({
-//       where: {
-//         riderId,
-//         orderStatus: "DELIVERED",
-//         ...(filter !== "all" && { createdAt: dateFilter }),
-//       },
-//       include: {
-//         OrderItems: true,
-//         OrderPricing: true,
-//         OrderTracking: true,
-//         OrderPickupAddress: true,
-//         OrderDeliveryAddress: true,
-//         OrderRiderEarning: true, // ✅ correct relation
-//       },
-//       orderBy: {
-//         createdAt: "desc",
-//       },
-//     });
-
-//     // ---------- RIDER EARNING LOGIC ----------
-// const getRiderEarning = (order) => {
-//   // ✅ Use stored earning only if amount is greater than 0
-//   const storedEarning = Number(order.OrderRiderEarning?.amount || 0);
-
-//   if (storedEarning > 0) {
-//     return storedEarning;
-//   }
-
-//   // ✅ Fallback calculation
-//   const deliveryFee = Number(order.OrderPricing?.deliveryFee || 0);
-//   const commission = Number(order.OrderPricing?.platformCommission || 0);
-
-//   return deliveryFee - commission;
-// };
-//     // ---------- TOTALS ----------
-//     const totalOrders = orders.length;
-
-//     const totalRiderEarnings = Number(
-//       orders
-//         .reduce((sum, order) => sum + getRiderEarning(order), 0)
-//         .toFixed(2)
-//     );
-
-//     const totalDistance = Number(
-//       orders
-//         .reduce(
-//           (sum, order) =>
-//             sum + Number(order.OrderTracking?.distanceInKm || 0),
-//           0
-//         )
-//         .toFixed(2)
-//     );
-
-//     const ratings = orders
-//       .map((o) => o.rating)
-//       .filter((r) => typeof r === "number");
-
-//     const avgRating = ratings.length
-//       ? Number(
-//           (
-//             ratings.reduce((a, b) => a + b, 0) / ratings.length
-//           ).toFixed(1)
-//         )
-//       : null;
-
-//     // ---------- RESPONSE DATA ----------
-//     const data = orders.map((order) => {
-//       const pricing = order.OrderPricing;
-//       const riderEarning = Number(getRiderEarning(order).toFixed(2));
-
-//       return {
-//         orderId: order.orderId,
-
-//         items:
-//           order.OrderItems?.map((item) => ({
-//             itemName: item.itemName,
-//             quantity: item.quantity,
-//             price: item.price,
-//             total: item.total,
-//           })) || [],
-
-//         pricing: {
-//           itemTotal: pricing?.itemTotal || 0,
-//           deliveryFee: pricing?.deliveryFee || 0,
-//           tax: pricing?.tax || 0,
-//           platformCommission: pricing?.platformCommission || 0,
-//           totalAmount: pricing?.totalAmount || 0,
-
-//           // ✅ Correct rider earning
-//           riderEarning,
-//         },
-
-//         distanceTravelled: order.OrderTracking?.distanceInKm || 0,
-//         durationInMin: order.OrderTracking?.durationInMin || 0,
-
-//         pickupAddress: order.OrderPickupAddress?.addressLine || "",
-//         deliveredAddress: order.OrderDeliveryAddress?.addressLine || "",
-
-//         rating: order.rating || null,
-//         deliveredAt: order.updatedAt || null,
-//       };
-//     });
-
-//     return res.status(200).json({
-//       success: true,
-//       filter,
-//       totalOrders,
-
-//       // ✅ final field you wanted
-//       totalRiderEarnings,
-
-//       totalDistance,
-//       avgRating,
-//       data,
-//     });
-//   } catch (err) {
-//     console.error("Order History Error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//       error: err.message,
-//     });
-//   }
-// };
 exports.getRiderOrderHistory = async (req, res) => {
   try {
     const riderId = req.rider?.id;
@@ -1141,6 +811,7 @@ exports.getRiderOrderHistory = async (req, res) => {
 
     if (filter === "weekly") {
       const now = new Date();
+
       const firstDayOfWeek = new Date(now);
       const day = now.getDay();
 
@@ -1185,19 +856,30 @@ exports.getRiderOrderHistory = async (req, res) => {
         OrderPickupAddress: true,
         OrderDeliveryAddress: true,
         OrderRiderEarning: true,
-
-        // ✅ rating relation
-        RiderRating: true,
       },
       orderBy: {
         createdAt: "desc",
       },
     });
 
+    // ---------- FETCH RIDER RATINGS ----------
+    // Fetch only by riderId, not by orderId
+    const riderRatings = await prisma.riderRating.findMany({
+      where: {
+        riderId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    const ratingMap = new Map(
+      riderRatings.map((rating) => [rating.orderId, rating])
+    );
+
     // ---------- RIDER EARNING ----------
     const getRiderEarning = (order) => {
       const earning = order.OrderRiderEarning;
-
       return Number(earning?.totalEarning || 0);
     };
 
@@ -1220,16 +902,16 @@ exports.getRiderOrderHistory = async (req, res) => {
         .toFixed(2)
     );
 
-    // ---------- RATINGS ----------
-    const ratings = orders
-      .map((order) => Number(order.RiderRating?.rating))
+    // ---------- AVG RIDER RATING ----------
+    const validRatings = riderRatings
+      .map((r) => Number(r.rating))
       .filter((rating) => !isNaN(rating) && rating > 0);
 
-    const avgRating = ratings.length
+    const avgRating = validRatings.length
       ? Number(
           (
-            ratings.reduce((sum, rating) => sum + rating, 0) /
-            ratings.length
+            validRatings.reduce((sum, rating) => sum + rating, 0) /
+            validRatings.length
           ).toFixed(1)
         )
       : 0;
@@ -1238,7 +920,7 @@ exports.getRiderOrderHistory = async (req, res) => {
     const data = orders.map((order) => {
       const pricing = order.OrderPricing;
       const earning = order.OrderRiderEarning;
-      const riderRating = order.RiderRating;
+      const riderRating = ratingMap.get(order.orderId);
 
       const riderEarning = Number(getRiderEarning(order).toFixed(2));
 
@@ -1279,7 +961,8 @@ exports.getRiderOrderHistory = async (req, res) => {
         pickupAddress: order.OrderPickupAddress?.addressLine || "",
         deliveredAddress: order.OrderDeliveryAddress?.addressLine || "",
 
-        rating: riderRating?.rating || 0,
+        // order-wise rating if orderId matched
+        rating: riderRating ? Number(riderRating.rating) : 0,
         review: riderRating?.review || null,
 
         deliveredAt: order.updatedAt || null,
@@ -1292,7 +975,10 @@ exports.getRiderOrderHistory = async (req, res) => {
       totalOrders,
       totalRiderEarnings,
       totalDistance,
+
+      // rider overall average rating
       avgRating,
+
       data,
     });
   } catch (err) {
@@ -1305,162 +991,6 @@ exports.getRiderOrderHistory = async (req, res) => {
     });
   }
 };
-// exports.getRiderOrderHistory = async (req, res) => {
-//   try {
-//     const riderId = req.rider?.id;
-
-//     if (!riderId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Rider ID missing",
-//       });
-//     }
-
-//     const { filter = "all" } = req.query;
-//     let dateFilter = {};
-
-//     if (filter === "daily") {
-//       const start = new Date();
-//       start.setHours(0, 0, 0, 0);
-
-//       const end = new Date();
-//       end.setHours(23, 59, 59, 999);
-
-//       dateFilter = { gte: start, lte: end };
-//     }
-
-//     if (filter === "weekly") {
-//       const start = new Date();
-//       start.setDate(start.getDate() - 6);
-//       start.setHours(0, 0, 0, 0);
-
-//       dateFilter = { gte: start, lte: new Date() };
-//     }
-
-//     if (filter === "monthly") {
-//       const start = new Date(
-//         new Date().getFullYear(),
-//         new Date().getMonth(),
-//         1,
-//       );
-//       const end = new Date(
-//         new Date().getFullYear(),
-//         new Date().getMonth() + 1,
-//         0,
-//         23,
-//         59,
-//         59,
-//       );
-
-//       dateFilter = { gte: start, lte: end };
-//     }
-
-//     // ---------- FETCH ORDERS ----------
-//     const orders = await prisma.order.findMany({
-//       where: {
-//         riderId,
-//         orderStatus: "DELIVERED",
-//         ...(filter !== "all" && { createdAt: dateFilter }),
-//       },
-//       include: {
-//         OrderItems: true,
-//         OrderPricing: true,
-//         OrderPayment: true,
-//         OrderTracking: true,
-//         OrderPickupAddress: true,
-//         OrderDeliveryAddress: true,
-//       },
-//       orderBy: {
-//         createdAt: "desc",
-//       },
-//     });
-//     orders.forEach((order) => {
-//       if (!order.OrderPricing) {
-//         console.warn("Delivered order missing pricing:", order.orderId);
-//       }
-//     });
-//     // ---------- TOTALS ----------
-//     const totalOrders = orders.length;
-
-//     const totalEarnings = orders.reduce(
-//       (sum, o) => sum + (o.OrderPricing?.totalAmount || 0),
-//       0,
-//     );
-
-//     const totalDistance = Number(
-//       orders
-//         .reduce((sum, o) => sum + (o.OrderTracking?.distanceInKm || 0), 0)
-//         .toFixed(2),
-//     );
-
-//     const ratings = orders
-//       .map((o) => o.rating)
-//       .filter((r) => typeof r === "number");
-
-//     const avgRating = ratings.length
-//       ? (ratings.reduce((a, b) => a + b, 0) / ratings.length).toFixed(1)
-//       : null;
-
-//     // ---------- RESPONSE ----------
-//     const data = orders.map((order) => ({
-//       orderId: order.orderId,
-
-//       items:
-//         order.OrderItems?.map((item) => ({
-//           itemName: item.itemName,
-//           quantity: item.quantity,
-//           price: item.price,
-//           total: item.total,
-//         })) || [],
-
-//       pricing: {
-//         itemTotal: order.OrderPricing?.itemTotal || 0,
-//         deliveryFee: order.OrderPricing?.deliveryFee || 0,
-//         tax: order.OrderPricing?.tax || 0,
-//         platformCommission: order.OrderPricing?.platformCommission || 0,
-//         totalAmount: order.OrderPricing?.totalAmount || 0,
-//       },
-
-//       customerTip: 0,
-
-//       distanceTravelled: order.OrderTracking?.distanceInKm || 0,
-
-//       durationInMin: order.OrderTracking?.durationInMin || 0,
-//       pickupAddress: order.OrderPickupAddress?.addressLine || "",
-
-//       rating: null,
-
-//       deliveredAddress: order.OrderDeliveryAddress?.addressLine || "",
-//       deliveredAt: order.updatedAt || null,
-//     }));
-
-//     return res.status(200).json({
-//       success: true,
-//       filter,
-//       totalOrders,
-//       totalEarnings,
-//       totalDistance,
-//       avgRating,
-//       data,
-//     });
-//   } catch (err) {
-//     console.error("Order History Error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//     });
-//   }
-// };
-/**
-
-
-* ============================================================
-
-* UPDATE BANK DETAILS (PUT)
-
-* ============================================================
-
-*/
 exports.addOrUpdateBankDetails = async (req, res) => {
   try {
     const riderId = req.rider.id;

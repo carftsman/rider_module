@@ -36,7 +36,7 @@ const fcmTokenRoutes = require("./routes/fcmTokenRoutes");
 const riderStatusRoutes = require("./routes/riderStatus.routes");
 const riderCashRoutes = require("./routes/riderCashRoutes");
 const orderStateReady = require("./routes/readyStateRouter");
-const rawPayloadRoutes = require("./routes/rawPayloadRoutes");
+
 const companySelectionRoutes = require("./routes/companySelectionRoutes");
 const riderIncentivesrouter = require("./routes/incentive.routes");
 const todayRiderOnlineRoutes = require("./routes/todayRiderOnlineRoutes");
@@ -120,7 +120,7 @@ app.use("/api/home", incentiveRoutes);
 // app.use("/api/rider/incentives", riderIncentiveRoutes);
  
 app.use("/api/issues", issueRouter);
-app.use("/api/raw", rawPayloadRoutes);
+
  
 app.use("/api/rider/earnings", riderEarningsRoutes);
  

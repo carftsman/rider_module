@@ -10,7 +10,7 @@ exports.getWeeklyIncentives = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    // 1. Rider location
+    //  Rider location
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId }
     });
@@ -21,7 +21,7 @@ exports.getWeeklyIncentives = async (req, res) => {
 
     const today = new Date();
 
-    // 2. Get active programs
+    //  Get active programs
     const programs = await prisma.program.findMany({
       where: {
         programType: "WEEKLY_TARGET",
@@ -39,12 +39,12 @@ exports.getWeeklyIncentives = async (req, res) => {
       }
     });
 
-    // ✅ FIX: handle empty programs early
+    //  handle empty programs early
     if (!programs.length) {
       return res.json({ success: true, data: [] });
     }
 
-    // 3. Weekly key
+    //  Weekly key
 const week = getWeekKey();
 
 const progresses = await prisma.programProgress.findMany({
@@ -57,14 +57,14 @@ const progresses = await prisma.programProgress.findMany({
   }
 });
 
-// 🔥 IMPORTANT FIX: UPSERT ZERO RECORDS
+// IMPORTANT FIX: UPSERT ZERO RECORDS
 const response = [];
 
 for (const prog of programs) {
 
   let progProgress = progresses.find(p => p.programId === prog.id);
 
-  // ✅ If not exists → create ZERO progress
+  // If not exists → create ZERO progress
   if (!progProgress) {
     progProgress = await prisma.programProgress.create({
       data: {
@@ -107,7 +107,7 @@ exports.getRiderWeeklyPrograms = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    // 1️⃣ Rider pincode
+    //  Rider pincode
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId }
     });
@@ -118,7 +118,7 @@ exports.getRiderWeeklyPrograms = async (req, res) => {
 
     const today = new Date();
 
-    // 2️⃣ Fetch programs WITH FULL DETAILS
+    //  Fetch programs WITH FULL DETAILS
     const programs = await prisma.program.findMany({
       where: {
         programType: "WEEKLY_TARGET",
@@ -141,39 +141,38 @@ exports.getRiderWeeklyPrograms = async (req, res) => {
       }
     });
 
-    // 3️⃣ Format response
+    //  Format response
     const response = programs.map((p) => {
 
-      // 🔥 STATUS CALCULATION
+      //  STATUS CALCULATION
       const status =
         today < p.validFrom ? "UPCOMING" :
         today > p.validTill ? "EXPIRED" :
         "RUNNING";
 
-// 🔥 MAX REWARD FIRST
+//  MAX REWARD FIRST
 let maxReward = null;
 
-// 🔹 SLAB
+//  SLAB
 if (p.ruleType === "SLAB" && p.slabs?.length) {
   maxReward = Math.max(...p.slabs.map(s => s.rewardAmount));
 }
 
-// 🔹 FIXED TARGET
+//  FIXED TARGET
 else if (p.ruleType === "FIXED_TARGET" && p.targets?.[0]) {
   maxReward = p.targets[0].rewardAmount;
 }
 
-// 🔹 HYBRID
+//  HYBRID
 else if (p.ruleType === "HYBRID" && p.targets?.[0]) {
   maxReward = p.targets[0].rewardAmount;
 }
 
-// 🔹 fallback
+//  fallback
 if (maxReward === null) {
   maxReward = p.maxPayoutPerWeek ?? null;
 }
 
-// ✅ THEN use it
 const result = {
   programId: p.id,
   name: p.name,
@@ -186,10 +185,10 @@ const result = {
   maxReward
 };
 
-      // ✅ SLAB
+      //SLAB
       if (p.ruleType === "SLAB" && p.slabs?.length) {
         result.slabs = p.slabs
-          .sort((a, b) => a.minValue - b.minValue) // 🔥 IMPORTANT
+          .sort((a, b) => a.minValue - b.minValue) 
           .map(s => ({
             minOrders: s.minValue,
             maxOrders: s.maxValue,
@@ -197,7 +196,7 @@ const result = {
           }));
       }
 
-      // ✅ FIXED TARGET
+      //  FIXED TARGET
       if (p.ruleType === "FIXED_TARGET" && p.targets?.[0]) {
         result.target = {
           orders: p.targets[0].targetOrders
@@ -207,7 +206,7 @@ const result = {
         };
       }
 
-      // ✅ HYBRID
+      //  HYBRID
       if (p.ruleType === "HYBRID" && p.rules?.[0]) {
         result.conditions = {
           minOrders: p.rules[0].minOrders,
@@ -215,7 +214,7 @@ const result = {
         };
       }
 
-      // ✅ CONSISTENCY
+      // CONSISTENCY
       if (p.consistency) {
         result.consistencyRule = {
           minActiveDays: p.consistency.minActiveDays,

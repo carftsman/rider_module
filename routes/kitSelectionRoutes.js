@@ -2,7 +2,7 @@ const router = require('express').Router()
 const{createAsset,
     viewAssets,
     requestAsset,
-    approveRequest,
+    
     makePayment,
     dispatchAsset,
     raiseIssue,
@@ -962,7 +962,6 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  *               error: Internal server error
  */
 router.post('/admin/dispatch/:assetRequestIds', dispatchAsset)
-router.post('/admin/approve/:riderId', approveRequest)
 router.post("/issues/:issueId/verify",  verifyIssue);
 
 router.post(

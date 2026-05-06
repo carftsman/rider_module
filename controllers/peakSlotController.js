@@ -1,6 +1,6 @@
 const prisma = require("../config/prisma");
 const { TrackingType, RuleType, ProgramType } = require("@prisma/client");
- 
+
 function toMinutes(time) {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
@@ -45,148 +45,148 @@ const createPerOrderPeakSlot = async (req, res) => {
     const body = req.body;
 
 
-if (!body.cityName) {
-  return res.status(400).json({
-    success: false,
-    message: "cityName is required",
-  });
-}
+    if (!body.cityName) {
+      return res.status(400).json({
+        success: false,
+        message: "cityName is required",
+      });
+    }
 
-const city = await prisma.city.findFirst({
-  where: {
-    name: {
-      equals: body.cityName,
-      mode: "insensitive",
-    },
-  },
-});
-
-if (!city) {
-  return res.status(400).json({
-    success: false,
-    message: "Invalid cityName",
-  });
-}
- 
-if (!body.name) {
-  return res.status(400).json({
-    success: false,
-    message: "Name is required",
-  });
-}
-
-if (!body.dateRange?.startDate || !body.dateRange?.endDate) {
-  return res.status(400).json({
-    success: false,
-    message: "dateRange is required",
-  });
-}
-
-if (!Array.isArray(body.slots) || body.slots.length === 0) {
-  return res.status(400).json({
-    success: false,
-    message: "Slots are required",
-  });
-}
-
-for (const slot of body.slots) {
-  const startMin = toMinutes(slot.startTime);
-  const endMin = toMinutes(slot.endTime);
-
-  if (startMin >= endMin) {
-    return res.status(400).json({
-      success: false,
-      message: "Invalid slot time (start must be before end)",
+    const city = await prisma.city.findFirst({
+      where: {
+        name: {
+          equals: body.cityName,
+          mode: "insensitive",
+        },
+      },
     });
-  }
 
-  if (!slot.reward?.amount) {
-    return res.status(400).json({
-      success: false,
-      message: "Reward amount is required",
-    });
-  }
-}
+    if (!city) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid cityName",
+      });
+    }
+
+    if (!body.name) {
+      return res.status(400).json({
+        success: false,
+        message: "Name is required",
+      });
+    }
+
+    if (!body.dateRange?.startDate || !body.dateRange?.endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "dateRange is required",
+      });
+    }
+
+    if (!Array.isArray(body.slots) || body.slots.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Slots are required",
+      });
+    }
+
+    for (const slot of body.slots) {
+      const startMin = toMinutes(slot.startTime);
+      const endMin = toMinutes(slot.endTime);
+
+      if (startMin >= endMin) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid slot time (start must be before end)",
+        });
+      }
+
+      if (!slot.reward?.amount) {
+        return res.status(400).json({
+          success: false,
+          message: "Reward amount is required",
+        });
+      }
+    }
 
     const start = new Date(body.dateRange.startDate);
     const end = new Date(body.dateRange.endDate);
- 
-const pincodeIds = Array.isArray(body.pincodeIds)
-  ? body.pincodeIds.map(String)
-  : [String(body.pincodeIds)];
 
-  const existingPrograms = await prisma.program.findMany({
-  where: {
-    pincodeIds: {
-  equals: pincodeIds,
-},
-    isActive: true,
-    validFrom: {
-      lte: end,
-    },
-    validTill: {
-      gte: start,
-    },
-  },
-  include: {
-    slots: true,
-  },
-});
+    const pincodeIds = Array.isArray(body.pincodeIds)
+      ? body.pincodeIds.map(String)
+      : [String(body.pincodeIds)];
 
-const conflict = existingPrograms.some(program =>
-  program.slots.some(existingSlot =>
-    body.slots.some(newSlot => {
+    const existingPrograms = await prisma.program.findMany({
+      where: {
+        pincodeIds: {
+          equals: pincodeIds,
+        },
+        isActive: true,
+        validFrom: {
+          lte: end,
+        },
+        validTill: {
+          gte: start,
+        },
+      },
+      include: {
+        slots: true,
+      },
+    });
 
-      const newStart = toMinutes(newSlot.startTime);
-      const newEnd = toMinutes(newSlot.endTime);
+    const conflict = existingPrograms.some(program =>
+      program.slots.some(existingSlot =>
+        body.slots.some(newSlot => {
 
-      const existingStart = existingSlot.startMinutes;
-      const existingEnd = existingSlot.endMinutes;
+          const newStart = toMinutes(newSlot.startTime);
+          const newEnd = toMinutes(newSlot.endTime);
 
-      const timeOverlap =
-        newStart < existingEnd &&
-        newEnd > existingStart;
+          const existingStart = existingSlot.startMinutes;
+          const existingEnd = existingSlot.endMinutes;
 
-      const existingDays = existingSlot.daysOfWeek || [];
-      const newDays = newSlot.daysOfWeek || [];
+          const timeOverlap =
+            newStart < existingEnd &&
+            newEnd > existingStart;
 
-      const dayOverlap = existingDays.some(day =>
-        newDays.includes(day)
-      );
+          const existingDays = existingSlot.daysOfWeek || [];
+          const newDays = newSlot.daysOfWeek || [];
 
-      return timeOverlap && dayOverlap;
-    })
-  )
-);
+          const dayOverlap = existingDays.some(day =>
+            newDays.includes(day)
+          );
 
-if (conflict) {
-  return res.status(400).json({
-    success: false,
-    message: "Slot already exists for this time range and pincode",
-  });
-}
- 
-const program = await prisma.program.create({
-  data: {
-    name: body.name,
-    programType: "PEAK_SLOT",
-    trackingType: "DAILY",
-    ruleType: "PER_ORDER",
- 
-    validFrom: start,
-    validTill: end,
- 
-    // ✅ FIXED
-cityId: [String(city.id)], 
-    pincodeIds,
- 
-    isActive: body.isActive ?? true,
- 
-    weekStartDay: body.weekStartDay || "MON",
-    daysOfWeek: body.daysOfWeek
-  }
-});
- 
+          return timeOverlap && dayOverlap;
+        })
+      )
+    );
+
+    if (conflict) {
+      return res.status(400).json({
+        success: false,
+        message: "Slot already exists for this time range and pincode",
+      });
+    }
+
+    const program = await prisma.program.create({
+      data: {
+        name: body.name,
+        programType: "PEAK_SLOT",
+        trackingType: "DAILY",
+        ruleType: "PER_ORDER",
+
+        validFrom: start,
+        validTill: end,
+
+        // FIXED
+        cityId: [String(city.id)],
+        pincodeIds,
+
+        isActive: body.isActive ?? true,
+
+        weekStartDay: body.weekStartDay || "MON",
+        daysOfWeek: body.daysOfWeek
+      }
+    });
+
     for (const slot of body.slots) {
       await prisma.programSlot.create({
         data: {
@@ -199,17 +199,17 @@ cityId: [String(city.id)],
         }
       });
     }
- 
+
     return res.status(201).json({
-  success: true,
-  message: "Peak slot incentive created successfully",
-  data: {
-    id: program.id,
-    name: program.name,
-    totalSlots: body.slots.length
-  }
-});
- 
+      success: true,
+      message: "Peak slot incentive created successfully",
+      data: {
+        id: program.id,
+        name: program.name,
+        totalSlots: body.slots.length
+      }
+    });
+
   } catch (err) {
     console.error(err);
     return res.status(500).json({
@@ -218,30 +218,30 @@ cityId: [String(city.id)],
     });
   }
 };
- 
-// ---------------- SLAB ----------------
+
+// SLAB 
 const createSlabPeakSlot = async (req, res) => {
   try {
     const body = req.body;
- 
-    // 1. Basic validations
+
+    //  Basic validations
     if (!body.name) {
       return res.status(400).json({ success: false, message: "Name is required" });
     }
- 
+
     if (!body.dateRange?.startDate || !body.dateRange?.endDate) {
       return res.status(400).json({ success: false, message: "dateRange is required" });
     }
- 
+
     if (!Array.isArray(body.slots) || body.slots.length === 0) {
       return res.status(400).json({ success: false, message: "Slots required" });
     }
- 
+
     if (!body.cityName) {
       return res.status(400).json({ success: false, message: "cityName is required" });
     }
- 
-    // 2. City mapping
+
+    //  City mapping
     const city = await prisma.city.findFirst({
       where: {
         name: {
@@ -250,120 +250,120 @@ const createSlabPeakSlot = async (req, res) => {
         }
       }
     });
- 
+
     if (!city) {
       return res.status(400).json({ success: false, message: "Invalid cityName" });
     }
- 
-    // 3. Normalize pincodeIds
+
+    //  Normalize pincodeIds
     const pincodeIds = Array.isArray(body.pincode)
-  ? body.pincode.map(String)
-  : body.pincode
-    ? [String(body.pincode)]
-    : [];
- 
-    // 4. Validate slots BEFORE DB
+      ? body.pincode.map(String)
+      : body.pincode
+        ? [String(body.pincode)]
+        : [];
+
+    //  Validate slots BEFORE DB
     for (const slot of body.slots) {
       if (!slot.startTime || !slot.endTime) {
         return res.status(400).json({ success: false, message: "Slot time missing" });
       }
- 
+
       const startMin = toMinutes(slot.startTime);
       const endMin = toMinutes(slot.endTime);
- 
+
       if (startMin >= endMin) {
         return res.status(400).json({ success: false, message: "Invalid slot time" });
       }
- 
+
       if (!Array.isArray(slot.slabs) || slot.slabs.length === 0) {
         return res.status(400).json({ success: false, message: "Slabs required" });
       }
- 
+
       for (const s of slot.slabs) {
         if (s.minOrders > s.maxOrders) {
           return res.status(400).json({ success: false, message: "Invalid slab range" });
         }
       }
     }
- 
-      
 
-const start = new Date(body.dateRange.startDate);
-const end = new Date(body.dateRange.endDate);
 
-const existingPrograms = await prisma.program.findMany({
-  where: {
-    pincodeIds: {
-      hasSome: pincodeIds, // better than equals
-    },
-    isActive: true,
-    validFrom: {
-      lte: end,
-    },
-    validTill: {
-      gte: start,
-    },
-  },
-  include: {
-    slots: true,
-  },
-});
 
-// 🔥 CONFLICT CHECK
-const conflict = existingPrograms.some(program =>
-  program.slots.some(existingSlot =>
-    body.slots.some(newSlot => {
+    const start = new Date(body.dateRange.startDate);
+    const end = new Date(body.dateRange.endDate);
 
-      const newStart = toMinutes(newSlot.startTime);
-      const newEnd = toMinutes(newSlot.endTime);
+    const existingPrograms = await prisma.program.findMany({
+      where: {
+        pincodeIds: {
+          hasSome: pincodeIds, 
+        },
+        isActive: true,
+        validFrom: {
+          lte: end,
+        },
+        validTill: {
+          gte: start,
+        },
+      },
+      include: {
+        slots: true,
+      },
+    });
 
-      const existingStart = existingSlot.startMinutes;
-      const existingEnd = existingSlot.endMinutes;
+    // CONFLICT CHECK
+    const conflict = existingPrograms.some(program =>
+      program.slots.some(existingSlot =>
+        body.slots.some(newSlot => {
 
-      const timeOverlap =
-        newStart < existingEnd &&
-        newEnd > existingStart;
+          const newStart = toMinutes(newSlot.startTime);
+          const newEnd = toMinutes(newSlot.endTime);
 
-      const existingDays = existingSlot.daysOfWeek || [];
-      const newDays = newSlot.daysOfWeek || [];
+          const existingStart = existingSlot.startMinutes;
+          const existingEnd = existingSlot.endMinutes;
 
-      const dayOverlap = existingDays.some(day =>
-        newDays.includes(day)
-      );
+          const timeOverlap =
+            newStart < existingEnd &&
+            newEnd > existingStart;
 
-      return timeOverlap && dayOverlap;
-    })
-  )
-);
+          const existingDays = existingSlot.daysOfWeek || [];
+          const newDays = newSlot.daysOfWeek || [];
 
-if (conflict) {
-  return res.status(400).json({
-    success: false,
-    message: "Slot already exists for this time range and pincode",
-  });
-}
+          const dayOverlap = existingDays.some(day =>
+            newDays.includes(day)
+          );
 
-    // 5. Create program
+          return timeOverlap && dayOverlap;
+        })
+      )
+    );
+
+    if (conflict) {
+      return res.status(400).json({
+        success: false,
+        message: "Slot already exists for this time range and pincode",
+      });
+    }
+
+    //  Create program
     const program = await prisma.program.create({
       data: {
         name: body.name,
         programType: "PEAK_SLOT",
         trackingType: "DAILY",
         ruleType: "SLAB",
- 
+
         validFrom: new Date(body.dateRange.startDate),
         validTill: new Date(body.dateRange.endDate),
- 
+
         cityId: [String(city.id)],
         pincodeIds,
- 
+
         weekStartDay: body.weekStartDay || "MON",
         daysOfWeek: body.daysOfWeek || [],
         isActive: body.isActive ?? true
       }
     });
- 
-    // 6. Create slots + slabs
+
+    //  Create slots + slabs
     for (const slot of body.slots) {
       const createdSlot = await prisma.programSlot.create({
         data: {
@@ -374,7 +374,7 @@ if (conflict) {
           daysOfWeek: slot.daysOfWeek || []
         }
       });
- 
+
       await prisma.programSlotSlab.createMany({
         data: slot.slabs.map((s) => ({
           slotId: createdSlot.id,
@@ -384,7 +384,7 @@ if (conflict) {
         }))
       });
     }
- 
+
     return res.status(201).json({
       success: true,
       message: "Peak slot slab incentive created",
@@ -392,7 +392,7 @@ if (conflict) {
         id: program.id
       }
     });
- 
+
   } catch (err) {
     console.error(err);
     return res.status(500).json({
@@ -401,11 +401,8 @@ if (conflict) {
     });
   }
 };
- 
- 
- 
- 
- 
+
+
 const getAllPeakSlots = async (req, res) => {
   try {
     const programs = await prisma.program.findMany({
@@ -413,40 +410,40 @@ const getAllPeakSlots = async (req, res) => {
         programType: "PEAK_SLOT"
       },
       include: {
-        slots: true   
+        slots: true
       },
       orderBy: {
         createdAt: "desc"
       }
     });
- 
+
     const result = programs.map((p) => ({
-  id: p.id,
-  name: p.name,
-  isActive: p.isActive,
- 
-  slots: (p.slots || []).map((s) => ({
-    startTime: `${Math.floor(s.startMinutes / 60)
-      .toString()
-      .padStart(2, "0")}:${(s.startMinutes % 60)
-      .toString()
-      .padStart(2, "0")}`,
- 
-    endTime: `${Math.floor(s.endMinutes / 60)
-      .toString()
-      .padStart(2, "0")}:${(s.endMinutes % 60)
-      .toString()
-      .padStart(2, "0")}`,
- 
-    ruleType: s.ruleType
-  }))
-}));
- 
+      id: p.id,
+      name: p.name,
+      isActive: p.isActive,
+
+      slots: (p.slots || []).map((s) => ({
+        startTime: `${Math.floor(s.startMinutes / 60)
+          .toString()
+          .padStart(2, "0")}:${(s.startMinutes % 60)
+            .toString()
+            .padStart(2, "0")}`,
+
+        endTime: `${Math.floor(s.endMinutes / 60)
+          .toString()
+          .padStart(2, "0")}:${(s.endMinutes % 60)
+            .toString()
+            .padStart(2, "0")}`,
+
+        ruleType: s.ruleType
+      }))
+    }));
+
     return res.status(200).json({
       success: true,
       data: result
     });
- 
+
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -454,45 +451,44 @@ const getAllPeakSlots = async (req, res) => {
     });
   }
 };
- 
- 
+
+
 const getPeakSlotById = async (req, res) => {
   try {
     const { id } = req.params;
- 
+
     const program = await prisma.program.findUnique({
       where: { id },
       include: {
         slots: true
       }
     });
- 
+
     if (!program) {
       return res.status(404).json({
         success: false,
         message: "Peak slot not found"
       });
     }
- 
-    // ✅ ADD THIS HERE (AFTER program fetch)
+
     let cityName = [];
- 
+
     if (program.cityId?.length) {
       const cities = await prisma.city.findMany({
         where: {
           id: { in: program.cityId }
         }
       });
- 
+
       cityName = cities.map(c => c.name);
     }
- 
-    // ✅ RESULT
+
+    //  RESULT
     const result = {
       id: program.id,
       name: program.name,
-      cityName, // 👈 correct now
- 
+      cityName, 
+
       slots: (program.slots || []).map((s) => ({
         startTime: `${String(Math.floor(s.startMinutes / 60)).padStart(2, "0")}:${String(s.startMinutes % 60).padStart(2, "0")}`,
         endTime: `${String(Math.floor(s.endMinutes / 60)).padStart(2, "0")}:${String(s.endMinutes % 60).padStart(2, "0")}`,
@@ -503,12 +499,12 @@ const getPeakSlotById = async (req, res) => {
         }
       }))
     };
- 
+
     return res.status(200).json({
       success: true,
       data: result
     });
- 
+
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -516,7 +512,7 @@ const getPeakSlotById = async (req, res) => {
     });
   }
 };
- 
+
 const updatePeakSlot = async (req, res) => {
   try {
     const { id } = req.params;
@@ -542,10 +538,10 @@ const updatePeakSlot = async (req, res) => {
 
     const currentDay = now
       .toLocaleString("en-US", { weekday: "short" })
-      .toUpperCase(); // MON, TUE...
+      .toUpperCase(); 
 
     // check if any slot is active right now
-   const isSlotActive = program.slots?.some(slot => {
+    const isSlotActive = program.slots?.some(slot => {
       const days = slot.daysOfWeek.map(d => d.toUpperCase());
 
       return (
@@ -555,7 +551,7 @@ const updatePeakSlot = async (req, res) => {
       );
     });
 
-    // ❌ BLOCK RULE
+    //  BLOCK RULE
     if (isActive === false && isSlotActive) {
       return res.status(400).json({
         success: false,
@@ -593,7 +589,7 @@ const deletePeakSlot = async (req, res) => {
     const program = await prisma.program.findUnique({
       where: { id },
       include: {
-        slots: true   // ✅ correct relation name
+        slots: true   
       }
     });
 
@@ -610,9 +606,9 @@ const deletePeakSlot = async (req, res) => {
 
     const currentDay = now
       .toLocaleString("en-US", { weekday: "short" })
-      .toUpperCase(); // MON, TUE...
+      .toUpperCase();
 
-    // 🔴 check if any slot is active right now
+    // check if any slot is active right now
     const isSlotActive = program.slots?.some(slot => {
       const days = slot.daysOfWeek.map(d => d.toUpperCase());
 
@@ -623,7 +619,7 @@ const deletePeakSlot = async (req, res) => {
       );
     });
 
-    // ❌ BLOCK DELETE IF ACTIVE
+    // BLOCK DELETE IF ACTIVE
     if (isSlotActive) {
       return res.status(400).json({
         success: false,
@@ -631,7 +627,7 @@ const deletePeakSlot = async (req, res) => {
       });
     }
 
-    // ✅ SAFE DELETE
+    // SAFE DELETE
     await prisma.program.delete({
       where: { id }
     });
@@ -653,9 +649,8 @@ module.exports = {
   createPerOrderPeakSlot,
   createSlabPeakSlot,
   getAllPeakSlots,
-  updatePeakSlot ,
+  updatePeakSlot,
   getPeakSlotById,
   deletePeakSlot,
   createPeakSlot
 };
- 
