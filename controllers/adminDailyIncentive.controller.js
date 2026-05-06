@@ -133,7 +133,6 @@ exports.createDailyIncentive = async (req, res) => {
       }
     }
 
-    // DUPLICATE CHECK (FINAL FIX)
     // SAME PINCODE BLOCK
     if (pincodeIds && pincodeIds.length > 0) {
       const existingPincode = await prisma.program.findFirst({
@@ -475,7 +474,7 @@ exports.deleteDailyIncentive = async (req, res) => {
       });
     }
 
-    // 2. Delete
+    //  Delete
     await prisma.program.delete({
       where: { id }
     });

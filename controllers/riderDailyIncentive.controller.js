@@ -96,7 +96,7 @@ if (!program && riderCityId) {
       });
     }
 
-    // 2. Find today's progress
+    //  Find today's progress
     let progress = await prisma.programProgress.findFirst({
       where: {
         riderId,
@@ -211,7 +211,7 @@ const getRiderDailyPrograms = async (req, res) => {
     }
 
 
-    // FORMAT RESPONSE (ADMIN STYLE)
+    // FORMAT RESPONSE 
 
     const response = programs.map((p) => {
 

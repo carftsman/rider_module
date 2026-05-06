@@ -1,6 +1,6 @@
 const prisma = require("../config/prisma");
 
-// ================= HELPERS =================
+//HELPERS 
 
 const isValidDate = (date) => !isNaN(new Date(date).getTime());
 
@@ -13,7 +13,7 @@ function getProgramStatus(program) {
   return "RUNNING";
 }
 
-// ================= VALIDATION =================
+// VALIDATION 
 
 const validateRequest = (body) => {
   const {
@@ -40,7 +40,7 @@ const validateRequest = (body) => {
   if (!isValidDate(dateRange.startDate) || !isValidDate(dateRange.endDate))
     return "Invalid date format";
 
-  // ✅ PINCODE REQUIRED
+  // PINCODE REQUIRED
   if (!pincodeIds || !Array.isArray(pincodeIds) || pincodeIds.length === 0) {
     return "pincodeIds is required and must be a non-empty array";
   }
@@ -60,7 +60,7 @@ const validateRequest = (body) => {
   return null;
 };
 
-// ================= CREATE =================
+//  CREATE
 
 exports.createWeeklyIncentive = async (req, res) => {
   try {
@@ -89,14 +89,14 @@ exports.createWeeklyIncentive = async (req, res) => {
     const newStart = new Date(dateRange.startDate);
     const newEnd = new Date(dateRange.endDate);
 
-    // ================= CONFLICT CHECK =================
+    // CONFLICT CHECK 
 
    const existingPrograms = await prisma.program.findMany({
   where: {
     programType: "WEEKLY_TARGET",
     trackingType: "WEEKLY",
     isActive: true,
-    validTill: { gte: new Date() }, // ✅ KEY FIX
+    validTill: { gte: new Date() }, 
     pincodeIds: {
       hasSome: pincodeIds
     }
@@ -119,7 +119,7 @@ exports.createWeeklyIncentive = async (req, res) => {
       }
     }
 
-    // ================= OPTIONAL CONSTRAINTS =================
+    //  OPTIONAL CONSTRAINTS 
 
     const minAcceptanceRate =
       constraints?.minAcceptanceRate ??
@@ -131,7 +131,7 @@ exports.createWeeklyIncentive = async (req, res) => {
       conditions?.minCompletionRate ??
       null;
 
-    // ================= CREATE =================
+    // CREATE 
 
     const program = await prisma.program.create({
       data: {
@@ -155,7 +155,7 @@ exports.createWeeklyIncentive = async (req, res) => {
         maxPayoutPerWeek,
         isActive: isActive ?? true,
 
-        // ===== SLAB =====
+        //  SLAB 
         slabs: slabs?.length
           ? {
               create: slabs.map((s) => ({
@@ -166,7 +166,7 @@ exports.createWeeklyIncentive = async (req, res) => {
             }
           : undefined,
 
-        // ===== FIXED TARGET =====
+        //  FIXED TARGET 
         targets: target
           ? {
               create: {
@@ -176,7 +176,7 @@ exports.createWeeklyIncentive = async (req, res) => {
             }
           : undefined,
 
-        // ===== HYBRID =====
+        // HYBRID 
         rules: conditions
           ? {
               create: {
@@ -186,7 +186,7 @@ exports.createWeeklyIncentive = async (req, res) => {
             }
           : undefined,
 
-        // ===== CONSISTENCY =====
+        //  CONSISTENCY 
         consistency: consistencyRule
           ? {
               create: {
@@ -227,7 +227,7 @@ exports.updateWeeklyIncentive = async (req, res) => {
       });
     }
 
-    // ❌ SLAB VALIDATION
+    // SLAB VALIDATION
     if (req.body.slabs) {
       if (!Array.isArray(req.body.slabs) || req.body.slabs.length === 0) {
         return res.status(400).json({
@@ -237,7 +237,7 @@ exports.updateWeeklyIncentive = async (req, res) => {
       }
     }
 
-    // ❌ TARGET VALIDATION
+    // TARGET VALIDATION
     if (req.body.target && !req.body.reward?.amount) {
       return res.status(400).json({
         success: false,
@@ -245,7 +245,7 @@ exports.updateWeeklyIncentive = async (req, res) => {
       });
     }
 
-    // ================= STATUS CHECK =================
+    //  STATUS CHECK 
     const now = new Date();
 
     let status;
@@ -274,7 +274,7 @@ exports.updateWeeklyIncentive = async (req, res) => {
 
     const updatedProgram = await prisma.$transaction(async (tx) => {
 
-      // ================= MAIN UPDATE =================
+      //  MAIN UPDATE 
      const updated = await tx.program.update({
   where: { id },
   data: {
@@ -288,16 +288,16 @@ exports.updateWeeklyIncentive = async (req, res) => {
     isActive
   },
   include: {
-    slabs: true   // 👈 THIS IS THE FIX
+    slabs: true   
   }
 });
 
-// ================= SLABS =================
+//  SLABS
 if (slabs) {
 
   const normalizedSlabs = slabs.map((s, index) => {
 
-    // ❌ require ALL fields
+    //  require ALL fields
     if (
       s.minOrders == null ||
       s.maxOrders == null ||
@@ -308,7 +308,7 @@ if (slabs) {
       );
     }
 
-    // ❌ invalid range
+    // invalid range
     if (s.minOrders > s.maxOrders) {
       throw new Error(
         `Invalid slab at index ${index}. minOrders cannot be greater than maxOrders`
@@ -323,7 +323,6 @@ if (slabs) {
     };
   });
 
-  // 🔥 Replace slabs completely (STRICT MODE)
   await tx.programSlab.deleteMany({
     where: { programId: id }
   });
@@ -333,7 +332,7 @@ if (slabs) {
   });
 }
 
-      // ================= TARGET =================
+      //  TARGET 
       if (target) {
         await tx.programTarget.deleteMany({
           where: { programId: id }
@@ -348,7 +347,7 @@ if (slabs) {
         });
       }
 
-      // ================= HYBRID =================
+      //  HYBRID 
       if (conditions) {
         await tx.programRule.deleteMany({
           where: { programId: id }
@@ -363,7 +362,7 @@ if (slabs) {
         });
       }
 
-      // ================= CONSISTENCY =================
+      // CONSISTENCY
       if (consistencyRule) {
         await tx.programConsistency.deleteMany({
           where: { programId: id }
@@ -396,7 +395,7 @@ if (slabs) {
     });
   }
 };
-// ================= GET ALL =================
+//GET ALL 
 
 exports.getAllWeeklyIncentives = async (req, res) => {
   try {
@@ -415,7 +414,7 @@ exports.getAllWeeklyIncentives = async (req, res) => {
       name: p.name,
       ruleType: p.ruleType,
       isActive: p.isActive,
-      status: getProgramStatus(p) // ✅ KEY ADDITION
+      status: getProgramStatus(p) 
     }));
 
     return res.json({
@@ -429,7 +428,7 @@ exports.getAllWeeklyIncentives = async (req, res) => {
   }
 };
 
-// ================= GET BY ID =================
+//  GET BY ID 
 
 exports.getWeeklyIncentiveById = async (req, res) => {
   try {
@@ -456,7 +455,7 @@ exports.getWeeklyIncentiveById = async (req, res) => {
       id: program.id,
       name: program.name,
       ruleType: program.ruleType,
-      status: getProgramStatus(program) // ✅ STATUS HERE ALSO
+      status: getProgramStatus(program) 
     };
 
     if (program.ruleType === "SLAB" && program.slabs?.length) {
@@ -504,7 +503,7 @@ exports.deleteWeeklyIncentive = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1. Fetch program
+    //  Fetch program
     const program = await prisma.program.findUnique({
       where: { id }
     });
@@ -516,7 +515,7 @@ exports.deleteWeeklyIncentive = async (req, res) => {
       });
     }
 
-    // 2. Get status
+    //  Get status
     const now = new Date();
 
     let status;
@@ -525,7 +524,7 @@ exports.deleteWeeklyIncentive = async (req, res) => {
     else if (now > program.validTill) status = "EXPIRED";
     else status = "RUNNING";
 
-    // 3. Restrict delete
+    //  Restrict delete
     if (status !== "UPCOMING") {
       return res.status(400).json({
         success: false,
@@ -533,7 +532,7 @@ exports.deleteWeeklyIncentive = async (req, res) => {
       });
     }
 
-    // 4. Delete
+    //  Delete
     await prisma.program.delete({
       where: { id }
     });
