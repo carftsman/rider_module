@@ -755,10 +755,11 @@ model Order {
   OrderAllocation OrderAllocation?
 
   OrderCancelIssue OrderCancelIssue?
-
-  OrderSettlement OrderSettlement?
-  totalWeight     Float?
-  chats           OrderChat[]
+  RiderRating      RiderRating?      @relation(fields: [riderRatingId], references: [id])
+  OrderSettlement  OrderSettlement?
+  totalWeight      Float?
+  chats            OrderChat[]
+  riderRatingId    String?
 
   @@index([orderStatus])
   @@index([riderId])
@@ -1866,7 +1867,8 @@ model RiderRating {
 
   createdAt DateTime @default(now())
 
-  rider Rider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  rider  Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  orders Order[]
 
   @@index([riderId])
   @@index([createdAt])
@@ -1881,7 +1883,9 @@ enum WeightUnit {
 
 enum ProgramType {
   INCENTIVE
-
+  PEAK_SLOT
+  DAILY_TARGET
+  WEEKLY_TARGET
   JOINING_BONUS
 
   REFERRAL
@@ -2213,9 +2217,9 @@ model ProgramProgress {
 
   programId String
 
-  date DateTime?
-
-  week String?
+  date   DateTime?
+  slotId String?
+  week   String?
 
   totalOrders Int @default(0)
 
@@ -2415,7 +2419,7 @@ model PayoutConfig {
 }
 
 model Zone {
-  id String @id @default(cuid())
+  id String @id
 
   name String
 

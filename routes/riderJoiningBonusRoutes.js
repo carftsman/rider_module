@@ -1,8 +1,183 @@
 const express = require("express");
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
-const { getAvailablePrograms , getProgramDetails,joinProgram,getMyPrograms,getMyProgress,getTodayTask,getEarnings} = require("../controllers/riderJoiningBonusController");
+const { getAvailablePrograms , getProgramDetails,joinProgram,getMyPrograms,getMyProgramProgress,getTodayTask} = require("../controllers/riderJoiningBonusController");
 const riderJoiningBonusRouter = express.Router();
 
+
+
+/**
+ * @swagger
+ * /api/rider/joining/bonus/programs/myProgress:
+ *   get:
+ *     tags:
+ *       - Rider Joining Bonus
+ *     summary: Get logged-in rider program progress
+ *     description: >
+ *       Fetches the active joining bonus program progress for the logged-in rider.
+ *       
+ *       Logic:
+ *       - Retrieves latest ACTIVE enrollment
+ *       - Automatically marks program as EXPIRED if expired
+ *       - Returns all tasks with progress
+ *       - Provides summary (completed, pending, rewards)
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     responses:
+ *
+ *       200:
+ *         description: Program progress fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *
+ *                     program:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: string
+ *                           example: PROG12345
+ *                         name:
+ *                           type: string
+ *                           example: Joining Bonus Program
+ *                         validityDays:
+ *                           type: number
+ *                           example: 7
+ *                         validFrom:
+ *                           type: string
+ *                           format: date-time
+ *                         validTill:
+ *                           type: string
+ *                           format: date-time
+ *                         isActive:
+ *                           type: boolean
+ *                           example: true
+ *
+ *                     enrollment:
+ *                       type: object
+ *                       properties:
+ *                         status:
+ *                           type: string
+ *                           example: ACTIVE
+ *                         enrolledAt:
+ *                           type: string
+ *                           format: date-time
+ *                         expiresAt:
+ *                           type: string
+ *                           format: date-time
+ *
+ *                     summary:
+ *                       type: object
+ *                       properties:
+ *                         totalTasks:
+ *                           type: number
+ *                           example: 5
+ *                         completedTasks:
+ *                           type: number
+ *                           example: 2
+ *                         pendingTasks:
+ *                           type: number
+ *                           example: 3
+ *                         totalRewardEarned:
+ *                           type: number
+ *                           example: 200
+ *
+ *                     tasks:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *
+ *                           taskId:
+ *                             type: string
+ *                             example: TASK123
+ *
+ *                           dayNumber:
+ *                             type: number
+ *                             example: 1
+ *
+ *                           taskType:
+ *                             type: string
+ *                             example: ORDERS
+ *
+ *                           conditions:
+ *                             type: object
+ *                             properties:
+ *                               minOrders:
+ *                                 type: number
+ *                                 example: 10
+ *                               minAcceptanceRate:
+ *                                 type: number
+ *                                 example: null
+ *                               minPeakSlots:
+ *                                 type: number
+ *                                 example: null
+ *                               minEarnings:
+ *                                 type: number
+ *                                 example: null
+ *
+ *                           rewardAmount:
+ *                             type: number
+ *                             example: 100
+ *
+ *                           isCompleted:
+ *                             type: boolean
+ *                             example: true
+ *
+ *                           progressValue:
+ *                             type: number
+ *                             example: 8
+ *
+ *                           completedAt:
+ *                             type: string
+ *                             format: date-time
+ *                             nullable: true
+ *
+ *       404:
+ *         description: No active program found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: No active joining bonus program found
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Server error
+ */
+
+riderJoiningBonusRouter.get("/programs/myProgress",riderAuthMiddleWare, getMyProgramProgress);
 
 /**
  * @swagger
@@ -187,27 +362,7 @@ riderJoiningBonusRouter.post("/programs/:programId/join", riderAuthMiddleWare,jo
  */
 riderJoiningBonusRouter.get("/my-programs", riderAuthMiddleWare,getMyPrograms);
 
-/**
- * @swagger
- * /api/rider/joining/bonus/programs/{programId}/progress:
- *   get:
- *     summary: Get rider progress for a program
- *     tags: [Rider Joining Bonus]
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: path
- *         name: programId
- *         required: true
- *         schema:
- *           type: string
- *     responses:
- *       200:
- *         description: Progress fetched
- *       400:
- *         description: Not enrolled
- */
-riderJoiningBonusRouter.get("/programs/:programId/progress",riderAuthMiddleWare, getMyProgress);
+
 
 /**
  * @swagger
