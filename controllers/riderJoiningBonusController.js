@@ -235,60 +235,148 @@ exports.getMyPrograms = async (req, res) => {
 };
 
 
-// 5️⃣ Get My Progress
-exports.getMyProgress = async (req, res) => {
+//Get My Progress
+exports.getMyProgramProgress = async (req, res) => {
   try {
     const riderId = req.rider.id;
-    const { programId } = req.params;
+    const now = new Date();
 
-    // ✅ Check enrollment first
-    const enrollment = await prisma.programEnrollment.findUnique({
+    // ----------------------------
+    // GET ACTIVE ENROLLMENT
+    // ----------------------------
+    let enrollment = await prisma.programEnrollment.findFirst({
       where: {
-        riderId_programId: { riderId, programId }
-      }
-    });
-
-    if (!enrollment) {
-      return res.status(400).json({
-        success: false,
-        message: "Not enrolled in program"
-      });
-    }
-
-    // ✅ Fetch progress
-    let progress = await prisma.programProgress.findFirst({
-      where: { riderId, programId },
+        riderId,
+        status: "ACTIVE"
+      },
       include: {
         program: {
-          include: { tasks: true }
+          select: {
+            id: true,
+            name: true,
+            validityDays: true,
+            validFrom: true,
+            validTill: true,
+            isActive: true
+          }
         }
-      }
+      },
+      orderBy: { enrolledAt: "desc" }
     });
 
-    // ✅ If no progress → return default object
-    if (!progress) {
-      return res.json({
-        success: true,
-        message: "No progress yet",
-        data: {
-          riderId,
-          programId,
-          totalOrders: 0,
-          totalEarnings: 0,
-          achieved: false,
-          tasks: []
-        }
+    // ----------------------------
+    // NO ACTIVE PROGRAM
+    // ----------------------------
+    if (!enrollment) {
+      return res.status(404).json({
+        success: false,
+        message: "No active joining bonus program found"
       });
     }
 
-    res.json({
-      success: true,
-      data: progress
+    // ----------------------------
+    // HANDLE EXPIRY
+    // ----------------------------
+    if (enrollment.expiresAt < now) {
+      await prisma.programEnrollment.update({
+        where: { id: enrollment.id },
+        data: { status: "EXPIRED" }
+      });
+
+      enrollment.status = "EXPIRED";
+    }
+
+    const programId = enrollment.program.id;
+
+    console.log(programId)
+
+    // ----------------------------
+    // GET TASKS
+    // ----------------------------
+    const tasks = await prisma.programTask.findMany({
+      where: { programId },
+      orderBy: { dayNumber: "asc" }
     });
 
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false });
+    // ----------------------------
+    // GET TASK PROGRESS
+    // ----------------------------
+    const progressList = await prisma.programTaskProgress.findMany({
+      where: { riderId, programId }
+    });
+
+    // Map progress
+    const progressMap = {};
+    progressList.forEach(p => {
+      progressMap[p.taskId] = p;
+    });
+
+    // ----------------------------
+    // BUILD TASK RESPONSE
+    // ----------------------------
+    const tasksData = tasks.map(task => {
+      const progress = progressMap[task.id];
+
+      return {
+        taskId: task.id,
+        dayNumber: task.dayNumber,
+        taskType: task.taskType,
+
+        conditions: {
+          minOrders: task.minOrders,
+          minAcceptanceRate: task.minAcceptanceRate,
+          minPeakSlots: task.minPeakSlots,
+          minEarnings: task.minEarnings
+        },
+
+        rewardAmount: task.rewardAmount,
+
+        // Progress
+        isCompleted: progress?.isCompleted || false,
+        progressValue: progress?.progressValue || 0,
+        completedAt: progress?.completedAt || null
+      };
+    });
+
+    // ----------------------------
+    // SUMMARY
+    // ----------------------------
+    const totalTasks = tasksData.length;
+    const completedTasks = tasksData.filter(t => t.isCompleted).length;
+
+    const totalRewardEarned = tasksData
+      .filter(t => t.isCompleted)
+      .reduce((sum, t) => sum + t.rewardAmount, 0);
+
+    // ----------------------------
+    // RESPONSE
+    // ----------------------------
+    return res.status(200).json({
+      success: true,
+      data: {
+        program: enrollment.program,
+        enrollment: {
+          status: enrollment.status,
+          enrolledAt: enrollment.enrolledAt,
+          expiresAt: enrollment.expiresAt
+        },
+        summary: {
+          totalTasks,
+          completedTasks,
+          pendingTasks: totalTasks - completedTasks,
+          totalRewardEarned
+        },
+        tasks: tasksData
+      }
+    });
+
+  } catch (error) {
+    console.error("Get My Program Progress Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
   }
 };
 
