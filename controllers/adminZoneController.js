@@ -1,53 +1,9 @@
 const prisma=require('../config/prisma');
+const geocodeAddress = require("../utils/geocode");
 
 /////////////////////////////////////////////////////
 // CREATE ADDRESS (ADMIN)
 /////////////////////////////////////////////////////
-// exports.createZonePoint = async (req, res) => {
-//   try {
-//     const {
-//       name,
-//       addressLine1,
-//       addressLine2,
-//       city,
-//       state,
-//       pincode,
-//       latitude,
-//       longitude,
-//       zoneId
-//     } = req.body;
-
-//     if (!name || !addressLine1 || !city || !state || !pincode || !latitude || !longitude || !zoneId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Missing required fields"
-//       });
-//     }
-
-//     const zonePoint = await prisma.zonePoint.create({
-//       data: {
-//         name,
-//         addressLine1,
-//         addressLine2,
-//         city,
-//         state,
-//         pincode,
-//         latitude,
-//         longitude,
-//         zoneId
-//       }
-//     });
-
-//     return res.status(201).json({
-//       success: true,
-//       data: zonePoint
-//     });
-
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ success: false, message: "Internal server error" });
-//   }
-// };
 
 exports.createZone = async (req, res) => {
   try {
@@ -60,8 +16,14 @@ exports.createZone = async (req, res) => {
       });
     }
 
+    //////////////////////////////////////////////////////
+    // CUSTOM ZONE ID
+    //////////////////////////////////////////////////////
+    const zoneId = `zone${Math.floor(1000 + Math.random() * 90000)}`;
+
     const zone = await prisma.zone.create({
       data: {
+        id: zoneId,
         name,
         city,
         state
@@ -76,6 +38,7 @@ exports.createZone = async (req, res) => {
 
   } catch (error) {
     console.error("CREATE ZONE ERROR:", error);
+
     res.status(500).json({
       success: false,
       message: error.message
@@ -84,21 +47,22 @@ exports.createZone = async (req, res) => {
 };
 
 
+
 exports.createZonePoint = async (req, res) => {
   try {
+
     const {
       name,
       addressLine1,
+      addressLine2,
       city,
       state,
       pincode,
-      latitude,
-      longitude,
       zoneId
     } = req.body;
 
     //////////////////////////////////////////////////////
-    // 🔴 CHECK IF ZONE EXISTS
+    // CHECK ZONE
     //////////////////////////////////////////////////////
     const zone = await prisma.zone.findUnique({
       where: { id: zoneId }
@@ -112,12 +76,30 @@ exports.createZonePoint = async (req, res) => {
     }
 
     //////////////////////////////////////////////////////
-    // ✅ CREATE ZONE POINT
+    // FULL ADDRESS
+    //////////////////////////////////////////////////////
+    const fullAddress = `
+      ${addressLine1},
+      ${addressLine2 || ""},
+      ${city},
+      ${state},
+      ${pincode}
+    `;
+
+    //////////////////////////////////////////////////////
+    // AUTO LAT LNG
+    //////////////////////////////////////////////////////
+    const { latitude, longitude } =
+      await geocodeAddress(fullAddress);
+
+    //////////////////////////////////////////////////////
+    // CREATE
     //////////////////////////////////////////////////////
     const zonePoint = await prisma.zonePoint.create({
       data: {
         name,
         addressLine1,
+        addressLine2,
         city,
         state,
         pincode,
@@ -133,24 +115,127 @@ exports.createZonePoint = async (req, res) => {
     });
 
   } catch (error) {
+
     console.error(error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };
 
 /////////////////////////////////////////////////////
 // GET ALL ADDRESSES (FOR UI LIST)
 /////////////////////////////////////////////////////
+// exports.getZonePoints = async (req, res) => {
+//   try {
+
+//     const { zoneId, pincode } = req.query;
+
+//     const zonePoints = await prisma.zonePoint.findMany({
+//       where: {
+//         isActive: true,
+//         ...(zoneId && { zoneId }),
+//         ...(pincode && { pincode })
+//       },
+
+//       //////////////////////////////////////////////////////
+//       // HIDE LATITUDE & LONGITUDE
+//       //////////////////////////////////////////////////////
+//       select: {
+//         id: true,
+//         name: true,
+//         addressLine1: true,
+//         addressLine2: true,
+//         city: true,
+//         state: true,
+//         pincode: true,
+//         radiusInMeters: true,
+//         zoneId: true,
+//         isActive: true,
+//         createdAt: true,
+//         updatedAt: true
+//       },
+
+//       orderBy: {
+//         createdAt: "desc"
+//       }
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       data: zonePoints
+//     });
+
+//   } catch (error) {
+
+//     console.error(error);
+
+//     res.status(500).json({
+//       success: false,
+//       message: "Internal server error"
+//     });
+//   }
+// };
+
 exports.getZonePoints = async (req, res) => {
   try {
-    const { zoneId, pincode } = req.query;
 
+    const { pincode } = req.query;
+
+    //////////////////////////////////////////////////////
+    // PINCODE REQUIRED
+    //////////////////////////////////////////////////////
+    if (!pincode) {
+      return res.status(400).json({
+        success: false,
+        message: "pincode is required"
+      });
+    }
+
+    //////////////////////////////////////////////////////
+    // GET ALL ZONES WITH THIS PINCODE
+    //////////////////////////////////////////////////////
     const zonePoints = await prisma.zonePoint.findMany({
+
       where: {
         isActive: true,
-        ...(zoneId && { zoneId }),
-        ...(pincode && { pincode })
+        pincode
       },
+
+      //////////////////////////////////////////////////////
+      // RETURN CLEAN DATA
+      //////////////////////////////////////////////////////
+      select: {
+
+        id: true,
+
+        name: true,
+
+        addressLine1: true,
+
+        addressLine2: true,
+
+        city: true,
+
+        state: true,
+
+        pincode: true,
+
+        //////////////////////////////////////////////////
+        // INCLUDE ZONE DETAILS
+        //////////////////////////////////////////////////
+        zone: {
+          select: {
+            id: true,
+            name: true,
+            city: true,
+            state: true
+          }
+        }
+      },
+
       orderBy: {
         createdAt: "desc"
       }
@@ -158,12 +243,18 @@ exports.getZonePoints = async (req, res) => {
 
     return res.status(200).json({
       success: true,
+      count: zonePoints.length,
       data: zonePoints
     });
 
   } catch (error) {
+
     console.error(error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
   }
 };
 
