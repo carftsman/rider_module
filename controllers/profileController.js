@@ -1141,6 +1141,7 @@ exports.getRiderOrderHistory = async (req, res) => {
 
     if (filter === "weekly") {
       const now = new Date();
+
       const firstDayOfWeek = new Date(now);
       const day = now.getDay();
 
@@ -1185,19 +1186,30 @@ exports.getRiderOrderHistory = async (req, res) => {
         OrderPickupAddress: true,
         OrderDeliveryAddress: true,
         OrderRiderEarning: true,
-
-        // ✅ rating relation
-        RiderRating: true,
       },
       orderBy: {
         createdAt: "desc",
       },
     });
 
+    // ---------- FETCH RIDER RATINGS ----------
+    // ✅ Fetch only by riderId, not by orderId
+    const riderRatings = await prisma.riderRating.findMany({
+      where: {
+        riderId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    const ratingMap = new Map(
+      riderRatings.map((rating) => [rating.orderId, rating])
+    );
+
     // ---------- RIDER EARNING ----------
     const getRiderEarning = (order) => {
       const earning = order.OrderRiderEarning;
-
       return Number(earning?.totalEarning || 0);
     };
 
@@ -1220,16 +1232,16 @@ exports.getRiderOrderHistory = async (req, res) => {
         .toFixed(2)
     );
 
-    // ---------- RATINGS ----------
-    const ratings = orders
-      .map((order) => Number(order.RiderRating?.rating))
+    // ---------- AVG RIDER RATING ----------
+    const validRatings = riderRatings
+      .map((r) => Number(r.rating))
       .filter((rating) => !isNaN(rating) && rating > 0);
 
-    const avgRating = ratings.length
+    const avgRating = validRatings.length
       ? Number(
           (
-            ratings.reduce((sum, rating) => sum + rating, 0) /
-            ratings.length
+            validRatings.reduce((sum, rating) => sum + rating, 0) /
+            validRatings.length
           ).toFixed(1)
         )
       : 0;
@@ -1238,7 +1250,7 @@ exports.getRiderOrderHistory = async (req, res) => {
     const data = orders.map((order) => {
       const pricing = order.OrderPricing;
       const earning = order.OrderRiderEarning;
-      const riderRating = order.RiderRating;
+      const riderRating = ratingMap.get(order.orderId);
 
       const riderEarning = Number(getRiderEarning(order).toFixed(2));
 
@@ -1279,7 +1291,8 @@ exports.getRiderOrderHistory = async (req, res) => {
         pickupAddress: order.OrderPickupAddress?.addressLine || "",
         deliveredAddress: order.OrderDeliveryAddress?.addressLine || "",
 
-        rating: riderRating?.rating || 0,
+        // ✅ order-wise rating if orderId matched
+        rating: riderRating ? Number(riderRating.rating) : 0,
         review: riderRating?.review || null,
 
         deliveredAt: order.updatedAt || null,
@@ -1292,7 +1305,10 @@ exports.getRiderOrderHistory = async (req, res) => {
       totalOrders,
       totalRiderEarnings,
       totalDistance,
+
+      // ✅ rider overall average rating
       avgRating,
+
       data,
     });
   } catch (err) {

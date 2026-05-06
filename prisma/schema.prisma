@@ -1866,7 +1866,7 @@ model RiderRating {
   review String?
 
   createdAt DateTime @default(now())
-
+  
   rider  Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
   orders Order[]
 
