@@ -19,26 +19,25 @@ const { upload } = require("../utils/azureUpload");
 
 /**
  * @swagger
- * /api/kit/payment/{id}:
+ * /api/kit/payment/{requestIds}:
  *   post:
- *     summary: Select payment option for asset request
+ *     summary: Select payment for joining kit requests
  *     description: >
- *       Allows an authenticated rider to select a payment mode for a specific asset request.
- *       If the asset request is already free and in READY_FOR_DISPATCH status, payment is not required.
- *       For ONLINE payment mode, rider must choose either FULL_PAYMENT or EMI.
- *       If EMI is selected, emiMonths must be one of 3, 6, 9, or 12.
+ *       Allows an authenticated rider to select a payment option (FULL / EMI)
+ *       for one or multiple asset requests. Accepts comma-separated requestIds.
+ *       Creates or updates payment records and EMI plan if applicable.
  *     tags:
- *       - Rider Payment
+ *       - Joining Kit
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: id
+ *         name: requestIds
  *         required: true
- *         description: Asset request ID
+ *         description: Comma-separated asset request IDs
  *         schema:
  *           type: string
- *           example: 8c1a92e1-8b7a-4c5b-b24f-8d8428a8d0c1
+ *           example: eb311c97-8da7-4805-8952-8f920fca96a2,2d8748ad-d134-420b-a88b-1284e83d437b
  *     requestBody:
  *       required: true
  *       content:
@@ -47,155 +46,101 @@ const { upload } = require("../utils/azureUpload");
  *             type: object
  *             required:
  *               - paymentMode
+ *               - paymentType
  *             properties:
  *               paymentMode:
  *                 type: string
- *                 enum: [ONLINE, OFFLINE]
+ *                 enum: [ONLINE, CASH, UPI, CARD]
  *                 example: ONLINE
  *               paymentType:
  *                 type: string
- *                 enum: [FULL_PAYMENT, EMI]
+ *                 enum: [FULL, EMI]
  *                 example: EMI
  *               emiMonths:
  *                 type: integer
- *                 enum: [3, 6, 9, 12]
- *                 example: 6
- *           examples:
- *             offlinePayment:
- *               summary: Offline payment selection
- *               value:
- *                 paymentMode: OFFLINE
- *             fullOnlinePayment:
- *               summary: Online full payment
- *               value:
- *                 paymentMode: ONLINE
- *                 paymentType: FULL_PAYMENT
- *             emiPayment:
- *               summary: Online EMI payment
- *               value:
- *                 paymentMode: ONLINE
- *                 paymentType: EMI
- *                 emiMonths: 6
+ *                 description: Required only if paymentType is EMI
+ *                 example: 3
  *     responses:
  *       200:
- *         description: Payment option selected successfully or payment not required
+ *         description: Payment option selected successfully
  *         content:
  *           application/json:
- *             examples:
- *               successResponse:
- *                 summary: Payment option selected successfully
- *                 value:
- *                   success: true
- *                   message: Payment option selected successfully
- *                   data:
- *                     id: 8c1a92e1-8b7a-4c5b-b24f-8d8428a8d0c1
- *                     riderId: 55b7f9e4-21a8-4c6d-bef7-7d9c9a11d333
- *                     assetType: HELMET
- *                     quantity: 1
- *                     status: PAYMENT_PENDING
- *                     paymentMode: ONLINE
- *                     paymentType: EMI
- *                     emiMonths: 6
- *                     createdAt: 2026-04-20T11:30:00.000Z
- *               freeAssetResponse:
- *                 summary: Asset already free
- *                 value:
- *                   success: true
- *                   message: This asset is already free and ready for dispatch
- *                   data:
- *                     id: 8c1a92e1-8b7a-4c5b-b24f-8d8428a8d0c1
- *                     riderId: 55b7f9e4-21a8-4c6d-bef7-7d9c9a11d333
- *                     assetType: HELMET
- *                     quantity: 1
- *                     status: READY_FOR_DISPATCH
- *                     createdAt: 2026-04-20T11:30:00.000Z
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Payment selected successfully
+ *                 totalAmount:
+ *                   type: number
+ *                   example: 1500
+ *                 totalRequests:
+ *                   type: integer
+ *                   example: 2
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: pay_12345
+ *                       assetRequestId:
+ *                         type: string
+ *                         example: eb311c97-8da7-4805-8952-8f920fca96a2
+ *                       amount:
+ *                         type: number
+ *                         example: 750
+ *                       paymentMode:
+ *                         type: string
+ *                         example: ONLINE
+ *                       paymentType:
+ *                         type: string
+ *                         example: EMI
+ *                       status:
+ *                         type: string
+ *                         enum: [PENDING, SUCCESS, FAILED]
+ *                         example: PENDING
  *       400:
- *         description: Validation error or invalid request state
+ *         description: Bad request / validation error
  *         content:
  *           application/json:
  *             examples:
- *               missingId:
- *                 summary: Missing id param
+ *               missingRequestIds:
+ *                 summary: requestIds missing
  *                 value:
  *                   success: false
- *                   message: id is required in params
- *               missingPaymentMode:
- *                 summary: Missing payment mode
+ *                   message: requestIds are required
+ *               invalidEmi:
+ *                 summary: EMI months missing
  *                 value:
  *                   success: false
- *                   message: paymentMode is required
- *               invalidPaymentMode:
- *                 summary: Invalid payment mode
- *                 value:
- *                   success: false
- *                   message: "Invalid paymentMode. Allowed: ONLINE, OFFLINE"
- *               missingPaymentType:
- *                 summary: Missing payment type for online mode
- *                 value:
- *                   success: false
- *                   message: paymentType is required when paymentMode is ONLINE
- *               invalidPaymentType:
- *                 summary: Invalid payment type
- *                 value:
- *                   success: false
- *                   message: "Invalid paymentType. Allowed: FULL_PAYMENT, EMI"
- *               missingEmiMonths:
- *                 summary: Missing EMI months
- *                 value:
- *                   success: false
- *                   message: emiMonths is required when paymentType is EMI
- *               invalidEmiMonths:
- *                 summary: Invalid EMI months
- *                 value:
- *                   success: false
- *                   message: "Invalid emiMonths. Allowed: 3, 6, 9, 12"
- *               invalidStatus:
- *                 summary: Payment selection not allowed for current status
- *                 value:
- *                   success: false
- *                   message: Payment selection not allowed for status DISPATCHED
+ *                   message: emiMonths required for EMI
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized rider
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Unauthorized
+ *             example:
+ *               success: false
+ *               message: Unauthorized
  *       404:
- *         description: Asset request not found
+ *         description: Some requests not found
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Asset request not found
+ *             example:
+ *               success: false
+ *               message: Some requests not found
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Something went wrong
- *                 error:
- *                   type: string
- *                   example: Internal server error
+ *             example:
+ *               success: false
+ *               message: Something went wrong
+ *               error: Internal server error
  */
 router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
 
@@ -205,16 +150,13 @@ router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
  * @swagger
  * /api/kit/rider/joining-kit:
  *   post:
- *     summary: Request joining kit for rider
+ *     summary: Request joining kit
  *     description: >
  *       Allows an authenticated rider to request a joining kit.
- *       Rider must choose either HOME_DELIVERY or PICKUP.
- *       For HOME_DELIVERY, name, completeAddress, and pincode are required.
- *       For PICKUP, pickupLocationId is required.
- *       If the first free-limit stock is available for a kit item, that item is marked as READY_FOR_DISPATCH,
- *       otherwise it is marked as PAYMENT_PENDING.
+ *       Joining kit includes T_SHIRT, BAG, HELMET, JACKET and ID_CARD.
+ *       Items are free until the configured freeLimit is reached in assetMaster.
  *     tags:
- *       - Rider Kit
+ *       - Joining Kit
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -222,39 +164,39 @@ router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
  *       content:
  *         application/json:
  *           schema:
- *             type: object
- *             required:
- *               - deliveryMode
- *             properties:
- *               deliveryMode:
- *                 type: string
- *                 enum: [HOME_DELIVERY, PICKUP]
- *                 example: HOME_DELIVERY
- *               name:
- *                 type: string
- *                 example: Vaishnavi Kuruba
- *               completeAddress:
- *                 type: string
- *                 example: H.No 1-23, Madhapur, Hyderabad, Telangana
- *               pincode:
- *                 type: string
- *                 example: "500081"
- *               pickupLocationId:
- *                 type: string
- *                 example: 2e9f5b1d-ef43-4d65-9b65-0b43e7d18d55
- *           examples:
- *             homeDelivery:
- *               summary: Home delivery request
- *               value:
- *                 deliveryMode: HOME_DELIVERY
- *                 name: Vaishnavi Kuruba
- *                 completeAddress: H.No 1-23, Madhapur, Hyderabad, Telangana
- *                 pincode: "500081"
- *             pickup:
- *               summary: Pickup request
- *               value:
- *                 deliveryMode: PICKUP
- *                 pickupLocationId: 2e9f5b1d-ef43-4d65-9b65-0b43e7d18d55
+ *             oneOf:
+ *               - type: object
+ *                 required:
+ *                   - deliveryMode
+ *                   - name
+ *                   - completeAddress
+ *                   - pincode
+ *                 properties:
+ *                   deliveryMode:
+ *                     type: string
+ *                     enum: [HOME_DELIVERY]
+ *                     example: HOME_DELIVERY
+ *                   name:
+ *                     type: string
+ *                     example: Ramu Kumar
+ *                   completeAddress:
+ *                     type: string
+ *                     example: H.No 12-34, Madhapur, Hyderabad
+ *                   pincode:
+ *                     type: string
+ *                     example: "500081"
+ *               - type: object
+ *                 required:
+ *                   - deliveryMode
+ *                   - pickupLocationId
+ *                 properties:
+ *                   deliveryMode:
+ *                     type: string
+ *                     enum: [PICKUP]
+ *                     example: PICKUP
+ *                   pickupLocationId:
+ *                     type: string
+ *                     example: 7f4b2c8a-91e2-4e49-bc7d-74f6e29f1a21
  *     responses:
  *       201:
  *         description: Joining kit requested successfully
@@ -274,7 +216,13 @@ router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
  *                   example: 5
  *                 totalPrice:
  *                   type: number
- *                   example: 0
+ *                   example: 897
+ *                 isEntireKitFree:
+ *                   type: boolean
+ *                   example: false
+ *                 freeItemCount:
+ *                   type: integer
+ *                   example: 2
  *                 data:
  *                   type: array
  *                   items:
@@ -282,57 +230,58 @@ router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
  *                     properties:
  *                       id:
  *                         type: string
- *                         example: 8c1a92e1-8b7a-4c5b-b24f-8d8428a8d0c1
+ *                         example: eb311c97-8da7-4805-8952-8f920fca96a2
  *                       riderId:
  *                         type: string
- *                         example: 55b7f9e4-21a8-4c6d-bef7-7d9c9a11d333
+ *                         example: r1
  *                       assetType:
  *                         type: string
  *                         enum: [T_SHIRT, BAG, HELMET, JACKET, ID_CARD]
- *                         example: T_SHIRT
+ *                         example: HELMET
  *                       quantity:
  *                         type: integer
  *                         example: 1
  *                       status:
  *                         type: string
  *                         enum: [READY_FOR_DISPATCH, PAYMENT_PENDING]
- *                         example: READY_FOR_DISPATCH
- *                       createdAt:
- *                         type: string
- *                         format: date-time
- *                         example: 2026-04-20T10:30:00.000Z
- *                       deliveryDetails:
- *                         type: object
- *                         description: Delivery or pickup details based on selected mode
- *                         properties:
- *                           deliveryMode:
- *                             type: string
- *                             enum: [HOME_DELIVERY, PICKUP]
- *                             example: HOME_DELIVERY
- *                           name:
- *                             type: string
- *                             example: Vaishnavi Kuruba
- *                           completeAddress:
- *                             type: string
- *                             example: H.No 1-23, Madhapur, Hyderabad, Telangana
- *                           pincode:
- *                             type: string
- *                             example: "500081"
- *                           pickupLocationId:
- *                             type: string
- *                             example: 2e9f5b1d-ef43-4d65-9b65-0b43e7d18d55
+ *                         example: PAYMENT_PENDING
  *                       price:
  *                         type: number
- *                         example: 0
+ *                         example: 299
  *                       isFree:
  *                         type: boolean
- *                         example: true
+ *                         example: false
+ *                       deliveryDetails:
+ *                         type: object
+ *                         oneOf:
+ *                           - type: object
+ *                             properties:
+ *                               deliveryMode:
+ *                                 type: string
+ *                                 example: HOME_DELIVERY
+ *                               name:
+ *                                 type: string
+ *                                 example: Ramu Kumar
+ *                               completeAddress:
+ *                                 type: string
+ *                                 example: H.No 12-34, Madhapur, Hyderabad
+ *                               pincode:
+ *                                 type: string
+ *                                 example: "500081"
+ *                           - type: object
+ *                             properties:
+ *                               deliveryMode:
+ *                                 type: string
+ *                                 example: PICKUP
+ *                               pickupLocationId:
+ *                                 type: string
+ *                                 example: 7f4b2c8a-91e2-4e49-bc7d-74f6e29f1a21
  *       400:
- *         description: Validation error or joining kit already requested
+ *         description: Bad request / validation error / joining kit already requested
  *         content:
  *           application/json:
  *             examples:
- *               missingDeliveryMode:
+ *               deliveryModeRequired:
  *                 summary: deliveryMode missing
  *                 value:
  *                   success: false
@@ -342,50 +291,36 @@ router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
  *                 value:
  *                   success: false
  *                   message: Invalid deliveryMode
- *               missingHomeDeliveryFields:
- *                 summary: Missing home delivery fields
+ *               homeDeliveryFieldsRequired:
+ *                 summary: HOME_DELIVERY fields missing
  *                 value:
  *                   success: false
  *                   message: name, completeAddress and pincode required for HOME_DELIVERY
- *               missingPickupLocation:
- *                 summary: Missing pickup location
+ *               pickupLocationRequired:
+ *                 summary: PICKUP location missing
  *                 value:
  *                   success: false
  *                   message: pickupLocationId required for PICKUP
  *               alreadyRequested:
- *                 summary: Kit already requested
+ *                 summary: Joining kit already requested
  *                 value:
  *                   success: false
  *                   message: Joining kit already requested
  *       401:
- *         description: Unauthorized
+ *         description: Unauthorized rider
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Unauthorized
+ *             example:
+ *               success: false
+ *               message: Unauthorized
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Something went wrong
- *                 error:
- *                   type: string
- *                   example: Internal server error
+ *             example:
+ *               success: false
+ *               message: Something went wrong
+ *               error: Internal server error
  */
 router.post("/rider/joining-kit", riderAuthMiddleWare, requestJoiningKit);
 router.post('/admin/assets', createAsset)
@@ -654,44 +589,49 @@ router.post(
 
 /**
  * @swagger
- * /api/kit/rider/issue:
+ * /api/kit/rider/issue/{requestId}:
  *   post:
+ *     summary: Raise issue for delivered asset
+ *     description: >
+ *       Allows a rider to raise an issue (damage, missing, etc.) for a delivered asset.
+ *       Issue can only be raised after the asset request status is COMPLETED.
  *     tags:
- *       - Rider Assets
- *     summary: Raise an issue for an issued asset
- *     description: Rider can raise an issue (damaged, lost, wrong size, or other) for their issued assets.
+ *       - Rider Asset Issues
  *     security:
  *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: requestId
+ *         required: true
+ *         description: Asset request ID
+ *         schema:
+ *           type: string
+ *           example: eb311c97-8da7-4805-8952-8f920fca96a2
  *     requestBody:
  *       required: true
  *       content:
- *         multipart/form-data:
+ *         application/json:
  *           schema:
  *             type: object
  *             required:
- *               - riderAssetsId
  *               - assetType
  *               - description
  *             properties:
- *               riderAssetsId:
- *                 type: string
- *                 format: uuid
- *                 example: "rider-assets-uuid-1234"
  *               assetType:
  *                 type: string
- *                 enum: [T_SHIRT, BAG, HELMET, JACKET, ID_CARD, OTHER]
- *                 example: "BAG"
+ *                 enum: [T_SHIRT, BAG, HELMET, JACKET, ID_CARD]
+ *                 example: HELMET
  *               description:
  *                 type: string
- *                 example: "The bag strap is broken"
+ *                 example: Helmet visor is broken
  *               issueType:
  *                 type: string
- *                 enum: [DAMAGED, LOST, WRONG_SIZE, OTHER]
- *                 example: "DAMAGED"
+ *                 enum: [DAMAGED, MISSING, WRONG_ITEM, OTHER]
+ *                 example: DAMAGED
  *               imageUrl:
  *                 type: string
- *                 format: binary
- *                 description: Optional image file upload for the issue
+ *                 format: uri
+ *                 example: https://example.com/image.jpg
  *     responses:
  *       201:
  *         description: Issue raised successfully
@@ -705,126 +645,123 @@ router.post(
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: "Issue raised successfully"
+ *                   example: Issue raised successfully
  *                 data:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: string
- *                       format: uuid
- *                       example: "issue-uuid-5678"
+ *                       example: issue_123
+ *                     requestId:
+ *                       type: string
+ *                       example: eb311c97-8da7-4805-8952-8f920fca96a2
  *                     riderAssetsId:
  *                       type: string
- *                       format: uuid
- *                       example: "rider-assets-uuid-1234"
+ *                       example: ra_123
  *                     assetType:
  *                       type: string
- *                       example: "BAG"
+ *                       example: HELMET
+ *                     assetName:
+ *                       type: string
+ *                       example: Helmet
+ *                     issueType:
+ *                       type: string
+ *                       example: DAMAGED
  *                     description:
  *                       type: string
- *                       example: "The bag strap is broken"
+ *                       example: Helmet visor is broken
  *                     imageUrl:
  *                       type: string
  *                       nullable: true
- *                       example: "/uploads/issues/bag123.jpg"
- *                     issueType:
- *                       type: string
- *                       example: "DAMAGED"
+ *                       example: https://example.com/image.jpg
  *                     status:
  *                       type: string
- *                       enum: [OPEN, IN_PROGRESS, RESOLVED]
- *                       example: "OPEN"
- *                     raisedAt:
+ *                       enum: [OPEN, IN_PROGRESS, RESOLVED, REJECTED]
+ *                       example: OPEN
+ *                     createdAt:
  *                       type: string
  *                       format: date-time
- *                       example: "2026-02-23T11:10:00.000Z"
- *                     resolvedAt:
- *                       type: string
- *                       format: date-time
- *                       nullable: true
- *                       example: null
+ *                       example: 2026-05-05T10:30:00.000Z
  *       400:
- *         description: Bad request - missing required fields
+ *         description: Bad request / validation error
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "riderAssetsId, assetType and description are required"
+ *             examples:
+ *               missingFields:
+ *                 summary: Missing required fields
+ *                 value:
+ *                   success: false
+ *                   message: assetType and description are required
+ *               notDelivered:
+ *                 summary: Asset not delivered yet
+ *                 value:
+ *                   success: false
+ *                   message: You can raise issue only after asset is delivered
  *       401:
- *         description: Unauthorized - invalid or missing rider token
+ *         description: Unauthorized rider
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "Unauthorized - Invalid token"
+ *             example:
+ *               success: false
+ *               message: Unauthorized
  *       403:
- *         description: Rider is not allowed to raise issue for this asset
+ *         description: Forbidden - not owner of asset request
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "You are not allowed to raise issue for this asset"
+ *             example:
+ *               success: false
+ *               message: You are not allowed to raise issue for this request
+ *       404:
+ *         description: Resource not found
+ *         content:
+ *           application/json:
+ *             examples:
+ *               requestNotFound:
+ *                 summary: Asset request not found
+ *                 value:
+ *                   success: false
+ *                   message: Asset request not found
+ *               assetNotAssigned:
+ *                 summary: Asset not assigned to rider
+ *                 value:
+ *                   success: false
+ *                   message: This asset type is not assigned to the rider
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "Something went wrong while raising issue"
- *                 error:
- *                   type: string
- *                   example: "Detailed error message"
+ *             example:
+ *               success: false
+ *               message: Something went wrong
+ *               error: Internal server error
  */
 router.post('/rider/issue/:requestId', riderAuthMiddleWare ,
      raiseIssue)
 /**
  * @swagger
- * /api/kit/asset/mark-delivered/{shipmentId}:
- *   patch:
- *     summary: Mark shipment as delivered
+ * /api/kit/asset/mark-delivered/{requestIds}:
+ *   post:
+ *     summary: Mark assets as delivered (Admin)
  *     description: >
- *       Marks a shipment as DELIVERED, sets deliveredDate,
- *       updates linked asset request status to COMPLETED,
- *       and updates rider asset items.
+ *       Marks one or multiple shipped assets as DELIVERED.
+ *       Updates shipment status, asset request status to COMPLETED,
+ *       and creates rider asset records.
+ *       Accepts comma-separated requestIds.
  *     tags:
- *       - Admin Shipment
+ *       - Admin Kit Management
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
- *         name: shipmentId
+ *         name: requestIds
  *         required: true
- *         description: Shipment ID
+ *         description: Comma-separated asset request IDs
  *         schema:
  *           type: string
- *           example: ship_001
+ *           example: eb311c97-8da7-4805-8952-8f920fca96a2,2d8748ad-d134-420b-a88b-1284e83d437b
  *     responses:
  *       200:
- *         description: Shipment marked as delivered successfully
+ *         description: Assets marked as delivered successfully
  *         content:
  *           application/json:
  *             schema:
@@ -835,87 +772,68 @@ router.post('/rider/issue/:requestId', riderAuthMiddleWare ,
  *                   example: true
  *                 message:
  *                   type: string
- *                   example: Shipment marked as delivered and rider assets updated
+ *                   example: Assets delivered and rider assets created successfully
+ *                 totalDelivered:
+ *                   type: integer
+ *                   example: 2
  *                 data:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *                       example: ship_001
- *                     assetRequestId:
- *                       type: string
- *                       example: req_001
- *                     courierName:
- *                       type: string
- *                       example: Delhivery
- *                     trackingId:
- *                       type: string
- *                       example: TRK123456789
- *                     dispatchDate:
- *                       type: string
- *                       format: date-time
- *                       example: 2026-04-20T09:30:00.000Z
- *                     deliveredDate:
- *                       type: string
- *                       format: date-time
- *                       example: 2026-04-22T14:15:00.000Z
- *                     deliveryStatus:
- *                       type: string
- *                       example: DELIVERED
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: ship_123
+ *                       assetRequestId:
+ *                         type: string
+ *                         example: eb311c97-8da7-4805-8952-8f920fca96a2
+ *                       deliveryStatus:
+ *                         type: string
+ *                         enum: [SHIPPED, IN_TRANSIT, DELIVERED]
+ *                         example: DELIVERED
+ *                       deliveredDate:
+ *                         type: string
+ *                         format: date-time
+ *                         example: 2026-05-05T12:30:00.000Z
  *       400:
- *         description: Validation error or shipment already delivered
+ *         description: Bad request
  *         content:
  *           application/json:
- *             examples:
- *               missingShipmentId:
- *                 summary: shipmentId missing
- *                 value:
- *                   success: false
- *                   message: shipmentId is required
- *               alreadyDelivered:
- *                 summary: Already delivered
- *                 value:
- *                   success: false
- *                   message: Shipment already marked as delivered
+ *             example:
+ *               success: false
+ *               message: requestIds are required
  *       404:
- *         description: Shipment not found
+ *         description: Some shipments not found
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Shipment not found
+ *             example:
+ *               success: false
+ *               message: Some shipments not found
+ *               foundShipmentRequestIds:
+ *                 - eb311c97-8da7-4805-8952-8f920fca96a2
+ *               missingRequestIds:
+ *                 - 2d8748ad-d134-420b-a88b-1284e83d437b
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Failed to update delivery
+ *             example:
+ *               success: false
+ *               message: Something went wrong
+ *               error: Internal server error
  */
 router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
 /**
  * @swagger
  * /api/kit/admin/dispatch/{assetRequestIds}:
  *   post:
- *     summary: Dispatch asset requests
+ *     summary: Dispatch assets (Admin)
  *     description: >
- *       Dispatch one or multiple asset requests by passing comma-separated assetRequestIds in path params.
- *       Only asset requests with READY_FOR_DISPATCH status can be dispatched.
- *       A shipment record is created for each asset request, and the request status is updated to DISPATCHED.
+ *       Dispatch one or multiple asset requests by providing courier details.
+ *       Only requests with status READY_FOR_DISPATCH can be dispatched.
+ *       Accepts comma-separated assetRequestIds.
  *     tags:
- *       - Admin Asset
+ *       - Admin Kit Management
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -925,7 +843,7 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  *         description: Comma-separated asset request IDs
  *         schema:
  *           type: string
- *           example: req_001,req_002,req_003
+ *           example: eb311c97-8da7-4805-8952-8f920fca96a2,2d8748ad-d134-420b-a88b-1284e83d437b
  *     requestBody:
  *       required: true
  *       content:
@@ -942,9 +860,6 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  *               trackingId:
  *                 type: string
  *                 example: TRK123456789
- *           example:
- *             courierName: Delhivery
- *             trackingId: TRK123456789
  *     responses:
  *       200:
  *         description: Assets dispatched successfully
@@ -967,8 +882,8 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  *                   items:
  *                     type: string
  *                   example:
- *                     - req_001
- *                     - req_002
+ *                     - eb311c97-8da7-4805-8952-8f920fca96a2
+ *                     - 2d8748ad-d134-420b-a88b-1284e83d437b
  *                 data:
  *                   type: array
  *                   items:
@@ -976,10 +891,10 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  *                     properties:
  *                       id:
  *                         type: string
- *                         example: ship_001
+ *                         example: ship_123
  *                       assetRequestId:
  *                         type: string
- *                         example: req_001
+ *                         example: eb311c97-8da7-4805-8952-8f920fca96a2
  *                       courierName:
  *                         type: string
  *                         example: Delhivery
@@ -989,12 +904,13 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  *                       dispatchDate:
  *                         type: string
  *                         format: date-time
- *                         example: 2026-04-20T10:30:00.000Z
+ *                         example: 2026-05-05T10:30:00.000Z
  *                       deliveryStatus:
  *                         type: string
+ *                         enum: [SHIPPED, IN_TRANSIT, DELIVERED]
  *                         example: SHIPPED
  *       400:
- *         description: Validation error or request not eligible for dispatch
+ *         description: Bad request / invalid status / missing fields
  *         content:
  *           application/json:
  *             examples:
@@ -1004,61 +920,46 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  *                   success: false
  *                   message: assetRequestIds param, courierName and trackingId are required
  *               noValidIds:
- *                 summary: No valid IDs found
+ *                 summary: No valid IDs after parsing
  *                 value:
  *                   success: false
  *                   message: No valid assetRequestIds found in params
- *               notReadyForDispatch:
- *                 summary: Some assets not ready
+ *               invalidStatus:
+ *                 summary: Requests not ready for dispatch
  *                 value:
  *                   success: false
  *                   message: Some assets are not ready for dispatch
  *                   invalidRequestIds:
- *                     - req_002
+ *                     - id1
  *                   statuses:
- *                     - id: req_002
+ *                     - id: id1
  *                       status: PAYMENT_PENDING
- *               shipmentExists:
- *                 summary: Shipment already exists
- *                 value:
- *                   success: false
- *                   message: Shipment already created for some requests
- *                   existingShipmentRequestIds:
- *                     - req_001
  *       404:
- *         description: Asset requests not found
+ *         description: Requests not found
  *         content:
  *           application/json:
  *             examples:
- *               noRequestsFound:
- *                 summary: No asset requests found
+ *               noneFound:
+ *                 summary: No requests found
  *                 value:
  *                   success: false
  *                   message: No asset requests found
- *               someRequestsNotFound:
- *                 summary: Some asset requests were not found
+ *               someNotFound:
+ *                 summary: Some requests missing
  *                 value:
  *                   success: false
  *                   message: Some asset requests were not found
  *                   notFoundIds:
- *                     - req_003
- *                     - req_004
+ *                     - id1
+ *                     - id2
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Something went wrong while dispatching asset
- *                 error:
- *                   type: string
- *                   example: Internal server error
+ *             example:
+ *               success: false
+ *               message: Something went wrong while dispatching asset
+ *               error: Internal server error
  */
 router.post('/admin/dispatch/:assetRequestIds', dispatchAsset)
 router.post('/admin/approve/:riderId', approveRequest)
