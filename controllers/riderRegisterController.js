@@ -1,4 +1,3 @@
-const Rider = require("../models/RiderModel");
 const jwt = require("jsonwebtoken");
 const path = require("path");
 const { sendSMS } = require("../utils/twilio");

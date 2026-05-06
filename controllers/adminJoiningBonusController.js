@@ -15,9 +15,8 @@ exports.createProgram = async (req, res) => {
       pincodeIds
     } = req.body;
 
-    // -----------------------------
-    // ✅ VALIDATIONS
-    // -----------------------------
+    
+    
     if (!name) {
       return res.status(400).json({
         success: false,
@@ -84,9 +83,8 @@ exports.createProgram = async (req, res) => {
       });
     }
 
-    // -----------------------------
-    // ✅ CHECK DUPLICATE PROGRAM
-    // -----------------------------
+    
+    
     const existing = await prisma.program.findFirst({
       where: {
         name,
@@ -102,9 +100,6 @@ exports.createProgram = async (req, res) => {
       });
     }
 
-    // -----------------------------
-    // ✅ CREATE PROGRAM
-    // -----------------------------
     const program = await prisma.program.create({
       data: {
         name,
@@ -149,9 +144,7 @@ exports.createProgramTask = async (req, res) => {
       rewardAmount
     } = req.body;
 
-    // ----------------------------
-    // BASIC VALIDATION
-    // ----------------------------
+    
     if (!programId) {
       return res.status(400).json({
         success: false,
@@ -180,9 +173,7 @@ exports.createProgramTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // TASK TYPE BASED VALIDATION 🔥
-    // ----------------------------
+    
     if (taskType === "ORDERS" && !minOrders) {
       return res.status(400).json({
         success: false,
@@ -211,9 +202,7 @@ exports.createProgramTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CHECK PROGRAM EXISTS
-    // ----------------------------
+    
     const program = await prisma.program.findUnique({
       where: { id: programId }
     });
@@ -231,9 +220,7 @@ exports.createProgramTask = async (req, res) => {
         });
     }
 
-    // ----------------------------
-    // DUPLICATE DAY CHECK
-    // ----------------------------
+    
     const existingTask = await prisma.programTask.findFirst({
       where: {
         programId,
@@ -248,9 +235,6 @@ exports.createProgramTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CREATE TASK
-    // ----------------------------
     const task = await prisma.programTask.create({
       data: {
         programId,
@@ -334,7 +318,7 @@ exports.getProgramTasks = async (req, res) => {
 };
 
 
-// Get All Programs// GET /api/admin/programs
+
 
 exports.getAllPrograms = async (req, res) => {
   try {
@@ -368,7 +352,6 @@ exports.getAllPrograms = async (req, res) => {
 };
 
 
-// GET /api/admin/programs/:programId  = Get Single Program (with tasks)
 exports.getProgramById = async (req, res) => {
   try {
     const { programId } = req.params;
@@ -404,7 +387,6 @@ exports.getProgramById = async (req, res) => {
 };
 
 
-// PUT /api/admin/programs/:programId    Update Program
 
 
 exports.updateProgram = async (req, res) => {
@@ -429,9 +411,7 @@ exports.updateProgram = async (req, res) => {
 
     const now = new Date();
 
-    // ----------------------------
-    // BLOCK IF ALREADY STARTED
-    // ----------------------------
+    
     if (now >= program.validFrom) {
       return res.status(400).json({
         success: false,
@@ -439,15 +419,11 @@ exports.updateProgram = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // PREPARE UPDATED VALUES
-    // ----------------------------
+    
     const newValidFrom = validFrom ? new Date(validFrom) : program.validFrom;
     const newValidTill = validTill ? new Date(validTill) : program.validTill;
 
-    // ----------------------------
-    // DATE VALIDATION
-    // ----------------------------
+    
     if (newValidFrom >= newValidTill) {
       return res.status(400).json({
         success: false,
@@ -455,9 +431,7 @@ exports.updateProgram = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // TASK vs VALIDITY CHECK
-    // ----------------------------
+    
     if (program.validityDays && program.tasks.length > 0) {
       const maxDay = Math.max(...program.tasks.map(t => t.dayNumber || 0));
 
@@ -469,9 +443,6 @@ exports.updateProgram = async (req, res) => {
       }
     }
 
-    // ----------------------------
-    // EMPTY ARRAY PROTECTION
-    // ----------------------------
     if (cityId && cityId.length === 0) {
       return res.status(400).json({
         success: false,
@@ -486,9 +457,7 @@ exports.updateProgram = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CONFLICT CHECK (IMPORTANT)
-    // ----------------------------
+    
     const conflict = await prisma.program.findFirst({
       where: {
         id: { not: programId },
@@ -511,9 +480,7 @@ exports.updateProgram = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // UPDATE PROGRAM
-    // ----------------------------
+    
     const updated = await prisma.program.update({
       where: { id: programId },
       data: {
@@ -543,15 +510,13 @@ exports.updateProgram = async (req, res) => {
 
 
 
-// PATCH /api/admin/programs/:programId/status   Activate / Deactivate
+
 exports.toggleProgramStatus = async (req, res) => {
   try {
     const { programId } = req.params;
     const { isActive } = req.body;
 
-    // ----------------------------
-    // VALIDATE INPUT
-    // ----------------------------
+
     if (typeof isActive !== "boolean") {
       return res.status(400).json({
         success: false,
@@ -559,9 +524,7 @@ exports.toggleProgramStatus = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // FETCH PROGRAM WITH TASKS
-    // ----------------------------
+    
     const program = await prisma.program.findUnique({
       where: { id: programId },
       include: { tasks: true }
@@ -574,9 +537,7 @@ exports.toggleProgramStatus = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // NO CHANGE CHECK
-    // ----------------------------
+    
     if (program.isActive === isActive) {
       return res.status(400).json({
         success: false,
@@ -586,11 +547,9 @@ exports.toggleProgramStatus = async (req, res) => {
 
     const now = new Date();
 
-    // ============================
-    // ACTIVATE LOGIC
-    // ============================
+  
     if (isActive) {
-      // ❌ Expired program
+      
       if (now > program.validTill) {
         return res.status(400).json({
           success: false,
@@ -598,7 +557,6 @@ exports.toggleProgramStatus = async (req, res) => {
         });
       }
 
-      // ❌ Invalid date range
       if (program.validFrom >= program.validTill) {
         return res.status(400).json({
           success: false,
@@ -606,7 +564,6 @@ exports.toggleProgramStatus = async (req, res) => {
         });
       }
 
-      // ❌ No tasks
       if (!program.tasks || program.tasks.length === 0) {
         return res.status(400).json({
           success: false,
@@ -614,7 +571,7 @@ exports.toggleProgramStatus = async (req, res) => {
         });
       }
 
-      // ❌ Missing days config
+      
       if (!program.validityDays) {
         return res.status(400).json({
           success: false,
@@ -622,7 +579,7 @@ exports.toggleProgramStatus = async (req, res) => {
         });
       }
 
-      // ❌ Conflict check
+     
       const conflict = await prisma.program.findFirst({
         where: {
           id: { not: programId },
@@ -642,11 +599,9 @@ exports.toggleProgramStatus = async (req, res) => {
       }
     }
 
-    // ============================
-    // DEACTIVATE LOGIC
-    // ============================
+    
     if (!isActive) {
-      // ⚠️ Optional: block if already started
+      //  Optional: block if already started
       if (now >= program.validFrom && now <= program.validTill) {
         return res.status(400).json({
           success: false,
@@ -655,9 +610,6 @@ exports.toggleProgramStatus = async (req, res) => {
       }
     }
 
-    // ----------------------------
-    // UPDATE STATUS
-    // ----------------------------
     const updated = await prisma.program.update({
       where: { id: programId },
       data: { isActive }
@@ -679,15 +631,12 @@ exports.toggleProgramStatus = async (req, res) => {
   }
 };
 
-// GET /api/admin/programs/:programId/tasks   Get Tasks of Program
+
 
 exports.getTasks = async (req, res) => {
   try {
     const { programId } = req.params;
 
-    // ----------------------------
-    // VALIDATION
-    // ----------------------------
     if (!programId) {
       return res.status(400).json({
         success: false,
@@ -695,9 +644,7 @@ exports.getTasks = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CHECK PROGRAM EXISTS
-    // ----------------------------
+    
     const program = await prisma.program.findUnique({
       where: { id: programId },
       select: {
@@ -714,19 +661,15 @@ exports.getTasks = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // FETCH TASKS
-    // ----------------------------
+    
     const tasks = await prisma.programTask.findMany({
       where: { programId },
       orderBy: { dayNumber: "asc" }
     });
 
-    // ----------------------------
-    // EDGE CASES
-    // ----------------------------
+  
 
-    // 1️⃣ No tasks created
+    
     if (!tasks.length) {
       return res.status(200).json({
         success: true,
@@ -736,7 +679,7 @@ exports.getTasks = async (req, res) => {
       });
     }
 
-    // 2️⃣ Validate tasks exceeding validityDays (data inconsistency check)
+    
     const invalidTasks = tasks.filter(
       t => program.validityDays && t.dayNumber > program.validityDays
     );
@@ -745,7 +688,7 @@ exports.getTasks = async (req, res) => {
       console.warn("⚠️ Invalid tasks found (dayNumber > validityDays)", invalidTasks);
     }
 
-    // 3️⃣ Duplicate dayNumber check (extra safety)
+    
     const daySet = new Set();
     const duplicateDays = [];
 
@@ -758,7 +701,7 @@ exports.getTasks = async (req, res) => {
     });
 
     if (duplicateDays.length > 0) {
-      console.warn("⚠️ Duplicate day tasks found:", duplicateDays);
+      console.warn(" Duplicate day tasks found:", duplicateDays);
     }
 
     // ----------------------------
@@ -785,7 +728,7 @@ exports.getTasks = async (req, res) => {
 };
 
 
-// PUT /api/admin/tasks/:taskId   Update Task
+
 
 exports.updateTask = async (req, res) => {
   try {
@@ -801,9 +744,7 @@ exports.updateTask = async (req, res) => {
       rewardAmount
     } = req.body;
 
-    // ----------------------------
-    // VALIDATION: taskId
-    // ----------------------------
+    
     if (!taskId) {
       return res.status(400).json({
         success: false,
@@ -811,9 +752,7 @@ exports.updateTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CHECK TASK EXISTS
-    // ----------------------------
+    
     const task = await prisma.programTask.findUnique({
       where: { id: taskId },
       include: { program: true }
@@ -828,9 +767,7 @@ exports.updateTask = async (req, res) => {
 
     const program = task.program;
 
-    // ----------------------------
-    // BLOCK UPDATE IF PROGRAM STARTED
-    // ----------------------------
+  
     if (new Date() >= program.validFrom) {
       return res.status(400).json({
         success: false,
@@ -838,9 +775,7 @@ exports.updateTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // VALIDATE dayNumber
-    // ----------------------------
+   
     if (dayNumber !== undefined) {
       if (dayNumber < 1) {
         return res.status(400).json({
@@ -873,9 +808,7 @@ exports.updateTask = async (req, res) => {
       }
     }
 
-    // ----------------------------
-    // VALIDATE reward
-    // ----------------------------
+    
     if (rewardAmount !== undefined && rewardAmount <= 0) {
       return res.status(400).json({
         success: false,
@@ -883,9 +816,7 @@ exports.updateTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // VALIDATE TASK TYPE CONDITIONS
-    // ----------------------------
+   
     if (taskType) {
       const allowedTypes = ["ORDERS", "ACCEPTANCE_RATE", "PEAK_SLOTS", "EARNINGS"];
 
@@ -911,9 +842,7 @@ exports.updateTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // BUILD SAFE UPDATE OBJECT
-    // ----------------------------
+    
     const updateData = {};
 
     if (dayNumber !== undefined) updateData.dayNumber = dayNumber;
@@ -962,9 +891,6 @@ exports.deleteTask = async (req, res) => {
   try {
     const { taskId } = req.params;
 
-    // ----------------------------
-    // VALIDATION
-    // ----------------------------
     if (!taskId) {
       return res.status(400).json({
         success: false,
@@ -972,9 +898,7 @@ exports.deleteTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CHECK TASK EXISTS
-    // ----------------------------
+    
     const task = await prisma.programTask.findUnique({
       where: { id: taskId },
       include: { program: true }
@@ -989,9 +913,7 @@ exports.deleteTask = async (req, res) => {
 
     const program = task.program;
 
-    // ----------------------------
-    // BLOCK DELETE IF PROGRAM STARTED
-    // ----------------------------
+    
     if (new Date() >= program.validFrom) {
       return res.status(400).json({
         success: false,
@@ -999,9 +921,7 @@ exports.deleteTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CHECK TASK PROGRESS (CRITICAL FIX)
-    // ----------------------------
+    
     const taskProgress = await prisma.programTaskProgress.findFirst({
       where: {
         taskId: taskId
@@ -1015,9 +935,7 @@ exports.deleteTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // OPTIONAL: CHECK PROGRAM PROGRESS
-    // ----------------------------
+   
     const programProgress = await prisma.programProgress.findFirst({
       where: {
         programId: program.id
@@ -1031,9 +949,7 @@ exports.deleteTask = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // DELETE TASK
-    // ----------------------------
+    
     await prisma.programTask.delete({
       where: { id: taskId }
     });
@@ -1054,7 +970,6 @@ exports.deleteTask = async (req, res) => {
 };
 
 
-// GET /api/admin/programs/:programId/riders  Get Riders in Program
 
 exports.getProgramRiders = async (req, res) => {
   try {
@@ -1065,9 +980,6 @@ exports.getProgramRiders = async (req, res) => {
     page = parseInt(page);
     limit = parseInt(limit);
 
-    // ----------------------------
-    // VALIDATION
-    // ----------------------------
     if (!programId) {
       return res.status(400).json({
         success: false,
@@ -1082,9 +994,6 @@ exports.getProgramRiders = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CHECK PROGRAM EXISTS
-    // ----------------------------
     const program = await prisma.program.findUnique({
       where: { id: programId },
       select: {
@@ -1103,9 +1012,7 @@ exports.getProgramRiders = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // FILTER BUILD
-    // ----------------------------
+   
     const whereClause = {
       programId
     };
@@ -1121,9 +1028,6 @@ exports.getProgramRiders = async (req, res) => {
       whereClause.status = status;
     }
 
-    // ----------------------------
-    // FETCH DATA
-    // ----------------------------
     const [total, enrollments] = await Promise.all([
       prisma.programEnrollment.count({ where: whereClause }),
 
@@ -1145,9 +1049,7 @@ exports.getProgramRiders = async (req, res) => {
       })
     ]);
 
-    // ----------------------------
-    // EDGE CASE: NO RIDERS
-    // ----------------------------
+    
     if (!enrollments.length) {
       return res.status(200).json({
         success: true,
@@ -1157,9 +1059,6 @@ exports.getProgramRiders = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // RESPONSE
-    // ----------------------------
     return res.status(200).json({
       success: true,
       count: total,
@@ -1184,15 +1083,12 @@ exports.getProgramRiders = async (req, res) => {
   }
 };
 
-// GET /api/admin/programs/:programId/riders/:riderId    Get Rider Progress
 
 exports.getRiderProgress = async (req, res) => {
   try {
     const { programId, riderId } = req.params;
 
-    // ----------------------------
-    // VALIDATION
-    // ----------------------------
+    
     if (!programId || !riderId) {
       return res.status(400).json({
         success: false,
@@ -1200,9 +1096,7 @@ exports.getRiderProgress = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CHECK PROGRAM EXISTS
-    // ----------------------------
+    
     const program = await prisma.program.findUnique({
       where: { id: programId },
       select: {
@@ -1221,9 +1115,7 @@ exports.getRiderProgress = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // CHECK ENROLLMENT
-    // ----------------------------
+   
     const enrollment = await prisma.programEnrollment.findUnique({
       where: {
         riderId_programId: {
@@ -1240,17 +1132,11 @@ exports.getRiderProgress = async (req, res) => {
       });
     }
 
-    // ----------------------------
-    // GET ALL TASKS
-    // ----------------------------
     const tasks = await prisma.programTask.findMany({
       where: { programId },
       orderBy: { dayNumber: "asc" }
     });
 
-    // ----------------------------
-    // GET TASK PROGRESS
-    // ----------------------------
     const taskProgress = await prisma.programTaskProgress.findMany({
       where: { programId, riderId }
     });
@@ -1261,9 +1147,7 @@ exports.getRiderProgress = async (req, res) => {
       progressMap[p.taskId] = p;
     });
 
-    // ----------------------------
-    // MERGE TASK + PROGRESS
-    // ----------------------------
+    
     const taskStatus = tasks.map(task => {
       const progress = progressMap[task.id];
 
@@ -1286,16 +1170,12 @@ exports.getRiderProgress = async (req, res) => {
       };
     });
 
-    // ----------------------------
-    // OVERALL PROGRAM PROGRESS
-    // ----------------------------
+    
     const overall = await prisma.programProgress.findFirst({
       where: { programId, riderId }
     });
 
-    // ----------------------------
-    // CALCULATE SUMMARY
-    // ----------------------------
+    
     const completedTasks = taskStatus.filter(t => t.isCompleted).length;
     const totalTasks = taskStatus.length;
 
@@ -1303,9 +1183,6 @@ exports.getRiderProgress = async (req, res) => {
       .filter(t => t.isCompleted)
       .reduce((sum, t) => sum + t.rewardAmount, 0);
 
-    // ----------------------------
-    // RESPONSE
-    // ----------------------------
     return res.status(200).json({
       success: true,
       data: {

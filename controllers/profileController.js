@@ -1,8 +1,5 @@
 
 
-
-
-
 const prisma = require("../config/prisma");
 
 const { extractTextFromImage } = require("../utils/ocr");
@@ -12,8 +9,8 @@ const {
   extractDLExpiry,
   
 } = require("../utils/kycParser");
-const { uploadToAzure } = require("../utils/azureUpload"); // path adjust
-const SlotBooking = require("../models/SlotBookingModel");
+const { uploadToAzure } = require("../utils/azureUpload"); 
+
 
 exports.getProfile = async (req, res) => {
   try {

@@ -1,75 +1,5 @@
 const prisma = require('../config/prisma');
 
-//  const createCity = async (req, res) => {
-//   try {
-//     const { city } = req.body
-
-//     // ❌ Missing data
-//     if (!city || !city.name || !city.state) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "City data is required"
-//       })
-//     }
-
-//     // ❌ Duplicate check
-//     const existingCity = await prisma.city.findUnique({
-//       where: { name: city.name }
-//     })
-
-//     if (existingCity) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "City already exists"
-//       })
-//     }
-
-//     // ✅ Create city with nested pincodes & areas
-//     const newCity = await prisma.city.create({
-//       data: {
-//         name: city.name,
-//         state: city.state,
-//         isActive: city.isActive ?? true,
-//         pincodes: {
-//           create: city.pincodes?.map(p => ({
-//             code: p.code,
-//             name: p.name,
-//             isActive: p.isActive ?? true,
-//             areas: {
-//               create: p.areas?.map(a => ({
-//                 name: a.name,
-//                 isActive: a.isActive ?? true
-//               }))
-//             }
-//           }))
-//         }
-//       },
-//       include: {
-//         pincodes: true
-//       }
-//     })
-
-//     return res.json({
-//       success: true,
-//       message: "City created successfully",
-//       data: {
-//         cityId: newCity.id,
-//         name: newCity.name,
-//         state: newCity.state,
-//         totalPincodes: newCity.pincodes.length,
-//         createdAt: newCity.createdAt
-//       }
-//     })
-
-//   } catch (err) {
-//     console.error(err)
-//     res.status(500).json({
-//       success: false,
-//       message: "Internal server error"
-//     })
-//   }
-// }
-
 const createCity = async (req, res) => {
   try {
     const { city } = req.body;
@@ -81,7 +11,7 @@ const createCity = async (req, res) => {
       });
     }
 
-    // 🔍 Check city
+    // Check city
     let existingCity = await prisma.city.findUnique({
       where: { name: city.name },
       include: {
@@ -91,9 +21,8 @@ const createCity = async (req, res) => {
       }
     });
 
-    // ============================
-    // 🆕 CREATE NEW CITY
-    // ============================
+    // CREATE NEW CITY
+    
     if (!existingCity) {
       const newCity = await prisma.city.create({
         data: {
@@ -130,22 +59,21 @@ const createCity = async (req, res) => {
       });
     }
 
-    // ============================
-    // 🔁 UPDATE EXISTING CITY
-    // ============================
+    //  UPDATE EXISTING CITY
+
 
     let addedPincodes = 0;
     let addedAreas = 0;
 
     for (const p of city.pincodes || []) {
 
-      // 🔍 Check existing pincode
+      //  Check existing pincode
       const existingPincode = existingCity.pincodes.find(
         ep => ep.code === p.code
       );
 
       if (!existingPincode) {
-        // ✅ Add new pincode
+        //  Add new pincode
         await prisma.pincode.create({
           data: {
             code: p.code,
@@ -163,7 +91,7 @@ const createCity = async (req, res) => {
 
         addedPincodes++;
       } else {
-        // 🔁 Pincode exists → check areas
+        // Pincode exists → check areas
         for (const a of p.areas || []) {
 
           const existingArea = existingPincode.areas.find(
@@ -181,7 +109,7 @@ const createCity = async (req, res) => {
 
             addedAreas++;
           } else {
-            // ❌ Duplicate area
+            //  Duplicate area
             return res.status(400).json({
               success: false,
               message: `Area '${a.name}' already exists in pincode ${p.code}`

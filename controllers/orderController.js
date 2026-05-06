@@ -1,16 +1,10 @@
-const Order = require("../models/OrderSchema");
 const crypto = require("crypto");
 const {notifyRider} = require("../webSocket");
-const Rider=require('../models/RiderModel')
 const axios = require("axios");
-const PricingConfig=require("../models/pricingConfigSchema")
-const mongoose=require('mongoose')
 const { getLatLng } = require("../services/geocodeService");
-const Incentive = require("../models/IncentiveSchema");
-const RiderIncentiveProgress = require("../models/RiderIncentiveProgressSchema");
 const prisma=require('../config/prisma');
 const getWeather=require('../utils/weather');
-// 👉 Dummy transaction generator
+//  Dummy transaction generator
 function generateTxn() {
   return "TXN_" + crypto.randomBytes(6).toString("hex");
 }
@@ -20,7 +14,7 @@ function generateOrderId(){
 }
 
 
-// 🔥 helper function
+//  helper function
 function convertToKg(weight, unit) {
   switch (unit) {
     case "g":
@@ -44,9 +38,6 @@ async function createOrder(req, res) {
   try {
     const body = req.body;
 
-    //////////////////////////////////////////////////////
-    // 1️⃣ GET LAT LNG
-    //////////////////////////////////////////////////////
     const pickupGeo = await getLatLng(
       body.pickupAddress.addressLine
     );
@@ -55,9 +46,6 @@ async function createOrder(req, res) {
       body.deliveryAddress.addressLine
     );
 
-    //////////////////////////////////////////////////////
-    // 2️⃣ PAYMENT LOGIC
-    //////////////////////////////////////////////////////
     let paymentData = {
       mode: body.payment.mode,
       status: "PENDING"
@@ -73,16 +61,13 @@ async function createOrder(req, res) {
         body.payment.codPaymentType || "CASH";
     }
 
-    //////////////////////////////////////////////////////
-    // 3️⃣ CALCULATE TOTAL + WEIGHT (🔥 CORE LOGIC)
-    //////////////////////////////////////////////////////
     let itemTotal = 0;
     let totalWeight = 0;
 
     for (const item of body.items) {
       itemTotal += item.total;
 
-      // ✅ validation
+      
       if (!item.weightPerUnit || !item.weightUnit) {
         return res.status(400).json({
           success: false,
@@ -98,9 +83,7 @@ async function createOrder(req, res) {
       totalWeight += weightInKg * item.quantity;
     }
 
-    //////////////////////////////////////////////////////
-    // ❌ BIKE LIMIT CHECK (20KG)
-    //////////////////////////////////////////////////////
+    
     if (totalWeight > 20) {
       return res.status(400).json({
         success: false,
@@ -110,9 +93,6 @@ async function createOrder(req, res) {
       });
     }
 
-    //////////////////////////////////////////////////////
-    // 4️⃣ PRICING
-    //////////////////////////////////////////////////////
     const deliveryFee = 40;
     const tax = 5;
     const platformCommission = 10;
@@ -120,20 +100,15 @@ async function createOrder(req, res) {
     const totalAmount =
       itemTotal + deliveryFee + tax;
 
-    //////////////////////////////////////////////////////
-    // 5️⃣ CREATE ORDER
-    //////////////////////////////////////////////////////
+
     const order = await prisma.order.create({
       data: {
         orderId: generateOrderId(),
         vendorShopName: body.vendorShopName,
 
-        // ✅ STORE TOTAL WEIGHT
+        
         totalWeight: totalWeight,
 
-        //////////////////////////////////////////////////
-        // ITEMS
-        //////////////////////////////////////////////////
         OrderItems: {
           create: body.items.map(item => ({
             itemName: item.itemName,
@@ -141,13 +116,11 @@ async function createOrder(req, res) {
             price: item.price,
             total: item.total,
             weightPerUnit: item.weightPerUnit,
-            weightUnit: item.weightUnit.toLowerCase() // ✅ NEW
+            weightUnit: item.weightUnit.toLowerCase() 
           }))
         },
 
-        //////////////////////////////////////////////////
-        // PICKUP ADDRESS
-        //////////////////////////////////////////////////
+        
         OrderPickupAddress: {
           create: {
             name: body.pickupAddress.name,
@@ -160,9 +133,6 @@ async function createOrder(req, res) {
           }
         },
 
-        //////////////////////////////////////////////////
-        // DELIVERY ADDRESS
-        //////////////////////////////////////////////////
         OrderDeliveryAddress: {
           create: {
             name: body.deliveryAddress.name,
@@ -175,9 +145,6 @@ async function createOrder(req, res) {
           }
         },
 
-        //////////////////////////////////////////////////
-        // PRICING
-        //////////////////////////////////////////////////
         OrderPricing: {
           create: {
             itemTotal,
@@ -188,16 +155,9 @@ async function createOrder(req, res) {
           }
         },
 
-        //////////////////////////////////////////////////
-        // PAYMENT
-        //////////////////////////////////////////////////
         OrderPayment: {
           create: paymentData
         },
-
-        //////////////////////////////////////////////////
-        // COD
-        //////////////////////////////////////////////////
         OrderCod:
           body.payment.mode === "COD"
             ? {
@@ -214,9 +174,7 @@ async function createOrder(req, res) {
       }
     });
 
-    //////////////////////////////////////////////////////
-    // 6️⃣ RESPONSE
-    //////////////////////////////////////////////////////
+  
     return res.status(201).json({
       success: true,
       message: "Order created successfully",
@@ -235,11 +193,6 @@ async function createOrder(req, res) {
   }
 }
 
-/* ===============================
-
-   GOOGLE DISTANCE + ETA HELPER
-
-================================ */
 
 async function getRouteInfo(pickupAddress, deliveryAddress) {
   if (!pickupAddress || !deliveryAddress) {
@@ -282,155 +235,6 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
   };
 }
 
-
-
-
-/* ===============================
-
-   CONFIRM ORDER API
-
-================================ */
-// async function confirmOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
-
-//     const order = await prisma.order.findFirst({
-//       where: { orderId },
-//       include: {
-//         OrderPickupAddress: true,
-//         OrderDeliveryAddress: true
-//       }
-//     });
-
-//     if (!order)
-//       return res.status(404).json({ success: false, message: "Order not found" });
-
-//     if (order.orderStatus !== "CREATED")
-//       return res.status(400).json({ success: false, message: "Order already processed" });
-
-//     const now = new Date();
-
-//     // ✅ PINCODE LOGIC ADDED HERE
-//     const pickupPincode = order.OrderPickupAddress?.pincode;
-//     console.log(pickupPincode)
-
-//     if (!pickupPincode) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Pickup pincode missing"
-//       });
-//     }
-
-//     const riders = await prisma.rider.findMany({
-//       where: {
-//         orderState: "READY",
-//         isOnline: true,
-//         slotBookings: {
-//           some: {
-//             status: "BOOKED",
-//             slotEndAt: { gte: now }
-//           }
-//         },
-//         // ✅ PINCODE FILTER ADDED
-//         location: {
-//           pincode: pickupPincode
-//         }
-//       },
-//       take: 10,
-//       select: {
-//         id: true,
-//         location: {
-//           select: {
-//             pincode: true
-//           }
-//         }
-//       }
-//     });
-
-//     if (!riders.length)
-//       return res.status(400).json({ success: false, message: "No riders available" });
-
-//     const routeInfo = await getRouteInfo(
-//       order.OrderPickupAddress,
-//       order.OrderDeliveryAddress
-//     );
-
-//     const basePay = 40;
-//     const distancePay = routeInfo.distanceKm * 5;
-//     const surgePay = 0;
-//     const totalEarning = basePay + distancePay + surgePay;
-
-//     await prisma.$transaction(async (tx) => {
-
-//       await tx.order.update({
-//         where: { id: order.id },
-//         data: { orderStatus: "CONFIRMED" }
-//       });
-
-//       await tx.orderAllocation.create({
-//         data: {
-//           orderId: order.orderId,
-//           expiresAt: new Date(Date.now() + 120000),
-//           OrderCandidateRiders: {
-//             create: riders.map(r => ({
-//               riderId: r.id,
-//               status: "PENDING",
-//               notifiedAt: new Date()
-//             }))
-//           }
-//         }
-//       });
-
-//       await tx.orderRiderEarning.create({
-//         data: {
-//           orderId: order.orderId,
-//           basePay,
-//           distancePay,
-//           surgePay,
-//           totalEarning,
-//           credited: false
-//         }
-//       });
-
-//       await tx.orderTracking.create({
-//         data: {
-//           orderId: order.orderId,
-//           distanceInKm: routeInfo.distanceKm,
-//           durationInMin: routeInfo.etaMinutes
-//         }
-//       });
-
-//     });
-
-//     riders.forEach(rider => {
-//       notifyRider(rider.id, {
-//         type: "ORDER_POPUP",
-//         orderId: order.orderId,
-//         vendorShopName: order.vendorShopName,
-//         pickupLocation: order.OrderPickupAddress,
-//         dropLocation: order.OrderDeliveryAddress,
-//         distanceKm: routeInfo.distanceKm,
-//         etaMinutes: routeInfo.etaMinutes,
-//         estimatedEarning: totalEarning
-//       });
-//     });
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Order confirmed and sent to riders",
-//       estimatedEarning: totalEarning,
-//       notifiedRiders: riders.length
-//     });
-
-//   } catch (err) {
-//     console.error("Confirm order error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message || "Failed to confirm order"
-//     });
-//   }
-// }
-
 async function confirmOrder(req, res) {
   try {
     const { orderId } = req.params;
@@ -460,7 +264,7 @@ async function confirmOrder(req, res) {
       });
     }
  
-    // ================= RIDER FILTER =================
+    //  RIDER FILTER 
     const riders = await prisma.rider.findMany({
       where: {
         orderState: "READY",
@@ -483,13 +287,13 @@ async function confirmOrder(req, res) {
     if (!riders.length)
       return res.status(400).json({ success: false, message: "No riders available" });
  
-    // ================= ROUTE =================
+    //  ROUTE
     const routeInfo = await getRouteInfo(
       order.OrderPickupAddress,
       order.OrderDeliveryAddress
     );
  
-    // ================= FETCH PAYOUT CONFIG =================
+    //  FETCH PAYOUT CONFIG 
     const payoutConfig = await prisma.payoutConfig.findFirst({
       where: {
         isActive: true,
@@ -516,14 +320,14 @@ async function confirmOrder(req, res) {
       weatherConfig
     } = payoutConfig;
  
-    // ================= DISTANCE PAY =================
+    //  DISTANCE PAY
     let distancePay = 0;
  
     if (routeInfo.distanceKm > 4) {
       distancePay = (routeInfo.distanceKm - 4) * perKmRate;
     }
  
-    // ================= SURGE =================
+    // SURGE 
     let surgePay = 0;
  
     if (surgeConfig?.enabled) {
@@ -531,7 +335,7 @@ async function confirmOrder(req, res) {
       surgePay = (basePay + distancePay) * (multiplier - 1);
     }
  
-    // ================= PEAK BONUS =================
+    //  PEAK BONUS 
     let peakBonus = 0;
  
     if (peakConfig?.enabled) {
@@ -545,7 +349,7 @@ async function confirmOrder(req, res) {
       }
     }
  
-    // ================= WEATHER BONUS =================
+    //  WEATHER BONUS 
     let weatherBonus = 0;
  
     const weather = await getWeather(
@@ -553,13 +357,13 @@ async function confirmOrder(req, res) {
   order.OrderPickupAddress.longitude
 );
 
-const isRaining = weather.isRaining;// replace later with real API
+const isRaining = weather.isRaining;
  
     if (isRaining && weatherConfig?.RAIN) {
       weatherBonus = weatherConfig.RAIN;
     }
  
-    // ================= TOTAL =================
+    //  TOTAL
     const totalEarning =
       basePay +
       distancePay +
@@ -567,7 +371,7 @@ const isRaining = weather.isRaining;// replace later with real API
       peakBonus +
       weatherBonus;
  
-    // ================= TRANSACTION =================
+    //  TRANSACTION 
     await prisma.$transaction(async (tx) => {
  
       await tx.order.update({
@@ -611,7 +415,7 @@ const isRaining = weather.isRaining;// replace later with real API
  
     });
  
-    // ================= NOTIFY =================
+    //  NOTIFY 
     riders.forEach(rider => {
       notifyRider(rider.id, {
         type: "ORDER_POPUP",
@@ -650,9 +454,6 @@ async function acceptOrder(req, res) {
     const { orderId } = req.params;
     const riderId = req.rider.id;
 
-    //////////////////////////////////////////////////////
-    // 1️⃣ FIND ORDER
-    //////////////////////////////////////////////////////
 
     const order = await prisma.order.findUnique({
       where: { orderId },
@@ -665,9 +466,7 @@ async function acceptOrder(req, res) {
     if (!order.OrderAllocation)
       return res.status(400).json({ success: false, message: "Order not allocated" });
 
-    //////////////////////////////////////////////////////
-    // 2️⃣ ACCEPT ORDER (TRANSACTION)
-    //////////////////////////////////////////////////////
+    
 
     await prisma.$transaction(async (tx) => {
 
@@ -723,9 +522,6 @@ async function acceptOrder(req, res) {
       });
     });
 
-    //////////////////////////////////////////////////////
-    // 3️⃣ DAILY ACCEPT COUNT (🔥 IMPORTANT)
-    //////////////////////////////////////////////////////
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -744,9 +540,6 @@ async function acceptOrder(req, res) {
       }
     });
 
-    //////////////////////////////////////////////////////
-    // 4️⃣ UPSERT PERFORMANCE
-    //////////////////////////////////////////////////////
 
     await prisma.riderPerformance.upsert({
       where: {
@@ -775,9 +568,6 @@ async function acceptOrder(req, res) {
       }
     });
 
-    //////////////////////////////////////////////////////
-    // 5️⃣ RESPONSE
-    //////////////////////////////////////////////////////
 
     return res.json({
       success: true,
@@ -803,9 +593,7 @@ async function rejectOrder(req, res) {
     const { orderId } = req.params;
     const riderId = req.rider.id;
  
-    //////////////////////////////////////////////////////
-    // 1️⃣ FIND ORDER + ALLOCATION
-    //////////////////////////////////////////////////////
+    
     const order = await prisma.order.findUnique({
       where: { orderId },
       include: { OrderAllocation: true }
@@ -825,9 +613,6 @@ async function rejectOrder(req, res) {
       });
     }
  
-    //////////////////////////////////////////////////////
-    // 2️⃣ REJECT ORDER
-    //////////////////////////////////////////////////////
     const result = await prisma.orderCandidateRider.updateMany({
       where: {
         allocationId: order.OrderAllocation.id,
@@ -846,9 +631,6 @@ async function rejectOrder(req, res) {
       });
     }
  
-    //////////////////////////////////////////////////////
-    // 3️⃣ DAILY REJECTION COUNT (AUTO RESET)
-    //////////////////////////////////////////////////////
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
  
@@ -866,17 +648,15 @@ async function rejectOrder(req, res) {
       }
     });
  
-    //////////////////////////////////////////////////////
-    // 4️⃣ OPTIONAL: PENALTY LOGIC (REAL APP BEHAVIOR)
-    //////////////////////////////////////////////////////
+   
     let warning = null;
  
     if (rejectCount >= 5 && rejectCount < 10) {
-      warning = "⚠️ Too many rejections today. Please accept orders.";
+      warning = "Too many rejections today. Please accept orders.";
     }
  
     if (rejectCount >= 10) {
-      // Example: mark rider inactive
+      //  mark rider inactive
       await prisma.rider.update({
         where: { id: riderId },
         data: {
@@ -884,12 +664,10 @@ async function rejectOrder(req, res) {
         }
       });
  
-      warning = "🚫 You are temporarily blocked due to high rejections";
+      warning = " You are temporarily blocked due to high rejections";
     }
  
-    //////////////////////////////////////////////////////
-    // 5️⃣ RESPONSE
-    //////////////////////////////////////////////////////
+
     return res.json({
       success: true,
       message: "Order rejected successfully",
@@ -1117,11 +895,6 @@ async function pickupOrder(req, res) {
   }
 }
 
-/* ===============================
-
-   HELPER FUNCTIONS
-
-=============================== */
 
 const getDateKey = (date = new Date()) =>
 
@@ -1151,16 +924,10 @@ const isPeakSlot = (date) => {
 
   const hour = new Date(date).getHours();
 
-  return hour >= 6 && hour < 10; // example peak slot
+  return hour >= 6 && hour < 10; 
 
 };
  
-/* ===============================
-
-   DELIVER ORDER API
-
-=============================== */
-
 async function deliverOrder(req, res) {
   try {
     const { orderId } = req.params;
@@ -1204,7 +971,7 @@ async function deliverOrder(req, res) {
       });
     }
 
-    //  IMPORTANT: Ensure payment record exists BEFORE transaction
+    //Ensure payment record exists BEFORE transaction
     if (!order.OrderPayment) {
       return res.status(400).json({
         success: false,
@@ -1400,9 +1167,7 @@ async function cancelOrder(req, res) {
       });
     }
 
-    /* ===============================
-       1️  FETCH ORDER
-    =============================== */
+   
     const order = await prisma.order.findUnique({
       where: { orderId }
     });
@@ -1414,9 +1179,7 @@ async function cancelOrder(req, res) {
       });
     }
 
-    /* ===============================
-       2️  VALIDATE STATE
-    =============================== */
+   
     if (["DELIVERED", "CANCELLED"].includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
@@ -1430,11 +1193,6 @@ async function cancelOrder(req, res) {
         message: "Order has no assigned rider"
       });
     }
-
-    /* ===============================
-       3️ VALIDATE RIDER ASSIGNMENT
-    =============================== */
-
 
     if (order.riderId !== riderId) {
       return res.status(403).json({
@@ -1479,18 +1237,12 @@ async function cancelOrder(req, res) {
 });
 
 
-    /* ===============================
-       6️ WS NOTIFICATION
-    =============================== */
     notifyRider(riderId, {
       type: "ORDER_CANCELLED",
       orderId,
       reason: reasonCode
     });
 
-    /* ===============================
-       7️  RESPONSE
-    =============================== */
     return res.status(200).json({
       success: true,
       message: "Order cancelled successfully",
@@ -1511,10 +1263,6 @@ async function cancelOrder(req, res) {
     });
   }
 }
-
-
-
-
 
 async function getOrdersByRider(req, res) {
   try {
@@ -1621,7 +1369,6 @@ async function getDeliveredOrdersByRider(req, res) {
 }
 
 
-
 async function getCancelledOrdersByRider(req, res) {
   try {
     const riderId = req.rider._id;
@@ -1647,13 +1394,6 @@ async function getCancelledOrdersByRider(req, res) {
   }
 }
 
- 
-
- 
-
- 
- 
- 
 module.exports = { createOrder,confirmOrder,acceptOrder,rejectOrder,getOrderDetails,pickupOrder,deliverOrder, cancelOrder,getOrdersByRider,getDeliveredOrdersByRider,getCancelledOrdersByRider};
  
  

@@ -1,12 +1,5 @@
-const Rider = require("../models/RiderModel");
-const Order = require("../models/OrderSchema");
 const jwt = require("jsonwebtoken");
 const prisma=require('../config/prisma');
-
-
-
-
-
 
 exports.handoverCodCash = async (req, res) => {
   try {
