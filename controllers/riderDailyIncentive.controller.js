@@ -20,7 +20,7 @@ const getDailyIncentive = async (req, res) => {
     // 1. Find active DAILY program
     const program = await prisma.program.findFirst({
       where: {
-        programType: "INCENTIVE",
+        programType: "DAILY_TARGET",
         trackingType: "DAILY",
         ruleType: {
           in: ["SLAB", "FIXED_TARGET", "HYBRID"]
@@ -121,7 +121,7 @@ const getRiderDailyPrograms = async (req, res) => {
     if (riderPincode) {
       programs = await prisma.program.findMany({
         where: {
-          programType: "INCENTIVE",
+          programType: "DAILY_TARGET",
           trackingType: "DAILY",
           ruleType: {
             in: ["SLAB", "FIXED_TARGET", "HYBRID"]
@@ -144,7 +144,7 @@ const getRiderDailyPrograms = async (req, res) => {
     if (!programs.length && riderCityId) {
       programs = await prisma.program.findMany({
         where: {
-          programType: "INCENTIVE",
+          programType: "DAILY_TARGET",
           trackingType: "DAILY",
           ruleType: {
             in: ["SLAB", "FIXED_TARGET", "HYBRID"]

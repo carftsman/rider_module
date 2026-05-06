@@ -24,7 +24,7 @@ exports.getWeeklyIncentives = async (req, res) => {
     // 2. Get active programs
     const programs = await prisma.program.findMany({
       where: {
-        programType: "INCENTIVE",
+        programType: "WEEKLY_TARGET",
         trackingType: "WEEKLY",
         isActive: true,
         pincodeIds: {
@@ -121,7 +121,7 @@ exports.getRiderWeeklyPrograms = async (req, res) => {
     // 2️⃣ Fetch programs WITH FULL DETAILS
     const programs = await prisma.program.findMany({
       where: {
-        programType: "INCENTIVE",
+        programType: "WEEKLY_TARGET",
         trackingType: "WEEKLY",
         isActive: true,
         pincodeIds: {

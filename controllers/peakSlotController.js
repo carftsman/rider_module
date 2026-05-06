@@ -169,7 +169,7 @@ if (conflict) {
 const program = await prisma.program.create({
   data: {
     name: body.name,
-    programType: "INCENTIVE",
+    programType: "PEAK_SLOT",
     trackingType: "DAILY",
     ruleType: "PER_ORDER",
  
@@ -347,7 +347,7 @@ if (conflict) {
     const program = await prisma.program.create({
       data: {
         name: body.name,
-        programType: "INCENTIVE",
+        programType: "PEAK_SLOT",
         trackingType: "DAILY",
         ruleType: "SLAB",
  
@@ -410,7 +410,7 @@ const getAllPeakSlots = async (req, res) => {
   try {
     const programs = await prisma.program.findMany({
       where: {
-        programType: "INCENTIVE"
+        programType: "PEAK_SLOT"
       },
       include: {
         slots: true   

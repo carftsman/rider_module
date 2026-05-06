@@ -93,7 +93,7 @@ exports.createWeeklyIncentive = async (req, res) => {
 
    const existingPrograms = await prisma.program.findMany({
   where: {
-    programType: "INCENTIVE",
+    programType: "WEEKLY_TARGET",
     trackingType: "WEEKLY",
     isActive: true,
     validTill: { gte: new Date() }, // ✅ KEY FIX
@@ -136,7 +136,7 @@ exports.createWeeklyIncentive = async (req, res) => {
     const program = await prisma.program.create({
       data: {
         name,
-        programType: "INCENTIVE",
+        programType: "WEEKLY_TARGET",
         trackingType: "WEEKLY",
         ruleType,
 
@@ -402,7 +402,7 @@ exports.getAllWeeklyIncentives = async (req, res) => {
   try {
     const programs = await prisma.program.findMany({
       where: {
-        programType: "INCENTIVE",
+        programType: "WEEKLY_TARGET",
         trackingType: "WEEKLY"
       },
       orderBy: {
