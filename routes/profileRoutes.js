@@ -895,18 +895,21 @@ router.put(
  * @swagger
  * /api/profile/orders/history:
  *   get:
- *     summary: Get rider order history (All / Today / Week / Month)
- *     tags: [Profile Orders]
+ *     summary: Get rider order history
+ *     description: Fetch delivered order history for a rider with earnings, distance, and rating summary.
+ *     tags:
+ *       - Profile
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: query
  *         name: filter
+ *         required: false
  *         schema:
  *           type: string
  *           enum: [all, daily, weekly, monthly]
  *           default: all
- *         description: Filter orders by time range (daily = today)
+ *         description: Filter order history by time period
  *     responses:
  *       200:
  *         description: Rider order history fetched successfully
@@ -923,14 +926,13 @@ router.put(
  *                   example: daily
  *                 totalOrders:
  *                   type: integer
- *                   example: 2
- *                 totalEarnings:
+ *                   example: 3
+ *                 totalRiderEarnings:
  *                   type: number
- *                   example: 330
- *                   description: Rider earnings (not total order amount)
+ *                   example: 150.5
  *                 totalDistance:
  *                   type: number
- *                   example: 12
+ *                   example: 12.75
  *                 avgRating:
  *                   type: number
  *                   nullable: true
@@ -942,7 +944,7 @@ router.put(
  *                     properties:
  *                       orderId:
  *                         type: string
- *                         example: ORD-123ABC
+ *                         example: ORD123456
  *                       items:
  *                         type: array
  *                         items:
@@ -950,49 +952,49 @@ router.put(
  *                           properties:
  *                             itemName:
  *                               type: string
- *                               example: Basmati Rice
+ *                               example: Chicken Burger
  *                             quantity:
  *                               type: integer
- *                               example: 1
+ *                               example: 2
  *                             price:
  *                               type: number
- *                               example: 150
+ *                               example: 120
  *                             total:
  *                               type: number
- *                               example: 150
+ *                               example: 240
  *                       pricing:
  *                         type: object
  *                         properties:
  *                           itemTotal:
  *                             type: number
- *                             example: 150
+ *                             example: 240
  *                           deliveryFee:
  *                             type: number
- *                             example: 165
+ *                             example: 50
  *                           tax:
  *                             type: number
- *                             example: 10
+ *                             example: 12
  *                           platformCommission:
  *                             type: number
- *                             example: 20
+ *                             example: 10
  *                           totalAmount:
  *                             type: number
- *                             example: 180
+ *                             example: 302
  *                           riderEarning:
  *                             type: number
- *                             example: 145
+ *                             example: 40
  *                       distanceTravelled:
  *                         type: number
- *                         example: 6.17
+ *                         example: 5.25
  *                       durationInMin:
  *                         type: number
- *                         example: 25
+ *                         example: 32
  *                       pickupAddress:
  *                         type: string
- *                         example: Madhapur, Hyderabad
+ *                         example: "Madhapur, Hyderabad"
  *                       deliveredAddress:
  *                         type: string
- *                         example: Kukatpally, Hyderabad
+ *                         example: "Kukatpally, Hyderabad"
  *                       rating:
  *                         type: number
  *                         nullable: true
@@ -1000,21 +1002,37 @@ router.put(
  *                       deliveredAt:
  *                         type: string
  *                         format: date-time
- *                         example: 2026-04-20T10:30:00Z
+ *                         nullable: true
+ *                         example: "2026-05-05T10:30:00.000Z"
  *       400:
  *         description: Rider ID missing
  *         content:
  *           application/json:
- *             example:
- *               success: false
- *               message: Rider ID missing
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Rider ID missing
  *       500:
  *         description: Server error
  *         content:
  *           application/json:
- *             example:
- *               success: false
- *               message: Server error
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Server error
+ *                 error:
+ *                   type: string
+ *                   example: Cannot read properties of undefined
  */
 router.get(
   "/orders/history",

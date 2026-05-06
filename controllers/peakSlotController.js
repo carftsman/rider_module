@@ -5,7 +5,41 @@ function toMinutes(time) {
   const [h, m] = time.split(":").map(Number);
   return h * 60 + m;
 }
- 
+
+
+const createPeakSlot = async (req, res) => {
+  try {
+    const body = req.body;
+
+    if (!body.ruleType) {
+      return res.status(400).json({
+        success: false,
+        message: "ruleType is required (SLAB | PER_ORDER)"
+      });
+    }
+
+    if (body.ruleType === "PER_ORDER") {
+      return await createPerOrderPeakSlot(req, res);
+    }
+
+    if (body.ruleType === "SLAB") {
+      return await createSlabPeakSlot(req, res);
+    }
+
+    return res.status(400).json({
+      success: false,
+      message: "Invalid ruleType"
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
+
+
 const createPerOrderPeakSlot = async (req, res) => {
   try {
     const body = req.body;
@@ -487,20 +521,48 @@ const updatePeakSlot = async (req, res) => {
   try {
     const { id } = req.params;
     const { name, isActive } = req.body;
- 
-    // check program exists
+
     const program = await prisma.program.findUnique({
-      where: { id }
+      where: { id },
+      include: {
+        slots: true
+      }
     });
- 
+
     if (!program) {
       return res.status(404).json({
         success: false,
         message: "Peak slot not found"
       });
     }
- 
-    // update only provided fields (safe update)
+
+    const now = new Date();
+
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const currentDay = now
+      .toLocaleString("en-US", { weekday: "short" })
+      .toUpperCase(); // MON, TUE...
+
+    // check if any slot is active right now
+   const isSlotActive = program.slots?.some(slot => {
+      const days = slot.daysOfWeek.map(d => d.toUpperCase());
+
+      return (
+        days.includes(currentDay) &&
+        currentMinutes >= slot.startMinutes &&
+        currentMinutes <= slot.endMinutes
+      );
+    });
+
+    // ❌ BLOCK RULE
+    if (isActive === false && isSlotActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot deactivate peak slot while it is active"
+      });
+    }
+
     const updatedProgram = await prisma.program.update({
       where: { id },
       data: {
@@ -508,17 +570,13 @@ const updatePeakSlot = async (req, res) => {
         ...(typeof isActive === "boolean" && { isActive })
       }
     });
- 
+
     return res.status(200).json({
       success: true,
       message: "Peak slot updated successfully",
-      data: {
-        id: updatedProgram.id,
-        name: updatedProgram.name,
-        isActive: updatedProgram.isActive
-      }
+      data: updatedProgram
     });
- 
+
   } catch (err) {
     return res.status(500).json({
       success: false,
@@ -526,12 +584,78 @@ const updatePeakSlot = async (req, res) => {
     });
   }
 };
- 
+
+
+const deletePeakSlot = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const program = await prisma.program.findUnique({
+      where: { id },
+      include: {
+        slots: true   // ✅ correct relation name
+      }
+    });
+
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        message: "Peak slot not found"
+      });
+    }
+
+    const now = new Date();
+
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    const currentDay = now
+      .toLocaleString("en-US", { weekday: "short" })
+      .toUpperCase(); // MON, TUE...
+
+    // 🔴 check if any slot is active right now
+    const isSlotActive = program.slots?.some(slot => {
+      const days = slot.daysOfWeek.map(d => d.toUpperCase());
+
+      return (
+        days.includes(currentDay) &&
+        currentMinutes >= slot.startMinutes &&
+        currentMinutes <= slot.endMinutes
+      );
+    });
+
+    // ❌ BLOCK DELETE IF ACTIVE
+    if (isSlotActive) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot delete peak slot while it is active"
+      });
+    }
+
+    // ✅ SAFE DELETE
+    await prisma.program.delete({
+      where: { id }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Peak slot deleted successfully"
+    });
+
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
+
 module.exports = {
   createPerOrderPeakSlot,
   createSlabPeakSlot,
   getAllPeakSlots,
   updatePeakSlot ,
-  getPeakSlotById
+  getPeakSlotById,
+  deletePeakSlot,
+  createPeakSlot
 };
  

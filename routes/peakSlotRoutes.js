@@ -8,27 +8,41 @@ const prisma = require("../config/prisma");
  * @swagger
  * /admin/incentives/peak-slot:
  *   post:
- *     summary: Create PER_ORDER Peak Slot Incentive
+ *     summary: Create Peak Slot Incentive (PER_ORDER)
  *     tags: [Peak Slot Incentives]
+ *     description: Create peak slot incentive using PER_ORDER structure.
+ *
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [name, cityName, dateRange, slots]
+ *             required:
+ *               - ruleType
+ *               - name
+ *               - cityName
+ *               - dateRange
+ *               - slots
  *             properties:
+ *               ruleType:
+ *                 type: string
+ *                 example: PER_ORDER
+ *
  *               name:
  *                 type: string
- *                 example: Evening Peak Bonus
+ *                 example: Evening Bonus
+ *
  *               cityName:
  *                 type: string
  *                 example: Hyderabad
- *               pincodeIds:
+ *
+ *               pincode:
  *                 type: array
  *                 items:
  *                   type: string
- *                 example: ["500081"]
+ *                 example: ["500001"]
+ *
  *               dateRange:
  *                 type: object
  *                 properties:
@@ -38,42 +52,46 @@ const prisma = require("../config/prisma");
  *                   endDate:
  *                     type: string
  *                     example: "2026-05-10"
+ *
  *               slots:
  *                 type: array
  *                 items:
  *                   type: object
- *                   required: [startTime, endTime, ruleType, reward]
  *                   properties:
  *                     startTime:
  *                       type: string
  *                       example: "18:00"
+ *
  *                     endTime:
  *                       type: string
  *                       example: "21:00"
+ *
  *                     daysOfWeek:
  *                       type: array
  *                       items:
  *                         type: string
- *                       example: ["MON", "TUE", "WED", "THU", "FRI"]
- *                     ruleType:
- *                       type: string
- *                       enum: [PER_ORDER]
- *                       example: PER_ORDER
+ *                       example: ["MON", "TUE"]
+ *
  *                     reward:
  *                       type: object
  *                       properties:
  *                         amount:
  *                           type: number
  *                           example: 20
+ *
  *               isActive:
  *                 type: boolean
  *                 example: true
+ *
  *     responses:
  *       201:
  *         description: Created successfully
+ *       400:
+ *         description: Validation error
+ *       500:
+ *         description: Server error
  */
- 
-router.post("/peak-slot",controller.createPerOrderPeakSlot)
+router.post("/peak-slot",controller.createPeakSlot)
  
  
  
@@ -266,7 +284,93 @@ router.get("/peak-slot",controller.getAllPeakSlots)
  *         description: Server error
  */
 router.get("/peak-slot/:id", controller.getPeakSlotById);
+
+
+/**
+ * @swagger
+ * /admin/incentives/peak-slot/{id}:
+ *   delete:
+ *     summary: Delete Peak Slot Program
+ *     description: >
+ *       Deletes a peak slot program by ID.
+ *       Deletion is only allowed if no slot is currently active.
+ *       A slot is considered active when:
+ *       - Current day matches slot daysOfWeek
+ *       - Current time is within startMinutes and endMinutes
+ *
+ *     tags:
+ *       - Peak Slot Incentives
+ *
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         description: Program ID of the peak slot to delete
+ *         schema:
+ *           type: string
+ *           example: c38edbe3-7c34-47c0-bc03-d4108f169f8b
+ *
+ *     responses:
+ *       200:
+ *         description: Peak slot deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Peak slot deleted successfully
+ *
+ *       400:
+ *         description: Cannot delete while slot is active
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Cannot delete peak slot while it is active
+ *
+ *       404:
+ *         description: Program not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Peak slot not found
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Something went wrong
+ */
  
+
+router.delete("/peak-slot/:id", controller.deletePeakSlot);
+
 module.exports = router;
  
  

@@ -275,8 +275,398 @@ const getPayoutConfigHistory = async (req, res) => {
   }
 };
 
+
+const updateBasePay = async (req, res) => {
+  try {
+   const id = req.body.id || req.body.configId;
+const basePay = req.body.basePay;
+const reason = req.body.reason;
+
+    console.log("BODY:", req.body);
+
+    console.log("REQ BODY TYPE:", typeof req.body);
+
+console.log("ID:", req.body?.id);
+console.log("BASEPAY:", req.body?.basePay);
+
+    if (!id || basePay === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "id and basePay are required",
+      });
+    }
+
+    const newBasePay = Number(basePay);
+
+    if (isNaN(newBasePay)) {
+      return res.status(400).json({
+        success: false,
+        message: "basePay must be a valid number",
+      });
+    }
+
+    // 1. check existing config
+    const existingConfig = await prisma.payoutConfig.findUnique({
+      where: { id },
+    });
+
+    if (!existingConfig) {
+      return res.status(404).json({
+        success: false,
+        message: "Payout config not found",
+      });
+    }
+
+    if (!existingConfig.isActive) {
+  return res.status(403).json({
+    success: false,
+    message: "Cannot update inactive payout config",
+  });
+}
+
+    const oldValue = existingConfig.basePay;
+
+    // 2. update ONLY basePay
+    const updatedConfig = await prisma.payoutConfig.update({
+      where: { id },
+      data: {
+        basePay: newBasePay,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Base pay updated successfully",
+      data: {
+        id: updatedConfig.id,
+        updatedField: "basePay",
+        oldValue,
+        newValue: updatedConfig.basePay,
+        reason: reason || null,
+      },
+    });
+  } catch (error) {
+    console.error("🔥 Prisma Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+
+
+
+
+
+const updateDistancePay = async (req, res) => {
+  try {
+    const cityId = req.body.cityId;
+    const perKmRate = req.body.perKmRate;
+
+    console.log("BODY:", req.body);
+
+    // 1. Validation
+    if (!cityId || perKmRate === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "cityId and perKmRate are required",
+      });
+    }
+
+    const newRate = Number(perKmRate);
+
+    if (isNaN(newRate)) {
+      return res.status(400).json({
+        success: false,
+        message: "perKmRate must be a valid number",
+      });
+    }
+
+    // 2. Find config by cityId
+   const existingConfig = await prisma.payoutConfig.findFirst({
+  where: {
+    cityId,
+    isActive: true
+  },
+});
+
+    if (!existingConfig) {
+      return res.status(404).json({
+        success: false,
+        message: "Payout config not found for this city",
+      });
+    }
+
+    const oldValue = existingConfig.perKmRate;
+
+    // 3. Update ONLY perKmRate
+    const updatedConfig = await prisma.payoutConfig.update({
+      where: { id: existingConfig.id },
+      data: {
+        perKmRate: newRate,
+        version: existingConfig.version + 1,
+      },
+    });
+
+    // 4. Response
+    return res.status(200).json({
+      success: true,
+      message: "Distance pay updated",
+      data: {
+        cityId: updatedConfig.id,
+        version: updatedConfig.version,
+        updatedField: "perKmRate",
+        oldValue,
+        newValue: updatedConfig.perKmRate,
+      },
+    });
+  } catch (error) {
+    console.error("🔥 Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+
+
+const updateSurgeConfig = async (req, res) => {
+  try {
+    const cityId = req.body.cityId;
+    const surgeConfig = req.body.surgeConfig;
+
+    console.log("BODY:", req.body);
+
+    // 1. Validation
+    if (!cityId || !surgeConfig) {
+      return res.status(400).json({
+        success: false,
+        message: "cityId and surgeConfig are required",
+      });
+    }
+
+    // 2. Find active config for city
+    const existingConfig = await prisma.payoutConfig.findFirst({
+      where: {
+        cityId,
+        isActive: true,
+      },
+    });
+
+    if (!existingConfig) {
+      return res.status(404).json({
+        success: false,
+        message: "Payout config not found for this city",
+      });
+    }
+
+    const oldValue = existingConfig.surgeConfig;
+
+    // 3. Update only surgeConfig
+    const updatedConfig = await prisma.payoutConfig.update({
+      where: { id: existingConfig.id },
+      data: {
+        surgeConfig,
+        version: existingConfig.version + 1,
+      },
+    });
+
+    // 4. Response
+    return res.status(200).json({
+      success: true,
+      message: "Surge config updated",
+      data: {
+        configId: updatedConfig.id,
+        version: updatedConfig.version,
+        updatedField: "surgeConfig",
+        oldValue,
+        newValue: updatedConfig.surgeConfig,
+      },
+    });
+
+  } catch (error) {
+    console.error("🔥 Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+
+const rollbackPayoutConfig = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Find target config
+      const target = await tx.payoutConfig.findUnique({
+        where: { id }
+      });
+
+      if (!target) {
+        throw new Error("NOT_FOUND");
+      }
+
+      // 2. If already active → no rollback needed
+      if (target.isActive) {
+        throw new Error("ALREADY_ACTIVE");
+      }
+
+      // 3. Deactivate current active configs for same city
+      await tx.payoutConfig.updateMany({
+        where: {
+          cityId: target.cityId,
+          isActive: true
+        },
+        data: { isActive: false }
+      });
+
+      // 4. Activate this config
+      const updated = await tx.payoutConfig.update({
+        where: { id },
+        data: { isActive: true }
+      });
+
+      return updated;
+    });
+
+    return res.json({
+      success: true,
+      message: "Rollback successful",
+      data: {
+        configId: result.id,
+        version: result.version,
+        isActive: result.isActive,
+        rolledBackAt: new Date()
+      },
+      meta: {}
+    });
+
+  } catch (err) {
+    console.error(err);
+
+    if (err.message === "NOT_FOUND" || err.message === "ALREADY_ACTIVE") {
+      return res.status(400).json({
+        success: false,
+        message: "Config not found or already active"
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Rollback failed"
+    });
+  }
+};
+const togglePayoutConfigStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    // ✅ validation
+    if (typeof isActive !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        message: "isActive must be boolean"
+      });
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const config = await tx.payoutConfig.findUnique({
+        where: { id }
+      });
+
+      if (!config) {
+        throw new Error("NOT_FOUND");
+      }
+
+      // 🚫 Prevent disabling last active config
+      if (config.isActive && isActive === false) {
+        const activeCount = await tx.payoutConfig.count({
+          where: {
+            AND: [
+              { cityId: config.cityId },
+              { isActive: true }
+            ]
+          }
+        });
+
+        if (activeCount <= 1) {
+          throw new Error("ONLY_ACTIVE");
+        }
+      }
+
+      // ✅ If activating → deactivate others
+      if (isActive === true) {
+        await tx.payoutConfig.updateMany({
+          where: {
+            AND: [
+              { cityId: config.cityId },
+              { isActive: true }
+            ]
+          },
+          data: { isActive: false }
+        });
+      }
+
+      // ✅ Update this config
+      const updated = await tx.payoutConfig.update({
+        where: { id },
+        data: { isActive }
+      });
+
+      return updated;
+    });
+
+    return res.json({
+      success: true,
+      message: "Config status updated",
+      data: {
+        configId: result.id,
+        isActive: result.isActive,
+        updatedAt: result.updatedAt
+      },
+      meta: {}
+    });
+
+  } catch (err) {
+    console.error("TOGGLE ERROR:", err); // 👈 keep this
+
+    if (err.message === "ONLY_ACTIVE") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot deactivate the only active config"
+      });
+    }
+
+    if (err.message === "NOT_FOUND") {
+      return res.status(404).json({
+        success: false,
+        message: "Config not found"
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update config status"
+    });
+  }
+};
 module.exports = {
     createPayoutConfig,
     getActivePayoutConfig,
-    getPayoutConfigHistory
+    getPayoutConfigHistory,
+    updateBasePay,
+    updateSurgeConfig,
+    updateDistancePay,
+    rollbackPayoutConfig,          
+    togglePayoutConfigStatus       
 };
