@@ -30,7 +30,7 @@ const getPeakSlotProgress = async (req, res) => {
     const programs = await prisma.program.findMany({
       where: {
         isActive: true,
-        programType: "INCENTIVE",
+        programType: "PEAK_SLOT",
         trackingType: "DAILY",
         pincodeIds: {
           has: riderPincode,
@@ -154,7 +154,7 @@ const getRiderPeakSlotPrograms = async (req, res) => {
     let programs = [];
 
     const baseQuery = {
-      programType: "INCENTIVE",
+      programType: "PEAK_SLOT",
       isActive: true,
       validFrom: { lte: now },
       validTill: { gte: now }
