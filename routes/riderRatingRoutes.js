@@ -1,5 +1,5 @@
 const express = require("express");
-const {submitRiderRating,getRiderRatings } = require("../controllers/riderRatingController");
+const {submitRiderRating,getRiderRatings ,getRiderWeeklyStats} = require("../controllers/riderRatingController");
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 const riderRatingRouter = express.Router();
 
@@ -195,6 +195,72 @@ riderRatingRouter.post("/rating",riderAuthMiddleWare,submitRiderRating);
  */
 
 riderRatingRouter.get("/ratings",riderAuthMiddleWare,getRiderRatings);
+
+
+
+
+/**
+ * @swagger
+ * /api/rider/rating/weekly:
+ *   get:
+ *     summary: Get rider performance stats for last 7 days
+ *     tags: [Rider Stats]
+ *
+ *     description: >
+ *       Returns total orders, delivered orders, acceptance rate, and average rating
+ *       for the logged-in rider in the past 7 days.
+ *
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     responses:
+ *       200:
+ *         description: Stats fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     riderId:
+ *                       type: string
+ *                       example: r1
+ *                     period:
+ *                       type: string
+ *                       example: last_7_days
+ *                     totalOrders:
+ *                       type: integer
+ *                       example: 42
+ *                     deliveredOrders:
+ *                       type: integer
+ *                       example: 35
+ *                     acceptanceRate:
+ *                       type: number
+ *                       example: 83.33
+ *                     averageRating:
+ *                       type: number
+ *                       example: 4.6
+ *                     totalRatings:
+ *                       type: integer
+ *                       example: 18
+ *
+ *       401:
+ *         description: Unauthorized (missing token)
+ *
+ *       500:
+ *         description: Server error
+ */
+riderRatingRouter.get(
+  "/rating/weekly",
+  riderAuthMiddleWare,
+  getRiderWeeklyStats
+);
+
 
 
 module.exports = riderRatingRouter;

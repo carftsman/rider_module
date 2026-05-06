@@ -122,3 +122,121 @@ exports.getRiderRatings = async (req, res) => {
     });
   }
 };
+
+
+
+
+exports.getRiderWeeklyStats = async (req, res) => {
+  try {
+    const riderId = req.rider.id;
+
+    // exact last 7 days
+    const endDate = new Date();
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+
+    console.log("START:", startDate);
+    console.log("END:", endDate);
+
+    // orders
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId,
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        orderStatus: true,
+      },
+    });
+
+    // allocations
+    const allocations = await prisma.orderAllocation.findMany({
+      where: {
+        assignedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+        Order: {
+          riderId,
+        },
+      },
+      include: {
+        Order: {
+          select: {
+            orderStatus: true,
+          },
+        },
+      },
+    });
+
+    const totalOrders = orders.length;
+
+    // delivered
+    const deliveredOrders = orders.filter(
+      (o) => o.orderStatus === "DELIVERED"
+    ).length;
+
+    // total allocations assigned
+    const assignedCount = allocations.length;
+
+    // accepted allocations
+    const acceptedCount = allocations.filter(
+      (a) =>
+        a.Order?.orderStatus === "ASSIGNED" ||
+        a.Order?.orderStatus === "PICKED_UP" ||
+        a.Order?.orderStatus === "DELIVERED"
+    ).length;
+
+    const acceptanceRate =
+      assignedCount > 0
+        ? (acceptedCount / assignedCount) * 100
+        : 0;
+
+    // ratings
+    const ratings = await prisma.riderRating.findMany({
+      where: {
+        riderId,
+        createdAt: {
+          gte: startDate,
+          lte: endDate,
+        },
+      },
+      select: {
+        rating: true,
+      },
+    });
+
+    const totalRatings = ratings.length;
+
+    const averageRating =
+      totalRatings > 0
+        ? ratings.reduce((sum, r) => sum + r.rating, 0) / totalRatings
+        : 0;
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        riderId,
+        period: "last_7_days",
+        totalOrders,
+        deliveredOrders,
+        assignedCount,
+        acceptedCount,
+        acceptanceRate: Number(acceptanceRate.toFixed(2)),
+        averageRating: Number(averageRating.toFixed(2)),
+        totalRatings,
+      },
+    });
+  } catch (error) {
+    console.error("Stats Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
