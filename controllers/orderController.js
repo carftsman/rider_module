@@ -1277,7 +1277,7 @@ async function deliverOrder(req, res) {
         }
 
 
-                        // Get rider active slot booking
+    // Get rider active slot booking
       const now = new Date();
 
       const slotBooking = await tx.slotBooking.findFirst({
