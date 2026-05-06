@@ -1276,6 +1276,51 @@ async function deliverOrder(req, res) {
           });
         }
 
+
+                        // Get rider active slot booking
+      const now = new Date();
+
+      const slotBooking = await tx.slotBooking.findFirst({
+        where: {
+          riderId,
+          status: "BOOKED",
+
+          slotStartAt: {
+            lte: now,
+          },
+
+          slotEndAt: {
+            gte: now,
+          },
+        },
+      });
+
+
+        await tx.orderSlotInfo.upsert({
+        where: { orderId },
+
+        update: {
+          slotBookingId: slotBooking?.id,
+          slotId: slotBooking?.slotId,
+          isSlotBooked: true,
+          isPeakSlot: slotBooking?.isPeakSlot,
+          slotStartAt: slotBooking?.slotStartAt,
+          slotEndAt: slotBooking?.slotEndAt,
+        },
+
+        create: {
+          orderId,
+          slotBookingId: slotBooking?.id,
+          slotId: slotBooking?.slotId,
+          isSlotBooked: true,
+          isPeakSlot: slotBooking?.isPeakSlot,
+          slotStartAt: slotBooking?.slotStartAt,
+          slotEndAt: slotBooking?.slotEndAt,
+        },
+      });
+
+
+
         //  Update order
         await tx.order.update({
           where: { orderId },
@@ -1287,6 +1332,19 @@ async function deliverOrder(req, res) {
           where: { orderId },
           data: { status: "SUCCESS" },
         });
+
+        //     await tx.orderSlotInfo.upsert({
+        //   where: { orderId },
+        //   update: {
+        //     isSlotBooked: false,
+        //   },
+        //   create: {
+        //     orderId,
+        //     isSlotBooked: false,
+        //   },
+        // });
+
+        
 
         //  Reset rider state
         await tx.rider.update({
