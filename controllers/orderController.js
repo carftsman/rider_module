@@ -1394,6 +1394,287 @@ async function getCancelledOrdersByRider(req, res) {
   }
 }
 
-module.exports = { createOrder,confirmOrder,acceptOrder,rejectOrder,getOrderDetails,pickupOrder,deliverOrder, cancelOrder,getOrdersByRider,getDeliveredOrdersByRider,getCancelledOrdersByRider};
+// async function getSurgeStatus(req, res)  {
+
+//   try {
+
+//     //////////////////////////////////////////////////////
+//     // RIDER ID FROM TOKEN
+//     //////////////////////////////////////////////////////
+
+//     const riderId = req.rider.id;
+
+//     //////////////////////////////////////////////////////
+//     // FETCH RIDER
+//     //////////////////////////////////////////////////////
+
+//     const rider = await prisma.rider.findUnique({
+//       where: {
+//         id: riderId
+//       },
+
+//       include: {
+//         location: true
+//       }
+//     });
+
+//     if (!rider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Rider not found"
+//       });
+//     }
+
+//     const pincode = rider.location?.pincode;
+
+//     const lat = rider.location?.latitude;
+
+//     const lng = rider.location?.longitude;
+
+//     console.log(rider);
+// console.log(rider.location);
+
+//     if (!pincode || !lat || !lng) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Rider location incomplete"
+//       });
+//     }
+
+//     //////////////////////////////////////////////////////
+//     // FETCH PAYOUT CONFIG
+//     //////////////////////////////////////////////////////
+
+//     const payoutConfig =
+//       await prisma.payoutConfig.findFirst({
+
+//         where: {
+//           isActive: true,
+
+//           pincodeIds: {
+//             has: pincode
+//           }
+//         },
+
+//         orderBy: {
+//           version: "desc"
+//         }
+//       });
+
+//     if (!payoutConfig) {
+
+//       return res.status(200).json({
+//         success: true,
+
+//         data: {
+//           surgeActive: false,
+//           surgeAmount: 0
+//         }
+//       });
+//     }
+
+//     //////////////////////////////////////////////////////
+//     // WEATHER CHECK
+//     //////////////////////////////////////////////////////
+
+//     const weather =
+//       await getWeather(lat, lng);
+
+//     //////////////////////////////////////////////////////
+//     // SURGE LOGIC
+//     //////////////////////////////////////////////////////
+
+//     let surgeActive = false;
+
+//     let multiplier = 1;
+
+//     if (
+//       weather.isRaining &&
+//       payoutConfig.surgeConfig?.enabled
+//     ) {
+
+//       surgeActive = true;
+
+//       multiplier =
+//         payoutConfig.surgeConfig.multiplier || 1.5;
+//     }
+
+//     //////////////////////////////////////////////////////
+//     // SURGE AMOUNT
+//     //////////////////////////////////////////////////////
+
+//     let surgeAmount = 0;
+
+//     if (surgeActive) {
+
+//       surgeAmount =
+//         payoutConfig.basePay *
+//         (multiplier - 1);
+//     }
+
+//     //////////////////////////////////////////////////////
+//     // RESPONSE
+//     //////////////////////////////////////////////////////
+
+//     return res.status(200).json({
+//       success: true,
+
+//       data: {
+
+//         riderId,
+
+//         pincode,
+
+//         weather: {
+//           isRaining: weather.isRaining
+//         },
+
+//         surgeActive,
+
+//         multiplier,
+
+//         surgeAmount
+//       }
+//     });
+
+//   } catch (err) {
+
+//     console.error(err);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message
+//     });
+//   }
+// };
+
+async function getSurgeStatus(req, res) {
+
+  try {
+
+    //////////////////////////////////////////////////////
+    // RIDER FROM TOKEN
+    //////////////////////////////////////////////////////
+
+    const riderId = req.rider.id;
+
+    //////////////////////////////////////////////////////
+    // FETCH RIDER
+    //////////////////////////////////////////////////////
+
+    const rider = await prisma.rider.findUnique({
+      where: {
+        id: riderId
+      },
+
+      include: {
+        location: true
+      }
+    });
+
+    if (!rider || !rider.location?.pincode) {
+      return res.status(400).json({
+        success: false,
+        message: "Rider pincode not found"
+      });
+    }
+
+    const pincode = rider.location.pincode;
+
+    //////////////////////////////////////////////////////
+    // FETCH PAYOUT CONFIG
+    //////////////////////////////////////////////////////
+
+    const payoutConfig =
+      await prisma.payoutConfig.findFirst({
+
+        where: {
+          isActive: true,
+
+          pincodeIds: {
+            has: pincode
+          }
+        },
+
+        orderBy: {
+          version: "desc"
+        }
+      });
+
+    //////////////////////////////////////////////////////
+    // NO CONFIG
+    //////////////////////////////////////////////////////
+
+    if (!payoutConfig) {
+
+      return res.status(200).json({
+        success: true,
+
+        data: {
+          surgeActive: false,
+          surgeAmount: 0
+        }
+      });
+    }
+
+    //////////////////////////////////////////////////////
+    // SURGE LOGIC
+    //////////////////////////////////////////////////////
+
+    const surgeConfig =
+      payoutConfig.surgeConfig || {};
+
+    const surgeActive =
+      surgeConfig.enabled === true;
+
+    //////////////////////////////////////////////////////
+    // SURGE AMOUNT
+    //////////////////////////////////////////////////////
+
+    let surgeAmount = 0;
+
+    if (surgeActive) {
+
+      const multiplier =
+        surgeConfig.multiplier || 1;
+
+      surgeAmount =
+        payoutConfig.basePay *
+        (multiplier - 1);
+    }
+
+    //////////////////////////////////////////////////////
+    // RESPONSE
+    //////////////////////////////////////////////////////
+
+    return res.status(200).json({
+      success: true,
+
+      data: {
+
+      
+
+        surgeActive,
+
+        multiplier:
+          surgeConfig.multiplier || 1,
+
+        surgeAmount
+      }
+    });
+
+  } catch (err) {
+
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
+
+
+module.exports = { createOrder,confirmOrder,acceptOrder,rejectOrder,getOrderDetails,pickupOrder,deliverOrder, cancelOrder,getOrdersByRider,getDeliveredOrdersByRider,getCancelledOrdersByRider,getSurgeStatus};
  
  

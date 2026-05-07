@@ -13,7 +13,8 @@ const {
     cancelOrder,
     getOrdersByRider,
     getDeliveredOrdersByRider,
-    getCancelledOrdersByRider
+    getCancelledOrdersByRider,
+    getSurgeStatus
 } = require("../controllers/orderController");
 
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
@@ -1243,6 +1244,77 @@ router.get("/cancelled",riderAuthMiddleWare,getCancelledOrdersByRider);
 
 
 
+/**
+ * @swagger
+ * /api/orders/rider/surge-status:
+ *   get:
+ *     summary: Get rider surge eligibility status
+ *     description: Checks whether the logged-in rider is eligible for surge pricing based on rider pincode and payout configuration.
+ *     tags:
+ *       - Orders
+ * 
+ *     security:
+ *       - bearerAuth: []
+ * 
+ *     responses:
+ *       200:
+ *         description: Surge status fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ * 
+ *                 data:
+ *                   type: object
+ *                   properties:
+ * 
+ *                     surgeActive:
+ *                       type: boolean
+ *                       example: true
+ * 
+ *                     multiplier:
+ *                       type: number
+ *                       example: 1.5
+ * 
+ *                     surgeAmount:
+ *                       type: number
+ *                       example: 50
+ * 
+ *       400:
+ *         description: Rider pincode not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ * 
+ *                 message:
+ *                   type: string
+ *                   example: Rider pincode not found
+ * 
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ * 
+ *                 message:
+ *                   type: string
+ *                   example: Failed to fetch surge status
+ */
+router.get("/rider/surge-status", riderAuthMiddleWare, getSurgeStatus);
 
 
 module.exports = router;
