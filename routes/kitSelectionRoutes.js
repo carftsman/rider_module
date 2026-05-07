@@ -208,7 +208,7 @@ router.post("/rider/joining-kit", riderAuthMiddleWare, requestJoiningKit);
 router.post('/admin/assets', createAsset)
 /**
  * @swagger
- * api/kit/rider/assets:
+ * /api/kit/rider/assets:
  *   get:
  *     tags:
  *       - Rider Assets

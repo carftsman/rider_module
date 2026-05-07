@@ -2076,8 +2076,8 @@ model ProgramTask {
 
   programId String
 
-  role IncentiveRole?
-
+  role              IncentiveRole?
+  taskRuleType      RuleType?
   dayNumber         Int?
   rewardPerOrder    Float?
   maxOrders         Int?
@@ -2089,7 +2089,7 @@ model ProgramTask {
   targetOrders      Int?
 
   fixedReward           Float?
-  rewardAmount          Float
+  rewardAmount          Float                 @default(0)
   taskType              TaskType              @default(ORDERS)
   program               Program               @relation(fields: [programId], references: [id], onDelete: Cascade)
   programTaskProgresses ProgramTaskProgress[]

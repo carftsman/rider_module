@@ -267,6 +267,7 @@ async function confirmOrder(req, res) {
     //  RIDER FILTER 
     const riders = await prisma.rider.findMany({
       where: {
+        isFullyRegistered:true,
         orderState: "READY",
         isOnline: true,
         slotBookings: {

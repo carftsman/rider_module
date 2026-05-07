@@ -1,174 +1,232 @@
 const prisma = require("../config/prisma");
 
+// exports.
 exports.createReferralConfig = async (req, res) => {
   try {
     const {
       name,
       description,
-      programType,
+      programType = "REFERRAL",
       trackingType,
       ruleType,
+      taskRuleType,
+      referralConfig,
+      refereeRules,
+      referrerReward,
       validFrom,
       validTill,
-      validityDays,
-      isActive,
+      daysOfWeek,
       weekStartDay,
-      referralConfig,
-      targetOrders,
-      slabs,
-      tasks
+      isActive,
+      priority,
     } = req.body;
 
-    if (!name || !programType || !trackingType || !ruleType) {
+    if (!name || !trackingType || !ruleType || !referralConfig || !refereeRules || !referrerReward) {
       return res.status(400).json({
         success: false,
-        message: "name, programType, trackingType and ruleType are required"
+        message:
+          "name, trackingType, ruleType, referralConfig, refereeRules and referrerReward are required",
       });
     }
 
-    if (programType === "REFERRAL") {
-      if (!validFrom || !validTill) {
+    if (!validFrom || !validTill) {
+      return res.status(400).json({
+        success: false,
+        message: "validFrom and validTill are required",
+      });
+    }
+
+    const tasksCreate = [];
+
+    // ---------- REFEREE RULES ----------
+    if (ruleType === "FIXED_TARGET") {
+      if (
+        refereeRules?.target?.orders == null ||
+        refereeRules?.reward?.amount == null
+      ) {
         return res.status(400).json({
           success: false,
-          message: "validFrom and validTill are required for referral program"
+          message:
+            "refereeRules.target.orders and refereeRules.reward.amount are required",
         });
       }
 
-      const newValidFrom = new Date(validFrom);
-      const newValidTill = new Date(validTill);
-
-      const existingProgram = await prisma.program.findFirst({
-        where: {
-          programType: "REFERRAL",
-          isActive: true,
-          OR: [
-            {
-              validFrom: {
-                lte: newValidTill
-              },
-              validTill: {
-                gte: newValidFrom
-              }
-            }
-          ]
-        }
+      tasksCreate.push({
+        role: "REFEREE",
+        taskRuleType: "FIXED_TARGET",
+        targetOrders: refereeRules.target.orders,
+        rewardAmount: refereeRules.reward.amount,
+        taskType: "ORDERS",
       });
+    }
 
-      if (existingProgram) {
-        return res.status(409).json({
+    if (ruleType === "SLAB") {
+      if (!Array.isArray(refereeRules.slabs) || refereeRules.slabs.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "refereeRules.slabs is required",
+        });
+      }
+
+      refereeRules.slabs.forEach((slab) => {
+        tasksCreate.push({
+          role: "REFEREE",
+          taskRuleType: "SLAB",
+          minOrders: slab.minOrders,
+          maxOrders: slab.maxOrders,
+          rewardAmount: slab.rewardAmount,
+          taskType: "ORDERS",
+        });
+      });
+    }
+
+    if (ruleType === "PER_ORDER") {
+      if (
+        refereeRules.rewardPerOrder == null ||
+        refereeRules.maxOrders == null ||
+        refereeRules.maxEarning == null
+      ) {
+        return res.status(400).json({
           success: false,
           message:
-            "Referral program already exists in this period. You can update the existing program within this period.",
-          data: {
-            existingProgramId: existingProgram.id,
-            existingProgramName: existingProgram.name,
-            validFrom: existingProgram.validFrom,
-            validTill: existingProgram.validTill
-          }
+            "refereeRules.rewardPerOrder, refereeRules.maxOrders and refereeRules.maxEarning are required",
         });
       }
+
+      tasksCreate.push({
+        role: "REFEREE",
+        taskRuleType: "PER_ORDER",
+        rewardPerOrder: refereeRules.rewardPerOrder,
+        maxOrders: refereeRules.maxOrders,
+        maxEarning: refereeRules.maxEarning,
+        taskType: "ORDERS",
+      });
     }
+
+    if (ruleType === "HYBRID") {
+      if (
+        !refereeRules.conditions ||
+        refereeRules.reward?.amount == null
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: "refereeRules.conditions and refereeRules.reward.amount are required",
+        });
+      }
+
+      tasksCreate.push({
+        role: "REFEREE",
+        taskRuleType: "HYBRID",
+        minOrders: refereeRules.conditions.minOrders,
+        minEarnings: refereeRules.conditions.minEarnings,
+        minAcceptanceRate: refereeRules.conditions.minAcceptanceRate,
+        minCompletionRate: refereeRules.conditions.minCompletionRate,
+        rewardAmount: refereeRules.reward.amount,
+        taskType: "ORDERS",
+      });
+    }
+
+    if (ruleType === "TASK") {
+      if (!taskRuleType) {
+        return res.status(400).json({
+          success: false,
+          message: "taskRuleType is required when ruleType is TASK",
+        });
+      }
+
+      if (!Array.isArray(refereeRules.tasks) || refereeRules.tasks.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "refereeRules.tasks is required",
+        });
+      }
+
+      refereeRules.tasks.forEach((task) => {
+        if (taskRuleType === "SLAB") {
+          task.slabs.forEach((slab) => {
+            tasksCreate.push({
+              role: "REFEREE",
+              taskRuleType: "SLAB",
+              dayNumber: task.dayNumber,
+              minOrders: slab.minOrders,
+              maxOrders: slab.maxOrders,
+              rewardAmount: slab.rewardAmount,
+              taskType: "ORDERS",
+            });
+          });
+        }
+      });
+    }
+
+    // ---------- REFERRER REWARD ----------
+    tasksCreate.push({
+      role: "REFERRER",
+      taskRuleType: ruleType === "TASK" ? taskRuleType : ruleType,
+      rewardAmount:
+        referrerReward.amount ??
+        referrerReward.amountPerSuccessfulReferral,
+      taskType: "ORDERS",
+    });
 
     const program = await prisma.program.create({
       data: {
         name,
         description: description || null,
-
         programType,
         trackingType,
         ruleType,
 
-        applicableWhen:
-          programType === "REFERRAL"
-            ? "WITH_REFERRAL"
-            : "WITHOUT_REFERRAL",
+        applicableWhen: "WITH_REFERRAL",
 
-        validFrom: validFrom ? new Date(validFrom) : null,
-        validTill: validTill ? new Date(validTill) : null,
-        validityDays: validityDays ? Number(validityDays) : null,
+        referralConfig: {
+          create: {
+            rewardFlow: referralConfig.rewardFlow,
+            maxReferralsPerUser: referralConfig.maxReferralsPerUser || null,
+            maxEarningPerUser: referralConfig.maxEarningPerUser || null,
+          },
+        },
 
-        daysOfWeek: ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
-        weekStartDay: weekStartDay || "MON",
+        tasks: {
+          create: tasksCreate,
+        },
 
+        validFrom: new Date(validFrom),
+        validTill: new Date(validTill),
         isActive: isActive ?? true,
-        priority: 1,
-
-        referralConfig:
-          programType === "REFERRAL" && referralConfig
-            ? {
-                create: {
-                  rewardFlow: referralConfig.rewardFlow || "BOTH",
-                  maxReferralsPerUser:
-                    referralConfig.maxReferralsPerUser !== undefined
-                      ? Number(referralConfig.maxReferralsPerUser)
-                      : null,
-                  maxEarningPerUser:
-                    referralConfig.maxEarningPerUser !== undefined
-                      ? Number(referralConfig.maxEarningPerUser)
-                      : null
-                }
-              }
-            : undefined,
-
-        targets:
-          targetOrders !== undefined && targetOrders !== null
-            ? {
-                create: {
-                  targetOrders: Number(targetOrders),
-                  rewardAmount: 0
-                }
-              }
-            : undefined,
-
-        slabs:
-          Array.isArray(slabs) && slabs.length > 0
-            ? {
-                create: slabs.map((slab) => ({
-                  role: slab.role,
-                  minValue: Number(slab.minValue),
-                  maxValue:
-                    slab.maxValue !== undefined && slab.maxValue !== null
-                      ? Number(slab.maxValue)
-                      : null,
-                  rewardAmount: Number(slab.rewardAmount)
-                }))
-              }
-            : undefined,
-
-        tasks:
-          Array.isArray(tasks) && tasks.length > 0
-            ? {
-                create: tasks.map((task) => ({
-                  role: task.role || "REFEREE",
-                  dayNumber:
-                    task.dayNumber !== undefined && task.dayNumber !== null
-                      ? Number(task.dayNumber)
-                      : null,
-                  minOrders: Number(task.minOrders),
-                  rewardAmount: Number(task.rewardAmount)
-                }))
-              }
-            : undefined
+        priority: priority || 1,
+        weekStartDay: weekStartDay || "MON",
+        daysOfWeek: daysOfWeek || [
+          "MON",
+          "TUE",
+          "WED",
+          "THU",
+          "FRI",
+          "SAT",
+          "SUN",
+        ],
       },
       include: {
         referralConfig: true,
-        targets: true,
-        slabs: true,
-        tasks: true
-      }
+        tasks: true,
+      },
     });
 
     return res.status(201).json({
       success: true,
-      message: "Program config created successfully",
-      data: program
+      message: "Referral program created successfully",
+      data: {
+        ...program,
+        refereeRules,
+        referrerReward,
+      },
     });
   } catch (error) {
-    console.error("Create program config error:", error);
+    console.error("Create referral program error:", error);
 
     return res.status(500).json({
       success: false,
-      message: error.message
+      message: "Internal server error",
+      error: error.message,
     });
   }
 };
