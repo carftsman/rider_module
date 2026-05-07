@@ -2,15 +2,16 @@
 
 const prisma = require("../config/prisma");
 
-// DATE VALIDATION
 
 function isValidDateString(dateStr) {
   if (!dateStr) return false;
 
   const date = new Date(dateStr);
+
   if (isNaN(date.getTime())) return false;
 
-  const [year, month, day] = dateStr.split("-").map(Number);
+  const [year, month, day] =
+    dateStr.split("-").map(Number);
 
   return (
     date.getUTCFullYear() === year &&
@@ -18,8 +19,6 @@ function isValidDateString(dateStr) {
     date.getUTCDate() === day
   );
 }
-
-// CREATE DAILY INCENTIVE
 
 exports.createDailyIncentive = async (req, res) => {
   try {
@@ -30,48 +29,49 @@ exports.createDailyIncentive = async (req, res) => {
       dateRange,
       daysOfWeek = [],
       ruleType,
+
       slabs,
       target,
       reward,
       conditions,
       constraints,
+      tasks,
+
       maxPayoutPerDay,
+
       isActive = true
     } = req.body;
-
-    // BASIC VALIDATION
-   
 
     if (!name || !ruleType || !dateRange) {
       return res.status(400).json({
         success: false,
-        message: "name, ruleType and dateRange are required"
+        message:
+          "name, ruleType and dateRange are required"
       });
     }
 
-    if ((!pincodeIds || pincodeIds.length === 0) && !cityId) {
+    if (
+      (!pincodeIds || pincodeIds.length === 0)
+      && !cityId
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Either pincodeIds or cityId is required"
+        message:
+          "Either pincodeIds or cityId is required"
       });
     }
 
-    if (ruleType === "SLAB" && (!daysOfWeek || daysOfWeek.length === 0)) {
-      return res.status(400).json({
-        success: false,
-        message: "daysOfWeek is required for SLAB incentives"
-      });
-    }
 
     const { startDate, endDate } = dateRange;
 
-    // DATE VALIDATION
-    
-
-    if (!isValidDateString(startDate) || !isValidDateString(endDate)) {
+    if (
+      !isValidDateString(startDate)
+      || !isValidDateString(endDate)
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Invalid date format or invalid calendar date"
+        message:
+          "Invalid date format or invalid calendar date"
       });
     }
 
@@ -79,12 +79,13 @@ exports.createDailyIncentive = async (req, res) => {
     const end = new Date(endDate);
 
     start.setHours(0, 0, 0, 0);
-    end.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
 
     if (start > end) {
       return res.status(400).json({
         success: false,
-        message: "startDate cannot be greater than endDate"
+        message:
+          "startDate cannot be greater than endDate"
       });
     }
 
@@ -94,14 +95,20 @@ exports.createDailyIncentive = async (req, res) => {
     if (start < today) {
       return res.status(400).json({
         success: false,
-        message: "startDate cannot be in the past"
+        message:
+          "startDate cannot be in the past"
       });
     }
 
-    // RULE VALIDATION
-  
-
-    if (!["SLAB", "FIXED_TARGET", "HYBRID"].includes(ruleType)) {
+    if (
+      ![
+        "SLAB",
+        "FIXED_TARGET",
+        "HYBRID",
+        "PER_ORDER",
+        "TASK"
+      ].includes(ruleType)
+    ) {
       return res.status(400).json({
         success: false,
         message: "Invalid ruleType"
@@ -109,113 +116,122 @@ exports.createDailyIncentive = async (req, res) => {
     }
 
     if (ruleType === "SLAB") {
+
       if (!slabs || slabs.length === 0) {
         return res.status(400).json({
           success: false,
-          message: "Slabs are required"
+          message: "slabs are required"
         });
       }
 
       for (const slab of slabs) {
-        if (slab.minOrders <= 0 || slab.maxOrders <= 0) {
+
+        if (
+          slab.minOrders <= 0
+          || slab.maxOrders <= 0
+        ) {
           return res.status(400).json({
             success: false,
-            message: "Orders must be greater than 0"
+            message:
+              "Orders must be greater than 0"
           });
         }
 
         if (slab.minOrders > slab.maxOrders) {
           return res.status(400).json({
             success: false,
-            message: "minOrders cannot be greater than maxOrders"
+            message:
+              "minOrders cannot be greater than maxOrders"
           });
         }
       }
     }
 
-    // SAME PINCODE BLOCK
-    if (pincodeIds && pincodeIds.length > 0) {
-      const existingPincode = await prisma.program.findFirst({
-        where: {
-          programType: "DAILY_TARGET",
-          trackingType: "DAILY",
-          ruleType: {
-            in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-          },
-          isActive: true,
-          AND: [
-            { validFrom: { lte: end } },
-            { validTill: { gte: start } }
-          ],
-          pincodeIds: {
-            hasSome: pincodeIds
-          }
-        }
-      });
+    /**
+     * IMPORTANT:
+     * Same city can have multiple incentives
+     * BUT same pincode + overlapping dates
+     * should not have duplicate incentives
+     */
 
-      if (existingPincode) {
+    if (
+      pincodeIds &&
+      pincodeIds.length > 0
+    ) {
+
+      const existingProgram =
+        await prisma.program.findFirst({
+          where: {
+            programType: "DAILY_TARGET",
+            trackingType: "DAILY",
+            isActive: true,
+
+            AND: [
+              {
+                validFrom: {
+                  lte: end
+                }
+              },
+              {
+                validTill: {
+                  gte: start
+                }
+              }
+            ],
+
+            pincodeIds: {
+              hasSome: pincodeIds
+            }
+          }
+        });
+
+      if (existingProgram) {
         return res.status(400).json({
           success: false,
-          message: "Incentive already exists for this pincode and date range"
+          message:
+            "Incentive already exists for this pincode and date range"
         });
       }
     }
-
-    // CITY BLOCK (covers city + pincode conflicts)
-    if (cityId) {
-      const existingCity = await prisma.program.findFirst({
-        where: {
-          programType: "DAILY_TARGET",
-          trackingType: "DAILY",
-          ruleType: {
-            in: ["SLAB", "FIXED_TARGET", "HYBRID"]
-          },
-          isActive: true,
-          AND: [
-            { validFrom: { lte: end } },
-            { validTill: { gte: start } }
-          ],
-          cityId: {
-            has: cityId
-          }
-        }
-      });
-
-      if (existingCity) {
-        return res.status(400).json({
-          success: false,
-          message: "Incentive already exists for this city and date range"
-        });
-      }
-    }
-
-    // BUILD DATA
-
-
-    const weekStartDay = daysOfWeek?.[0] || "MON";
+    const weekStartDay =
+      daysOfWeek?.[0] || "MON";
 
     const programData = {
       name,
+
       programType: "DAILY_TARGET",
+
       trackingType: "DAILY",
+
       ruleType,
+
       cityId: cityId ? [cityId] : [],
+
       pincodeIds,
+
       validFrom: start,
+
       validTill: end,
+
       daysOfWeek,
+
       weekStartDay,
+
       minAcceptanceRate:
-        constraints?.minAcceptanceRate || conditions?.minAcceptanceRate,
+        constraints?.minAcceptanceRate
+        || conditions?.minAcceptanceRate,
+
       minCompletionRate:
-        constraints?.minCompletionRate || conditions?.minCompletionRate,
+        constraints?.minCompletionRate
+        || conditions?.minCompletionRate,
+
       maxPayoutPerDay,
+
       isActive
     };
 
-    // RULE HANDLING
-
     if (ruleType === "SLAB") {
+
       programData.slabs = {
         create: slabs.map((s) => ({
           minValue: s.minOrders,
@@ -226,43 +242,144 @@ exports.createDailyIncentive = async (req, res) => {
     }
 
     if (ruleType === "FIXED_TARGET") {
+
       programData.targets = {
         create: {
-          targetOrders: target?.orders,
-          rewardAmount: reward?.amount
+          targetOrders:
+            target?.orders,
+
+          rewardAmount:
+            reward?.amount
         }
       };
     }
 
-    if (ruleType === "HYBRID") {
-      if (conditions) {
-        programData.rules = {
-          create: {
-            minOrders: conditions.minOrders,
-            minEarnings: conditions.minEarnings
-          }
-        };
+    if (ruleType === "PER_ORDER") {
+
+      if (
+        !reward?.perOrderAmount
+        || reward.perOrderAmount <= 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Valid perOrderAmount is required"
+        });
       }
 
-      if (reward) {
-        programData.targets = {
-          create: {
-            rewardAmount: reward.amount
-          }
+      programData.rules = {
+        create: {
+          perOrderAmount:
+            reward.perOrderAmount
+        }
+      };
+    }
+
+ 
+    if (ruleType === "HYBRID") {
+
+      programData.rules = {
+        create: {
+          minOrders:
+            conditions?.minOrders,
+
+          minEarnings:
+            conditions?.minEarnings
+        }
+      };
+
+      programData.targets = {
+        create: {
+          rewardAmount:
+            reward?.amount
+        }
+      };
+    }
+
+    if (ruleType === "TASK") {
+
+      if (!tasks || tasks.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "tasks are required"
+        });
+      }
+
+      programData.tasks = {
+        create: tasks.map((t) => ({
+          dayNumber:
+            t.dayNumber,
+
+          taskRuleType:
+            t.taskRuleType,
+
+          targetOrders:
+            t.target?.orders || null,
+
+          fixedReward:
+            t.reward?.amount || null,
+
+          
+
+          rewardPerOrder:
+            t.rewardPerOrder || null,
+
+          maxOrders:
+            t.maxOrders || null,
+
+          maxEarning:
+            t.maxEarning || null,
+
+          minOrders:
+            t.conditions?.minOrders || null,
+
+          minAcceptanceRate:
+            t.conditions?.minAcceptanceRate || null,
+
+          minEarnings:
+            t.conditions?.minEarnings || null,
+
+          rewardAmount:
+            t.reward?.amount || 0
+        }))
+      };
+
+      const slabTasks =
+        tasks.filter(
+          (t) =>
+            t.taskRuleType === "SLAB"
+        );
+
+      if (slabTasks.length > 0) {
+
+        programData.slabs = {
+          create: slabTasks.flatMap((t) =>
+            t.slabs.map((s) => ({
+              minValue:
+                s.minOrders,
+
+              maxValue:
+                s.maxOrders,
+
+              rewardAmount:
+                s.rewardAmount
+            }))
+          )
         };
       }
     }
 
-    // CREATE
-    
+    const program =
+      await prisma.program.create({
+        data: programData
+      });
 
-    const program = await prisma.program.create({
-      data: programData
-    });
 
     return res.status(201).json({
       success: true,
-      message: "Daily incentive created successfully",
+      message:
+        "Daily incentive created successfully",
+
       data: {
         id: program.id,
         name: program.name
@@ -270,10 +387,16 @@ exports.createDailyIncentive = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("CREATE ERROR:", error);
-    res.status(500).json({
+
+    console.error(
+      "CREATE DAILY INCENTIVE ERROR:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
-      message: error.message || "Server error"
+      message:
+        error.message || "Server error"
     });
   }
 };
@@ -352,7 +475,8 @@ exports.getDailyIncentiveById = async (req, res) => {
       include: {
         slabs: true,
         rules: true,
-        targets: true
+        targets: true,
+        tasks: true
       }
     });
 
@@ -365,7 +489,7 @@ exports.getDailyIncentiveById = async (req, res) => {
     const formatDate = (date) =>
       date ? date.toISOString().split("T")[0] : null;
     // FORMAT RESPONSE
-    
+
 
     const response = {
       id: program.id,
@@ -387,7 +511,7 @@ exports.getDailyIncentiveById = async (req, res) => {
     }
 
     // SLAB
-  
+
     if (program.ruleType === "SLAB") {
       response.slabs = program.slabs.map(s => ({
         minOrders: s.minValue,
@@ -397,7 +521,7 @@ exports.getDailyIncentiveById = async (req, res) => {
     }
 
     // FIXED TARGET
- 
+
     if (program.ruleType === "FIXED_TARGET") {
       response.target = {
         orders: program.targets?.[0]?.targetOrders || null
@@ -409,7 +533,7 @@ exports.getDailyIncentiveById = async (req, res) => {
     }
 
     // HYBRID
-   
+
     if (program.ruleType === "HYBRID") {
       response.conditions = {
         minOrders: program.rules?.[0]?.minOrders || null,
@@ -422,7 +546,64 @@ exports.getDailyIncentiveById = async (req, res) => {
         amount: program.targets?.[0]?.rewardAmount || null
       };
     }
+    // TASK
 
+    if (program.ruleType === "TASK") {
+
+      response.tasks = program.tasks.map((t) => {
+
+        const task = {
+          dayNumber: t.dayNumber,
+          taskRuleType: t.taskRuleType
+        };
+
+        // FIXED_TARGET
+        if (t.taskRuleType === "FIXED_TARGET") {
+
+          task.target = {
+            orders: t.targetOrders
+          };
+
+          task.reward = {
+            amount: t.fixedReward
+          };
+        }
+
+        // PER_ORDER
+        else if (t.taskRuleType === "PER_ORDER") {
+
+          task.rewardPerOrder = t.rewardPerOrder;
+          task.maxOrders = t.maxOrders;
+          task.maxEarning = t.maxEarning;
+        }
+
+        // HYBRID
+        else if (t.taskRuleType === "HYBRID") {
+
+          task.conditions = {
+            minOrders: t.minOrders,
+            minAcceptanceRate: t.minAcceptanceRate,
+            minEarnings: t.minEarnings
+          };
+
+          task.reward = {
+            amount: t.rewardAmount
+          };
+        }
+
+        // SLAB
+        else if (t.taskRuleType === "SLAB") {
+
+          task.slabs = program.slabs.map((s) => ({
+            minOrders: s.minValue,
+            maxOrders: s.maxValue,
+            rewardAmount: s.rewardAmount
+          }));
+        }
+
+        return task;
+      });
+    }
     return res.json({
       success: true,
       data: response

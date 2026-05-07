@@ -1,5 +1,5 @@
 const prisma = require("../config/prisma");
-
+ 
 const getDailyIncentive = async (req, res) => {
   try {
 const riderId =
@@ -9,21 +9,21 @@ const riderId =
         message: "Rider ID missing in token",
       });
     }
-
+ 
     // Start & End of day (safe for DateTime)
     const startOfDay = new Date();
     startOfDay.setHours(0, 0, 0, 0);
-
+ 
     const endOfDay = new Date();
     endOfDay.setHours(23, 59, 59, 999);
-
+ 
 // GET RIDER LOCATION
-
+ 
 const riderLocation =
   await prisma.riderLocation.findUnique({
     where: { riderId }
   });
-
+ 
 if (!riderLocation) {
   return res.json({
     programId: null,
@@ -33,21 +33,21 @@ if (!riderLocation) {
     status: "NO_ACTIVE_PROGRAM",
   });
 }
-
+ 
 const riderPincode =
   riderLocation.pincode
     ? String(riderLocation.pincode).trim()
     : null;
-
+ 
 const riderCityId =
   riderLocation.cityId || null;
-
+ 
 const now = new Date();
-
+ 
 let program = null;
-
+ 
 // PINCODE FIRST
-
+ 
 if (riderPincode) {
   program = await prisma.program.findFirst({
     where: {
@@ -65,9 +65,9 @@ if (riderPincode) {
     }
   });
 }
-
+ 
 // FALLBACK CITY
-
+ 
 if (!program && riderCityId) {
   program = await prisma.program.findFirst({
     where: {
@@ -85,7 +85,7 @@ if (!program && riderCityId) {
     }
   });
 }
-
+ 
     if (!program) {
       return res.json({
         programId: null,
@@ -95,7 +95,7 @@ if (!program && riderCityId) {
         status: "NO_ACTIVE_PROGRAM",
       });
     }
-
+ 
     //  Find today's progress
     let progress = await prisma.programProgress.findFirst({
       where: {
@@ -108,7 +108,7 @@ if (!program && riderCityId) {
       },
     });
     let status = "NOT_STARTED";
-
+ 
    if (!progress) {
   return res.json({
     programId: program.id,
@@ -118,14 +118,14 @@ if (!program && riderCityId) {
     status: "NOT_STARTED",
   });
 }
-
+ 
 if (progress.achieved) {
   status = "ACHIEVED";
 }
 else if (progress.totalOrders > 0) {
   status = "IN_PROGRESS";
 }
-
+ 
     return res.json({
       programId: progress.programId,
       type: "DAILY",
@@ -133,44 +133,44 @@ else if (progress.totalOrders > 0) {
       rewardEarned: progress.rewardAmount,
       status,
     });
-
+ 
   } catch (error) {
     console.error("ERROR:", error);
-
+ 
     return res.status(500).json({
       message: error.message,
     });
   }
 };
-
+ 
 const getRiderDailyPrograms = async (req, res) => {
   try {
     const riderId =
   req.rider?.id || req.rider?.riderId;
-
+ 
     // GET RIDER LOCATION
-
+ 
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId }
     });
-
+ 
     if (!riderLocation) {
       return res.json({ success: true, data: [] });
     }
-
+ 
     // PREPARE VARIABLES
-
+ 
     const riderPincode = riderLocation.pincode
       ? String(riderLocation.pincode).trim()
       : null;
-
+ 
     const riderCityId = riderLocation.cityId || null;
-
+ 
     const now = new Date();
     /// FETCH PROGRAMS (PINCODE FIRST)
-
+ 
     let programs = [];
-
+ 
     if (riderPincode) {
       programs = await prisma.program.findMany({
         where: {
@@ -184,12 +184,13 @@ const getRiderDailyPrograms = async (req, res) => {
         include: {
           slabs: true,
           targets: true,
-          rules: true
+          rules: true,
+  tasks: true
         },
         orderBy: { createdAt: "desc" }
       });
     }
-
+ 
     // FALLBACK TO CITY
     if (!programs.length && riderCityId) {
       programs = await prisma.program.findMany({
@@ -204,105 +205,285 @@ const getRiderDailyPrograms = async (req, res) => {
         include: {
           slabs: true,
           targets: true,
-          rules: true
+          rules: true,
+  tasks: true
         },
         orderBy: { createdAt: "desc" }
       });
     }
+ 
+const response = programs.map((p) => {
 
+  let maxPayoutPerDay = p.maxPayoutPerDay;
 
-    // FORMAT RESPONSE 
+  if (maxPayoutPerDay === null) {
+    if (
+      p.ruleType === "SLAB"
+      && p.slabs?.length
+    ) {
 
-    const response = programs.map((p) => {
+      maxPayoutPerDay = Math.max(
+        ...p.slabs.map((s) => s.rewardAmount)
+      );
+    }
 
-      let maxPayoutPerDay = p.maxPayoutPerDay;
+    else if (
+      p.ruleType === "FIXED_TARGET"
+      && p.targets?.[0]
+    ) {
 
-      if (maxPayoutPerDay === null) {
+      maxPayoutPerDay =
+        p.targets[0].rewardAmount;
+    }
 
-        if (p.ruleType === "SLAB" && p.slabs?.length) {
-          maxPayoutPerDay = Math.max(...p.slabs.map(s => s.rewardAmount));
+    else if (
+      p.ruleType === "PER_ORDER"
+    ) {
+
+      maxPayoutPerDay =
+        p.maxPayoutPerDay || 0;
+    }
+
+    else if (
+      p.ruleType === "HYBRID"
+      && p.targets?.[0]
+    ) {
+
+      maxPayoutPerDay =
+        p.targets[0].rewardAmount;
+    }
+
+    else if (
+      p.ruleType === "TASK"
+      && p.tasks?.length
+    ) {
+
+      const taskRewards = p.tasks.map((t) => {
+
+        if (t.taskRuleType === "FIXED_TARGET") {
+          return t.fixedReward || 0;
         }
 
-        else if (["FIXED_TARGET", "HYBRID"].includes(p.ruleType) && p.targets?.[0]) {
-          maxPayoutPerDay = p.targets[0].rewardAmount;
+        if (t.taskRuleType === "HYBRID") {
+          return t.rewardAmount || 0;
         }
-      }
+
+        if (t.taskRuleType === "PER_ORDER") {
+          return t.maxEarning || 0;
+        }
+
+        if (
+          t.taskRuleType === "SLAB"
+          && p.slabs?.length
+        ) {
+
+          return Math.max(
+            ...p.slabs.map(
+              (s) => s.rewardAmount
+            )
+          );
+        }
+
+        return 0;
+      });
+
+      maxPayoutPerDay =
+        Math.max(...taskRewards);
+    }
+  }
+
+  const result = {
+
+    name: p.name,
+
+    cityId:
+      p.cityId?.[0] || null,
+
+    dateRange: {
+      startDate: p.validFrom,
+      endDate: p.validTill
+    },
+
+    ruleType: p.ruleType,
+
+    maxPayoutPerDay,
+
+    isActive: p.isActive
+  };
+
+  if (
+    p.ruleType === "SLAB"
+    && p.slabs?.length
+  ) {
+
+    result.slabs = p.slabs.map((s) => ({
+      minOrders: s.minValue,
+      maxOrders: s.maxValue,
+      rewardAmount: s.rewardAmount
+    }));
+  }
 
 
-      const result = {
-        name: p.name,
+  if (p.ruleType === "FIXED_TARGET") {
 
-        cityId: p.cityId?.[0] || null,
+    result.target = {
+      orders:
+        p.targets?.[0]?.targetOrders || null
+    };
 
-        dateRange: {
-          startDate: p.validFrom,
-          endDate: p.validTill
-        },
+    result.reward = {
+      amount:
+        p.targets?.[0]?.rewardAmount || null
+    };
+  }
 
-        ruleType: p.ruleType,
 
-        maxPayoutPerDay,
+  if (p.ruleType === "PER_ORDER") {
 
-        isActive: p.isActive
+    result.reward = {
+      perOrderAmount:
+        p.rules?.[0]?.perOrderAmount || 0
+    };
+  }
+
+
+  if (p.ruleType === "HYBRID") {
+
+    result.conditions = {
+
+      minOrders:
+        p.rules?.[0]?.minOrders || null,
+
+      minEarnings:
+        p.rules?.[0]?.minEarnings || null,
+
+      minAcceptanceRate:
+        p.minAcceptanceRate || null,
+
+      minCompletionRate:
+        p.minCompletionRate || null
+    };
+
+    result.reward = {
+      amount:
+        p.targets?.[0]?.rewardAmount || null
+    };
+  }
+
+
+  if (
+    p.ruleType === "TASK"
+    && p.tasks?.length
+  ) {
+
+    result.tasks = p.tasks.map((t) => {
+
+      const task = {
+
+        dayNumber:
+          t.dayNumber,
+
+        taskRuleType:
+          t.taskRuleType
       };
 
-      // SLAB
 
-      if (p.ruleType === "SLAB" && p.slabs?.length) {
-        result.slabs = p.slabs.map(s => ({
-          minOrders: s.minValue,
-          maxOrders: s.maxValue,
-          rewardAmount: s.rewardAmount
-        }));
-      }
+      if (
+        t.taskRuleType === "FIXED_TARGET"
+      ) {
 
-      // FIXED TARGET
-
-      if (p.ruleType === "FIXED_TARGET") {
-        result.target = {
-          orders: p.targets?.[0]?.targetOrders || null
+        task.target = {
+          orders:
+            t.targetOrders
         };
 
-        result.reward = {
-          amount: p.targets?.[0]?.rewardAmount || null
+        task.reward = {
+          amount:
+            t.fixedReward
         };
       }
 
-      // HYBRID
+      else if (
+        t.taskRuleType === "PER_ORDER"
+      ) {
 
-      if (p.ruleType === "HYBRID") {
-        result.conditions = {
-          minOrders: p.rules?.[0]?.minOrders || null,
-          minEarnings: p.rules?.[0]?.minEarnings || null,
-          minAcceptanceRate: p.minAcceptanceRate || null,
-          minCompletionRate: p.minCompletionRate || null
+        task.rewardPerOrder =
+          t.rewardPerOrder;
+
+        task.maxOrders =
+          t.maxOrders;
+
+        task.maxEarning =
+          t.maxEarning;
+      }
+
+
+      else if (
+        t.taskRuleType === "HYBRID"
+      ) {
+
+        task.conditions = {
+
+          minOrders:
+            t.minOrders,
+
+          minAcceptanceRate:
+            t.minAcceptanceRate,
+
+          minEarnings:
+            t.minEarnings
         };
 
-        result.reward = {
-          amount: p.targets?.[0]?.rewardAmount || null
+        task.reward = {
+          amount:
+            t.rewardAmount
         };
       }
 
-      return result;
+      else if (
+        t.taskRuleType === "SLAB"
+      ) {
+
+        task.slabs = p.slabs
+          .sort(
+            (a, b) =>
+              a.minValue - b.minValue
+          )
+          .map((s) => ({
+            minOrders:
+              s.minValue,
+
+            maxOrders:
+              s.maxValue,
+
+            rewardAmount:
+              s.rewardAmount
+          }));
+      }
+
+      return task;
     });
+  }
 
+  return result;
+});
     // RESPONSE
-
+ 
     return res.json({
       success: true,
       data: response
     });
-
+ 
   } catch (error) {
     console.error("Daily programs error:", error);
-
+ 
     return res.status(500).json({
       success: false,
       message: "Failed to fetch daily programs"
     });
   }
 };
-
+ 
 module.exports = {
   getDailyIncentive,
   getRiderDailyPrograms,
