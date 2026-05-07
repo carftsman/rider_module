@@ -6,23 +6,25 @@ exports.createProgram = async (req, res) => {
       name,
       description,
       programType,
+      joiningBonusType,
       trackingType,
       ruleType,
       validFrom,
       validTill,
       validityDays,
-      cityId,
+      cityIds,
       pincodeIds
     } = req.body;
 
-    
-    
-    if (!name) {
+
+    if (!name?.trim()) {
       return res.status(400).json({
         success: false,
         message: "Program name is required"
       });
     }
+
+ 
 
     if (!programType) {
       return res.status(400).json({
@@ -30,6 +32,18 @@ exports.createProgram = async (req, res) => {
         message: "programType is required"
       });
     }
+
+    if (
+      programType === "JOINING_BONUS" &&
+      !joiningBonusType
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "joiningBonusType is required"
+      });
+    }
+
+
 
     if (!trackingType) {
       return res.status(400).json({
@@ -45,31 +59,11 @@ exports.createProgram = async (req, res) => {
       });
     }
 
+
     if (!validFrom || !validTill) {
       return res.status(400).json({
         success: false,
         message: "validFrom and validTill are required"
-      });
-    }
-
-    if (!validityDays || validityDays <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "validityDays must be greater than 0"
-      });
-    }
-
-    if (!Array.isArray(cityId) || cityId.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "cityId must be a non-empty array"
-      });
-    }
-
-    if (!Array.isArray(pincodeIds) || pincodeIds.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: "pincodeIds must be a non-empty array"
       });
     }
 
@@ -79,38 +73,112 @@ exports.createProgram = async (req, res) => {
     if (startDate > endDate) {
       return res.status(400).json({
         success: false,
-        message: "validFrom cannot be greater than validTill"
+        message:
+          "validFrom cannot be greater than validTill"
       });
     }
 
-    
-    
-    const existing = await prisma.program.findFirst({
+
+    if (!validityDays || validityDays <= 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "validityDays must be greater than 0"
+      });
+    }
+
+
+    if (
+      !Array.isArray(cityIds) ||
+      cityIds.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "cityIds must be a non-empty array"
+      });
+    }
+
+    const cities = await prisma.city.findMany({
       where: {
-        name,
-        programType,
-        isActive: true
+        id: {
+          in: cityIds
+        }
       }
     });
 
-    if (existing) {
+    if (cities.length !== cityIds.length) {
       return res.status(400).json({
         success: false,
-        message: "Program with same name already exists"
+        message: "Some cityIds are invalid"
       });
     }
 
+
+
+    if (
+      !Array.isArray(pincodeIds) ||
+      pincodeIds.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "pincodeIds must be a non-empty array"
+      });
+    }
+
+    const pincodes = await prisma.pincode.findMany({
+      where: {
+        id: {
+          in: pincodeIds
+        }
+      }
+    });
+
+    if (pincodes.length !== pincodeIds.length) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Some pincodeIds are invalid"
+      });
+    }
+
+
+
+    const existingProgram =
+      await prisma.program.findFirst({
+        where: {
+          name,
+          programType,
+          pincodeIds: {
+            hasSome: pincodeIds
+          },
+          isActive: true
+        }
+      });
+
+    if (existingProgram) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Program already exists for selected pincodes"
+      });
+    }
+
+
+
     const program = await prisma.program.create({
       data: {
-        name,
+        name: name.trim(),
         description,
         programType,
+        joiningBonusType,
         trackingType,
         ruleType,
         validFrom: startDate,
         validTill: endDate,
         validityDays,
-        cityId,
+        cityId: cityIds,
         pincodeIds
       }
     });
@@ -126,7 +194,7 @@ exports.createProgram = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Server error"
+      message: "Internal server error"
     });
   }
 };
@@ -144,7 +212,8 @@ exports.createProgramTask = async (req, res) => {
       rewardAmount
     } = req.body;
 
-    
+  
+
     if (!programId) {
       return res.status(400).json({
         success: false,
@@ -166,14 +235,15 @@ exports.createProgramTask = async (req, res) => {
       });
     }
 
-    if (!rewardAmount) {
+    if (!rewardAmount || rewardAmount <= 0) {
       return res.status(400).json({
         success: false,
-        message: "rewardAmount is required"
+        message: "Valid rewardAmount is required"
       });
     }
 
-    
+
+
     if (taskType === "ORDERS" && !minOrders) {
       return res.status(400).json({
         success: false,
@@ -181,17 +251,22 @@ exports.createProgramTask = async (req, res) => {
       });
     }
 
-    if (taskType === "ACCEPTANCE_RATE" && !minAcceptanceRate) {
+    if (
+      taskType === "ACCEPTANCE_RATE" &&
+      !minAcceptanceRate
+    ) {
       return res.status(400).json({
         success: false,
-        message: "minAcceptanceRate is required for ACCEPTANCE_RATE task"
+        message:
+          "minAcceptanceRate is required for ACCEPTANCE_RATE task"
       });
     }
 
     if (taskType === "PEAK_SLOTS" && !minPeakSlots) {
       return res.status(400).json({
         success: false,
-        message: "minPeakSlots is required for PEAK_SLOTS task"
+        message:
+          "minPeakSlots is required for PEAK_SLOTS task"
       });
     }
 
@@ -202,9 +277,12 @@ exports.createProgramTask = async (req, res) => {
       });
     }
 
-    
+
+
     const program = await prisma.program.findUnique({
-      where: { id: programId }
+      where: {
+        id: programId
+      }
     });
 
     if (!program) {
@@ -213,25 +291,42 @@ exports.createProgramTask = async (req, res) => {
         message: "Program not found"
       });
     }
-    if (program.validityDays && dayNumber > program.validityDays) {
-        return res.status(400).json({
-            success: false,
-            message: `Day ${dayNumber} exceeds program limit of ${program.validityDays} days`
-        });
+
+
+    if (program.joiningBonusType !== "TASK_BASED") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Tasks can only be created for TASK_BASED programs"
+      });
     }
 
-    
-    const existingTask = await prisma.programTask.findFirst({
-      where: {
-        programId,
-        dayNumber
-      }
-    });
+  
+
+    if (
+      program.validityDays &&
+      dayNumber > program.validityDays
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `Day ${dayNumber} exceeds program validity of ${program.validityDays} days`
+      });
+    }
+
+
+    const existingTask =
+      await prisma.programTask.findFirst({
+        where: {
+          programId,
+          dayNumber,
+          taskType
+        }
+      });
 
     if (existingTask) {
       return res.status(400).json({
         success: false,
-        message: `Task already exists for Day ${dayNumber}`
+        message: `Task already exists for Day ${dayNumber} with type ${taskType}`
       });
     }
 
@@ -240,14 +335,28 @@ exports.createProgramTask = async (req, res) => {
         programId,
         dayNumber,
         taskType,
-        minOrders: taskType === "ORDERS" ? minOrders : null,
+
+        minOrders:
+          taskType === "ORDERS"
+            ? Number(minOrders)
+            : null,
+
         minAcceptanceRate:
-          taskType === "ACCEPTANCE_RATE" ? minAcceptanceRate : null,
+          taskType === "ACCEPTANCE_RATE"
+            ? Number(minAcceptanceRate)
+            : null,
+
         minPeakSlots:
-          taskType === "PEAK_SLOTS" ? minPeakSlots : null,
+          taskType === "PEAK_SLOTS"
+            ? Number(minPeakSlots)
+            : null,
+
         minEarnings:
-          taskType === "EARNINGS" ? minEarnings : null,
-        rewardAmount
+          taskType === "EARNINGS"
+            ? Number(minEarnings)
+            : null,
+
+        rewardAmount: Number(rewardAmount)
       }
     });
 
@@ -260,20 +369,12 @@ exports.createProgramTask = async (req, res) => {
   } catch (error) {
     console.error("Create Program Task Error:", error);
 
-    if (error.code === "P2002") {
-      return res.status(400).json({
-        success: false,
-        message: "Duplicate day task not allowed"
-      });
-    }
-
     return res.status(500).json({
       success: false,
       message: "Server error"
     });
   }
 };
-
 
 exports.getProgramTasks = async (req, res) => {
   try {

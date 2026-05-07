@@ -12,10 +12,17 @@ const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getPro
  *       - Admin Joining Bonus
  *     summary: Create a new program
  *     description: >
- *       Creates a new program with validation rules.
- *       Ensures unique program name per programType, validates date range,
- *       and requires city and pincode mappings.
+ *       Creates a new joining bonus/incentive program.
+ *       
+ *       Features:
+ *       - Validates cityIds and pincodeIds
+ *       - Prevents duplicate active programs for same pincodes
+ *       - Supports JOINING_BONUS specific validation
+ *       - Stores multiple cities and pincodes
+ *       - Validates date range and validityDays
  *
+ *     security:
+ *       - bearerAuth: []
  *
  *     requestBody:
  *       required: true
@@ -23,6 +30,22 @@ const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getPro
  *         application/json:
  *           schema:
  *             type: object
+ *
+ *             example:
+ *               name: Task Based Joining Bonus
+ *               description: task based joining bonus
+ *               programType: JOINING_BONUS
+ *               joiningBonusType: TASK_BASED
+ *               trackingType: DAILY
+ *               ruleType: TASK
+ *               validFrom: 2026-05-08
+ *               validTill: 2026-06-30
+ *               validityDays: 7
+ *               cityIds:
+ *                 - city1
+ *               pincodeIds:
+ *                 - pin1
+ *
  *             required:
  *               - name
  *               - programType
@@ -31,55 +54,79 @@ const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getPro
  *               - validFrom
  *               - validTill
  *               - validityDays
- *               - cityId
+ *               - cityIds
  *               - pincodeIds
+ *
  *             properties:
  *
  *               name:
  *                 type: string
- *                 example: Weekly Delivery Bonus
+ *                 example: Hyderabad Joining Bonus
  *
  *               description:
  *                 type: string
- *                 example: Riders get bonus for completing deliveries weekly
+ *                 example: Rider joining bonus program for Hyderabad city
  *
  *               programType:
  *                 type: string
- *                 example: INCENTIVE
+ *                 enum:
+ *                   - JOINING_BONUS
+ *                   - INCENTIVE
+ *                 example: JOINING_BONUS
+ *
+ *               joiningBonusType:
+ *                 type: string
+ *                 enum:
+ *                   - TASK_BASED
+ *                   - GUARANTEE
+ *                   - FIXED
+ *                 example: TASK_BASED
  *
  *               trackingType:
  *                 type: string
- *                 example: ORDER_COUNT
+ *                 enum:
+ *                   - DAILY
+ *                   - WEEKLY
+ *                   - MONTHLY
+ *                 example: DAILY
  *
  *               ruleType:
  *                 type: string
- *                 example: THRESHOLD
+ *                 enum:
+ *                   - TASK
+ *                   - ORDER
+ *                   - EARNING
+ *                 example: TASK
  *
  *               validFrom:
  *                 type: string
- *                 format: date-time
- *                 example: 2026-05-01T00:00:00.000Z
+ *                 format: date
+ *                 example: 2026-05-08
  *
  *               validTill:
  *                 type: string
- *                 format: date-time
- *                 example: 2026-06-01T00:00:00.000Z
+ *                 format: date
+ *                 example: 2026-06-30
  *
  *               validityDays:
  *                 type: number
- *                 example: 30
+ *                 example: 7
  *
- *               cityId:
+ *               cityIds:
  *                 type: array
  *                 items:
  *                   type: string
- *                 example: ["CITY123", "CITY456"]
+ *                 example:
+ *                   - city1
+ *                   - city2
  *
  *               pincodeIds:
  *                 type: array
  *                 items:
  *                   type: string
- *                 example: ["500081", "500032"]
+ *                 example:
+ *                   - pin1
+ *                   - pin2
  *
  *     responses:
  *
@@ -102,25 +149,34 @@ const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getPro
  *                 data:
  *                   type: object
  *                   properties:
+ *
  *                     id:
  *                       type: string
  *                       example: PROG12345
  *
  *                     name:
  *                       type: string
- *                       example: Weekly Delivery Bonus
+ *                       example: Hyderabad Joining Bonus
+ *
+ *                     description:
+ *                       type: string
+ *                       example: Rider joining bonus program for Hyderabad city
  *
  *                     programType:
  *                       type: string
- *                       example: INCENTIVE
+ *                       example: JOINING_BONUS
+ *
+ *                     joiningBonusType:
+ *                       type: string
+ *                       example: TASK_BASED
  *
  *                     trackingType:
  *                       type: string
- *                       example: ORDER_COUNT
+ *                       example: DAILY
  *
  *                     ruleType:
  *                       type: string
- *                       example: THRESHOLD
+ *                       example: TASK
  *
  *                     validFrom:
  *                       type: string
@@ -132,7 +188,7 @@ const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getPro
  *
  *                     validityDays:
  *                       type: number
- *                       example: 30
+ *                       example: 7
  *
  *                     cityId:
  *                       type: array
@@ -144,8 +200,12 @@ const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getPro
  *                       items:
  *                         type: string
  *
+ *                     isActive:
+ *                       type: boolean
+ *                       example: false
+ *
  *       400:
- *         description: Validation error or duplicate program
+ *         description: Validation error
  *         content:
  *           application/json:
  *             schema:
@@ -158,7 +218,21 @@ const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getPro
  *
  *                 message:
  *                   type: string
- *                   example: Program with same name already exists
+ *                   examples:
+ *                     missingName:
+ *                       value: Program name is required
+ *
+ *                     invalidDate:
+ *                       value: validFrom cannot be greater than validTill
+ *
+ *                     invalidCities:
+ *                       value: Some cityIds are invalid
+ *
+ *                     invalidPincodes:
+ *                       value: Some pincodeIds are invalid
+ *
+ *                     duplicate:
+ *                       value: Program already exists for selected pincodes
  *
  *       500:
  *         description: Internal server error
@@ -174,7 +248,7 @@ const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getPro
  *
  *                 message:
  *                   type: string
- *                   example: Server error
+ *                   example: Internal server error
  */
 
 joiningBonusRouter.post("/program", createProgram);
@@ -186,16 +260,19 @@ joiningBonusRouter.post("/program", createProgram);
  *   post:
  *     tags:
  *       - Admin Joining Bonus
- *     summary: Create a program task
+ *     summary: Create program task
  *     description: >
- *       Creates a task for a specific program day.
- *       Task validation depends on taskType:
- *       - ORDERS → requires minOrders
- *       - ACCEPTANCE_RATE → requires minAcceptanceRate
- *       - PEAK_SLOTS → requires minPeakSlots
- *       - EARNINGS → requires minEarnings
- *       Ensures no duplicate task per day and validates program duration.
+ *       Creates a task for a TASK_BASED joining bonus program.
  *
+ *       Features:
+ *       - Supports multiple task types
+ *       - Validates task conditions dynamically
+ *       - Prevents duplicate tasks for same day + type
+ *       - Ensures task dayNumber is within program validity
+ *       - Only TASK_BASED programs can have tasks
+ *
+ *     security:
+ *       - bearerAuth: []
  *
  *     requestBody:
  *       required: true
@@ -220,7 +297,11 @@ joiningBonusRouter.post("/program", createProgram);
  *
  *               taskType:
  *                 type: string
- *                 enum: [ORDERS, ACCEPTANCE_RATE, PEAK_SLOTS, EARNINGS]
+ *                 enum:
+ *                   - ORDERS
+ *                   - ACCEPTANCE_RATE
+ *                   - PEAK_SLOTS
+ *                   - EARNINGS
  *                 example: ORDERS
  *
  *               minOrders:
@@ -229,15 +310,15 @@ joiningBonusRouter.post("/program", createProgram);
  *
  *               minAcceptanceRate:
  *                 type: number
- *                 example: 85
+ *                 example: 90
  *
  *               minPeakSlots:
  *                 type: number
- *                 example: 3
+ *                 example: 5
  *
  *               minEarnings:
  *                 type: number
- *                 example: 500
+ *                 example: 2000
  *
  *               rewardAmount:
  *                 type: number
@@ -264,6 +345,7 @@ joiningBonusRouter.post("/program", createProgram);
  *                 data:
  *                   type: object
  *                   properties:
+ *
  *                     id:
  *                       type: string
  *                       example: TASK12345
@@ -286,14 +368,17 @@ joiningBonusRouter.post("/program", createProgram);
  *
  *                     minAcceptanceRate:
  *                       type: number
+ *                       nullable: true
  *                       example: null
  *
  *                     minPeakSlots:
  *                       type: number
+ *                       nullable: true
  *                       example: null
  *
  *                     minEarnings:
  *                       type: number
+ *                       nullable: true
  *                       example: null
  *
  *                     rewardAmount:
@@ -301,7 +386,7 @@ joiningBonusRouter.post("/program", createProgram);
  *                       example: 100
  *
  *       400:
- *         description: Validation error or duplicate task
+ *         description: Validation error
  *         content:
  *           application/json:
  *             schema:
@@ -314,7 +399,34 @@ joiningBonusRouter.post("/program", createProgram);
  *
  *                 message:
  *                   type: string
- *                   example: Task already exists for Day 1
+ *                   examples:
+ *
+ *                     invalidDay:
+ *                       value: Valid dayNumber is required
+ *
+ *                     invalidReward:
+ *                       value: Valid rewardAmount is required
+ *
+ *                     missingOrders:
+ *                       value: minOrders is required for ORDERS task
+ *
+ *                     missingAcceptance:
+ *                       value: minAcceptanceRate is required for ACCEPTANCE_RATE task
+ *
+ *                     missingPeakSlots:
+ *                       value: minPeakSlots is required for PEAK_SLOTS task
+ *
+ *                     missingEarnings:
+ *                       value: minEarnings is required for EARNINGS task
+ *
+ *                     invalidProgramType:
+ *                       value: Tasks can only be created for TASK_BASED programs
+ *
+ *                     exceedsValidity:
+ *                       value: Day 10 exceeds program validity of 7 days
+ *
+ *                     duplicateTask:
+ *                       value: Task already exists for Day 1 with type ORDERS
  *
  *       404:
  *         description: Program not found
