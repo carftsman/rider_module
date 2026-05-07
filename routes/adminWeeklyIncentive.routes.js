@@ -5,9 +5,16 @@ const controller = require("../controllers/adminWeeklyIncentive.controller");
 
 /**
  * @swagger
+ * tags:
+ *   name: Admin Weekly Incentives
+ *   description: Weekly incentive management APIs
+ */
+
+/**
+ * @swagger
  * /api/admin/programs/weekly:
  *   post:
- *     summary: Create Weekly Incentive (SLAB / FIXED / HYBRID / CONSISTENCY)
+ *     summary: Create Weekly Incentive (SLAB / FIXED_TARGET / HYBRID / TASK)
  *     tags: [Admin Weekly Incentives]
  *     requestBody:
  *       required: true
@@ -33,14 +40,22 @@ const controller = require("../controllers/adminWeeklyIncentive.controller");
  *                 type: array
  *                 items:
  *                   type: string
- *                 example: ["500081"]
+ *                 example:
+ *                   - "500081"
  *
  *               weekConfig:
  *                 type: object
  *                 properties:
  *                   weekStartDay:
  *                     type: string
- *                     enum: [MON, TUE, WED, THU, FRI, SAT, SUN]
+ *                     enum:
+ *                       - MON
+ *                       - TUE
+ *                       - WED
+ *                       - THU
+ *                       - FRI
+ *                       - SAT
+ *                       - SUN
  *                     example: MON
  *
  *               dateRange:
@@ -55,7 +70,11 @@ const controller = require("../controllers/adminWeeklyIncentive.controller");
  *
  *               ruleType:
  *                 type: string
- *                 enum: [SLAB, FIXED_TARGET, HYBRID]
+ *                 enum:
+ *                   - SLAB
+ *                   - FIXED_TARGET
+ *                   - HYBRID
+ *                   - TASK
  *
  *               slabs:
  *                 type: array
@@ -64,56 +83,154 @@ const controller = require("../controllers/adminWeeklyIncentive.controller");
  *                   properties:
  *                     minOrders:
  *                       type: integer
+ *                       example: 50
+ *
  *                     maxOrders:
  *                       type: integer
+ *                       example: 100
+ *
  *                     rewardAmount:
  *                       type: number
+ *                       example: 500
  *
  *               target:
  *                 type: object
  *                 properties:
  *                   orders:
  *                     type: integer
+ *                     example: 100
  *
  *               reward:
  *                 type: object
  *                 properties:
  *                   amount:
  *                     type: number
+ *                     example: 1000
  *
  *               conditions:
  *                 type: object
  *                 properties:
  *                   minOrders:
  *                     type: integer
+ *                     example: 100
+ *
  *                   minEarnings:
  *                     type: number
+ *                     example: 5000
+ *
  *                   minAcceptanceRate:
  *                     type: number
+ *                     example: 90
+ *
  *                   minCompletionRate:
  *                     type: number
+ *                     example: 95
  *
  *               consistencyRule:
  *                 type: object
  *                 properties:
  *                   minActiveDays:
  *                     type: integer
+ *                     example: 5
+ *
  *                   minOrdersPerDay:
  *                     type: integer
+ *                     example: 10
  *
  *               constraints:
  *                 type: object
  *                 properties:
  *                   minAcceptanceRate:
  *                     type: number
+ *                     example: 85
+ *
  *                   minCompletionRate:
  *                     type: number
+ *                     example: 90
  *
  *               maxPayoutPerWeek:
  *                 type: number
+ *                 example: 2000
+ *
+ *               tasks:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *
+ *                     dayNumber:
+ *                       type: integer
+ *                       example: 1
+ *
+ *                     taskType:
+ *                       type: string
+ *                       enum:
+ *                         - FIXED_TARGET
+ *                         - PER_ORDER
+ *                         - HYBRID
+ *                         - SLAB
+ *
+ *                     target:
+ *                       type: object
+ *                       properties:
+ *                         orders:
+ *                           type: integer
+ *                           example: 10
+ *
+ *                     reward:
+ *                       type: object
+ *                       properties:
+ *                         amount:
+ *                           type: number
+ *                           example: 100
+ *
+ *                     rewardPerOrder:
+ *                       type: number
+ *                       example: 20
+ *
+ *                     maxOrders:
+ *                       type: integer
+ *                       example: 10
+ *
+ *                     maxEarning:
+ *                       type: number
+ *                       example: 200
+ *
+ *                     conditions:
+ *                       type: object
+ *                       properties:
+ *                         minOrders:
+ *                           type: integer
+ *                           example: 10
+ *
+ *                         minEarnings:
+ *                           type: number
+ *                           example: 1000
+ *
+ *                         minAcceptanceRate:
+ *                           type: number
+ *                           example: 90
+ *
+ *                     slabs:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           minOrders:
+ *                             type: integer
+ *                             example: 5
+ *
+ *                           maxOrders:
+ *                             type: integer
+ *                             example: 10
+ *
+ *                           rewardAmount:
+ *                             type: number
+ *                             example: 100
  *
  *               isActive:
  *                 type: boolean
+ *                 example: true
  *
  *     responses:
  *       200:
@@ -124,8 +241,9 @@ const controller = require("../controllers/adminWeeklyIncentive.controller");
  *               success: true
  *               message: Weekly incentive created successfully
  *               data:
- *                 id: "program_123"
- *                 name: "Weekly Superstar Bonus"
+ *                 id: weekly_001
+ *                 name: Weekly Superstar Bonus
+ *                 ruleType: SLAB
  */
 router.post("/weekly", controller.createWeeklyIncentive);
 

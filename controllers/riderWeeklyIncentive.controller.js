@@ -134,7 +134,8 @@ exports.getRiderWeeklyPrograms = async (req, res) => {
         slabs: true,
         targets: true,
         rules: true,
-        consistency: true
+        consistency: true,
+        tasks: true
       },
       orderBy: {
         createdAt: "desc"
@@ -213,7 +214,79 @@ const result = {
           minEarnings: p.rules[0].minEarnings
         };
       }
+// TASK
+if (p.ruleType === "TASK" && p.tasks?.length) {
 
+  result.tasks = p.tasks.map((t) => {
+
+    const task = {
+      dayNumber: t.dayNumber,
+      taskRuleType: t.taskRuleType
+    };
+
+    //////////////////////////////////////////////////
+    // FIXED TARGET
+    //////////////////////////////////////////////////
+
+    if (t.taskRuleType === "FIXED_TARGET") {
+
+      task.target = {
+        orders: t.targetOrders
+      };
+
+      task.reward = {
+        amount: t.fixedReward
+      };
+    }
+
+    //////////////////////////////////////////////////
+    // PER ORDER
+    //////////////////////////////////////////////////
+
+    else if (t.taskRuleType === "PER_ORDER") {
+
+      task.rewardPerOrder = t.rewardPerOrder;
+
+      task.maxOrders = t.maxOrders;
+
+      task.maxEarning = t.maxEarning;
+    }
+
+    //////////////////////////////////////////////////
+    // HYBRID
+    //////////////////////////////////////////////////
+
+    else if (t.taskRuleType === "HYBRID") {
+
+      task.conditions = {
+        minOrders: t.minOrders,
+        minAcceptanceRate: t.minAcceptanceRate,
+        minEarnings: t.minEarnings
+      };
+
+      task.reward = {
+        amount: t.rewardAmount
+      };
+    }
+
+    //////////////////////////////////////////////////
+    // SLAB
+    //////////////////////////////////////////////////
+
+else if (t.taskRuleType === "SLAB") {
+
+  task.slabs = p.slabs
+    .sort((a, b) => a.minValue - b.minValue)
+    .map((s) => ({
+      minOrders: s.minValue,
+      maxOrders: s.maxValue,
+      rewardAmount: s.rewardAmount
+    }));
+}
+
+    return task;
+  });
+}
       // CONSISTENCY
       if (p.consistency) {
         result.consistencyRule = {

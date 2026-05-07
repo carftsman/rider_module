@@ -54,9 +54,59 @@ const validateRequest = (body) => {
   if (ruleType === "FIXED_TARGET" && !target)
     return "target required for FIXED_TARGET";
 
-  if (ruleType === "FIXED_TARGET" && !reward?.amount)
-    return "reward.amount required";
+if (
+  ruleType === "FIXED_TARGET" &&
+  reward?.amount == null
+)
+  return "reward.amount required";
+  if (ruleType === "HYBRID" && !body.conditions) {
+  return "conditions required for HYBRID";
+}
 
+if (
+  ruleType === "HYBRID" &&
+  body.reward?.amount == null
+) {
+  return "reward.amount required for HYBRID";
+}
+if (ruleType === "TASK") {
+
+  if (
+    !body.tasks ||
+    !Array.isArray(body.tasks) ||
+    body.tasks.length === 0
+  ) {
+    return "tasks required for TASK";
+  }
+
+  const allowedTaskRuleTypes = [
+    "FIXED_TARGET",
+    "PER_ORDER",
+    "HYBRID",
+    "SLAB"
+  ];
+
+  for (const task of body.tasks) {
+
+    if (!task.taskRuleType) {
+      return "taskRuleType required";
+    }
+
+    if (
+      !allowedTaskRuleTypes.includes(task.taskRuleType)
+    ) {
+      return `Invalid taskRuleType: ${task.taskRuleType}`;
+    }
+  }
+
+  const slabTasks = body.tasks.filter(
+    t => t.taskRuleType === "SLAB"
+  );
+
+  if (slabTasks.length > 1) {
+    return "Only one SLAB task supported currently";
+  }
+}
   return null;
 };
 
@@ -83,7 +133,8 @@ exports.createWeeklyIncentive = async (req, res) => {
       consistencyRule,
       constraints,
       maxPayoutPerWeek,
-      isActive
+      isActive,
+      tasks
     } = req.body;
 
     const newStart = new Date(dateRange.startDate);
@@ -135,6 +186,59 @@ exports.createWeeklyIncentive = async (req, res) => {
 
     const program = await prisma.program.create({
       data: {
+        tasks: tasks?.length
+  ? {
+create: tasks.map((task) => ({
+
+  dayNumber: task.dayNumber,
+
+  taskType: "ORDERS",
+
+  taskRuleType: task.taskRuleType,
+
+  //////////////////////////////////////////////////
+  // FIXED TARGET
+  //////////////////////////////////////////////////
+
+  targetOrders:
+    task.target?.orders || null,
+
+  fixedReward:
+    task.reward?.amount || null,
+
+  //////////////////////////////////////////////////
+  // PER ORDER
+  //////////////////////////////////////////////////
+
+  rewardPerOrder:
+    task.rewardPerOrder || null,
+
+  maxOrders:
+    task.maxOrders || null,
+
+  maxEarning:
+    task.maxEarning || null,
+
+  //////////////////////////////////////////////////
+  // HYBRID
+  //////////////////////////////////////////////////
+
+  minOrders:
+    task.conditions?.minOrders || null,
+
+  minAcceptanceRate:
+    task.conditions?.minAcceptanceRate || null,
+
+  minEarnings:
+    task.conditions?.minEarnings || null,
+
+  rewardAmount:
+    task.taskRuleType === "HYBRID"
+      ? task.reward?.amount || 0
+      : 0
+}))
+    }
+  : undefined,
         name,
         programType: "WEEKLY_TARGET",
         trackingType: "WEEKLY",
@@ -154,19 +258,29 @@ exports.createWeeklyIncentive = async (req, res) => {
 
         maxPayoutPerWeek,
         isActive: isActive ?? true,
-
-        //  SLAB 
-        slabs: slabs?.length
-          ? {
-              create: slabs.map((s) => ({
-                minValue: s.minOrders,
-                maxValue: s.maxOrders,
-                rewardAmount: s.rewardAmount
-              }))
-            }
-          : undefined,
-
         //  FIXED TARGET 
+        slabs:
+  ruleType === "SLAB" && slabs?.length
+    ? {
+        create: slabs.map((s) => ({
+          minValue: s.minOrders,
+          maxValue: s.maxOrders,
+          rewardAmount: s.rewardAmount
+        }))
+      }
+
+    : ruleType === "TASK" &&
+      tasks?.[0]?.slabs?.length
+
+    ? {
+        create: tasks[0].slabs.map((s) => ({
+          minValue: s.minOrders,
+          maxValue: s.maxOrders,
+          rewardAmount: s.rewardAmount
+        }))
+      }
+
+    : undefined,
         targets: target
           ? {
               create: {
@@ -238,7 +352,10 @@ exports.updateWeeklyIncentive = async (req, res) => {
     }
 
     // TARGET VALIDATION
-    if (req.body.target && !req.body.reward?.amount) {
+    if (
+  req.body.target &&
+  req.body.reward?.amount == null
+) {
       return res.status(400).json({
         success: false,
         message: "reward.amount required with target"
@@ -440,7 +557,8 @@ exports.getWeeklyIncentiveById = async (req, res) => {
         slabs: true,
         targets: true,
         rules: true,
-        consistency: true
+        consistency: true,
+        tasks: true
       }
     });
 
@@ -481,7 +599,85 @@ exports.getWeeklyIncentiveById = async (req, res) => {
         minEarnings: program.rules[0].minEarnings
       };
     }
+////////////////////////////////////////////////////
+// TASK
+////////////////////////////////////////////////////
 
+if (program.ruleType === "TASK") {
+
+  response.tasks = program.tasks.map((task) => {
+
+    const result = {
+      dayNumber: task.dayNumber
+    };
+
+    ////////////////////////////////////////////////
+    // FIXED TARGET
+    ////////////////////////////////////////////////
+
+switch (task.taskRuleType) {
+
+  case "FIXED_TARGET":
+
+    result.taskRuleType = "FIXED_TARGET";
+
+    result.target = {
+      orders: task.targetOrders
+    };
+
+    result.reward = {
+      amount: task.fixedReward
+    };
+
+    break;
+
+  case "PER_ORDER":
+
+    result.taskRuleType = "PER_ORDER";
+
+    result.rewardPerOrder =
+      task.rewardPerOrder;
+
+    result.maxOrders =
+      task.maxOrders;
+
+    result.maxEarning =
+      task.maxEarning;
+
+    break;
+
+  case "HYBRID":
+
+    result.taskRuleType = "HYBRID";
+
+    result.conditions = {
+      minOrders: task.minOrders,
+      minAcceptanceRate: task.minAcceptanceRate,
+      minEarnings: task.minEarnings
+    };
+
+    result.reward = {
+      amount: task.rewardAmount
+    };
+
+    break;
+
+  case "SLAB":
+
+    result.taskRuleType = "SLAB";
+
+    result.slabs =
+      program.slabs.map((s) => ({
+        minOrders: s.minValue,
+        maxOrders: s.maxValue,
+        rewardAmount: s.rewardAmount
+      }));
+
+    break;
+}
+    return result;
+  });
+}
     if (program.consistency) {
       response.consistencyRule = {
         minActiveDays: program.consistency.minActiveDays,
