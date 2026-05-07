@@ -168,7 +168,62 @@ else if (p.ruleType === "FIXED_TARGET" && p.targets?.[0]) {
 else if (p.ruleType === "HYBRID" && p.targets?.[0]) {
   maxReward = p.targets[0].rewardAmount;
 }
+//////////////////////////////////////////////////
+// TASK
+//////////////////////////////////////////////////
 
+else if (
+  p.ruleType === "TASK"
+  && p.tasks?.length
+) {
+
+  const taskRewards = p.tasks.map((t) => {
+
+    ////////////////////////////////////////////////
+    // FIXED_TARGET
+    ////////////////////////////////////////////////
+
+    if (t.taskRuleType === "FIXED_TARGET") {
+      return t.fixedReward || 0;
+    }
+
+    ////////////////////////////////////////////////
+    // HYBRID
+    ////////////////////////////////////////////////
+
+    if (t.taskRuleType === "HYBRID") {
+      return t.rewardAmount || 0;
+    }
+
+    ////////////////////////////////////////////////
+    // PER_ORDER
+    ////////////////////////////////////////////////
+
+    if (t.taskRuleType === "PER_ORDER") {
+      return t.maxEarning || 0;
+    }
+
+    ////////////////////////////////////////////////
+    // SLAB
+    ////////////////////////////////////////////////
+
+    if (
+      t.taskRuleType === "SLAB"
+      && p.slabs?.length
+    ) {
+      return Math.max(
+        ...p.slabs.map((s) => s.rewardAmount)
+      );
+    }
+
+    return 0;
+  });
+
+maxReward = taskRewards.reduce(
+  (sum, reward) => sum + reward,
+  0
+);
+}
 //  fallback
 if (maxReward === null) {
   maxReward = p.maxPayoutPerWeek ?? null;
