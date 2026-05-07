@@ -610,6 +610,8 @@ const normalizeDate = (inputDate) => {
   return d.toISOString().slice(0, 10);
 };
 
+
+
 exports.getSlotHistory = async (req, res) => {
   try {
     const riderId = req.rider?.id;
@@ -624,6 +626,7 @@ exports.getSlotHistory = async (req, res) => {
 
     let dateFilter = {};
 
+    // DAILY FILTER
     if (filter === "daily") {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -635,7 +638,10 @@ exports.getSlotHistory = async (req, res) => {
         gte: start,
         lte: end,
       };
-    } else if (filter === "weekly") {
+    }
+
+    // WEEKLY FILTER
+    else if (filter === "weekly") {
       const start = new Date();
       start.setDate(start.getDate() - 6);
       start.setHours(0, 0, 0, 0);
@@ -647,14 +653,19 @@ exports.getSlotHistory = async (req, res) => {
         gte: start,
         lte: end,
       };
-    } else if (filter === "monthly") {
+    }
+
+    // MONTHLY FILTER
+    else if (filter === "monthly") {
       const y = Number(year) || new Date().getFullYear();
+
       const m =
         month !== undefined && month !== ""
           ? Number(month) - 1
           : new Date().getMonth();
 
       const start = new Date(y, m, 1);
+
       const end = new Date(y, m + 1, 0, 23, 59, 59, 999);
 
       dateFilter.slotStartAt = {
@@ -663,45 +674,61 @@ exports.getSlotHistory = async (req, res) => {
       };
     }
 
+    // FETCH BOOKINGS
     const bookings = await prisma.slotBooking.findMany({
       where: {
         riderId,
         ...dateFilter,
       },
+
       orderBy: {
         slotStartAt: "desc",
       },
     });
 
-    const bookedSlotsCount = bookings.length;
-
+    // EMPTY RESPONSE
     if (!bookings.length) {
       return res.status(200).json({
         success: true,
         filter: filter || "all",
+
         bookedSlotsCount: 0,
+        completedSlotsCount: 0,
         totalSlots: 0,
         totalEarnings: 0,
+
         data: [],
       });
     }
 
+    // GET MIN/MAX SLOT RANGE
     const minSlotStart = new Date(
-      Math.min(...bookings.map((b) => new Date(b.slotStartAt).getTime()))
+      Math.min(
+        ...bookings.map((b) =>
+          new Date(b.slotStartAt).getTime()
+        )
+      )
     );
 
     const maxSlotEnd = new Date(
-      Math.max(...bookings.map((b) => new Date(b.slotEndAt).getTime()))
+      Math.max(
+        ...bookings.map((b) =>
+          new Date(b.slotEndAt).getTime()
+        )
+      )
     );
 
+    // FETCH ORDERS BETWEEN SLOT RANGE
     const allOrders = await prisma.order.findMany({
       where: {
         riderId,
+
         createdAt: {
           gte: minSlotStart,
           lte: maxSlotEnd,
         },
       },
+
       include: {
         OrderRiderEarning: true,
       },
@@ -709,64 +736,129 @@ exports.getSlotHistory = async (req, res) => {
 
     let totalEarnings = 0;
 
+    // SLOT MAPPING
     const data = bookings.map((booking) => {
-      const slotStart = new Date(booking.slotStartAt);
-      const slotEnd = new Date(booking.slotEndAt);
+      const slotStartMs = new Date(
+        booking.slotStartAt
+      ).getTime();
 
+      const slotEndMs = new Date(
+        booking.slotEndAt
+      ).getTime();
+
+      // MATCH ORDERS INSIDE SLOT
       const slotOrders = allOrders.filter((order) => {
-        const orderTime = new Date(order.createdAt);
-        return orderTime >= slotStart && orderTime <= slotEnd;
-      });
+        const orderMs = new Date(
+          order.deliveredAt ||
+          order.updatedAt ||
+          order.createdAt
+        ).getTime();
 
-      const completedOrders = slotOrders.filter(
-        (order) => order.orderStatus?.toUpperCase() === "DELIVERED"
-      );
-
-      const canceledOrders = slotOrders.filter(
-        (order) => order.orderStatus?.toUpperCase() === "CANCELLED"
-      );
-
-      const slotEarnings = completedOrders.reduce((sum, order) => {
         return (
-          sum + Number(order.OrderRiderEarning?.totalEarning || 0)
+          orderMs >= slotStartMs &&
+          orderMs < slotEndMs
         );
-      }, 0);
+      });
+      // COMPLETED ORDERS
+      const completedOrders = slotOrders.filter(
+        (order) =>
+          order.orderStatus?.toUpperCase() ===
+          "DELIVERED"
+      );
+
+      // CANCELLED ORDERS
+      const canceledOrders = slotOrders.filter(
+        (order) =>
+          order.orderStatus?.toUpperCase() ===
+          "CANCELLED"
+      );
+
+      // SLOT EARNINGS
+      const slotEarnings = completedOrders.reduce(
+        (sum, order) => {
+          return (
+            sum +
+            Number(
+              order.OrderRiderEarning?.totalEarning || 0
+            )
+          );
+        },
+        0
+      );
 
       totalEarnings += slotEarnings;
 
-      let slotStatus = "ACTIVE";
+      // SLOT STATUS
+      // SLOT STATUS
+let slotStatus = "ACTIVE";
 
-      if (
-        booking.status === "CANCELLED_BY_RIDER" ||
-        booking.status === "CANCELLED_BY_SYSTEM"
-      ) {
-        slotStatus = "CANCELLED";
-      } else if (new Date(booking.slotEndAt) < new Date()) {
-        slotStatus = "COMPLETED";
-      }
+// CANCELLED
+if (
+  booking.status === "CANCELLED_BY_RIDER" ||
+  booking.status === "CANCELLED_BY_SYSTEM"
+) {
+  slotStatus = "CANCELLED";
+}
+
+// SLOT TIME OVER
+else if (slotEndMs < Date.now()) {
+
+  // COMPLETED SLOT
+  if (completedOrders.length > 0) {
+    slotStatus = "COMPLETED";
+  }
+
+  // MISSED SLOT
+  else {
+    slotStatus = "MISSED";
+  }
+}
 
       return {
         slotBookingId: booking.id,
+
         date: booking.date,
+
         startTime: booking.startTime,
         endTime: booking.endTime,
+
+        slotStartAt: booking.slotStartAt,
+        slotEndAt: booking.slotEndAt,
+
         slotStatus,
 
         totalOrders: slotOrders.length,
+
         completedOrders: completedOrders.length,
+
         canceledOrders: canceledOrders.length,
 
-        slotEarnings: Number(slotEarnings.toFixed(2)),
+        slotEarnings: Number(
+          slotEarnings.toFixed(2)
+        ),
       };
     });
 
+    // COMPLETED SLOTS COUNT
+    const completedSlotsCount = data.filter(
+      (slot) => slot.slotStatus === "COMPLETED"
+    ).length;
+
+    // RESPONSE
     return res.status(200).json({
       success: true,
+
       filter: filter || "all",
 
-      bookedSlotsCount,
-      totalSlots: bookedSlotsCount,
-      totalEarnings: Number(totalEarnings.toFixed(2)),
+      bookedSlotsCount: bookings.length,
+
+      completedSlotsCount,
+
+      totalSlots: bookings.length,
+
+      totalEarnings: Number(
+        totalEarnings.toFixed(2)
+      ),
 
       data,
     });
