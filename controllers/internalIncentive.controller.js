@@ -1,9 +1,5 @@
 const prisma = require("../config/prisma");
 
-/* =========================================================
-   HELPERS
-========================================================= */
-
 function getDateKey(date = new Date()) {
   return date.toISOString().split("T")[0];
 }
@@ -24,19 +20,12 @@ function getWeekKey(date = new Date()) {
 
 
 
-/* =========================================================
-   MAIN API
-========================================================= */
 
 exports.processOrderIncentive = async (req, res) => {
 
   try {
 
     const { riderId, orderId } = req.body;
-
-    ////////////////////////////////////////////////////////
-    // VALIDATION
-    ////////////////////////////////////////////////////////
 
     if (!riderId || !orderId) {
       return res.status(400).json({
@@ -45,9 +34,6 @@ exports.processOrderIncentive = async (req, res) => {
       });
     }
 
-    ////////////////////////////////////////////////////////
-    // PREVENT DUPLICATE PROCESSING
-    ////////////////////////////////////////////////////////
 
     const existingProcessed =
       await prisma.processedOrder.findUnique({
@@ -60,10 +46,6 @@ exports.processOrderIncentive = async (req, res) => {
         message: "Order already processed"
       });
     }
-
-    ////////////////////////////////////////////////////////
-    // GET ORDER
-    ////////////////////////////////////////////////////////
 
     const order = await prisma.order.findUnique({
       where: { orderId },
@@ -81,9 +63,6 @@ exports.processOrderIncentive = async (req, res) => {
       });
     }
 
-    ////////////////////////////////////////////////////////
-    // CHECK ORDER STATUS
-    ////////////////////////////////////////////////////////
 
     if (order.orderStatus !== "DELIVERED") {
       return res.status(400).json({
@@ -92,9 +71,6 @@ exports.processOrderIncentive = async (req, res) => {
       });
     }
 
-    ////////////////////////////////////////////////////////
-    // GET RIDER LOCATION
-    ////////////////////////////////////////////////////////
 
     const riderLocation =
       await prisma.riderLocation.findUnique({
@@ -108,9 +84,6 @@ exports.processOrderIncentive = async (req, res) => {
       });
     }
 
-    ////////////////////////////////////////////////////////
-    // DATE HELPERS
-    ////////////////////////////////////////////////////////
 const now = new Date();
 const currentDay = now
   .toLocaleDateString("en-US", {
@@ -129,9 +102,6 @@ const today = new Date(
     const orderAmount =
       order.OrderPricing?.totalAmount || 0;
 
-    ////////////////////////////////////////////////////////
-    // FETCH PROGRAMS
-    ////////////////////////////////////////////////////////
 
     const programs = await prisma.program.findMany({
       where: {
@@ -176,9 +146,6 @@ const today = new Date(
       }
     });
 
-    ////////////////////////////////////////////////////////
-    // LOOP PROGRAMS
-    ////////////////////////////////////////////////////////
 
     for (const program of programs) {
 if (
@@ -187,9 +154,7 @@ if (
 ) {
   continue;
 }
-      /* =====================================================
-         DAILY / WEEKLY INCENTIVES
-      ===================================================== */
+
 
     if (
   (
@@ -203,9 +168,6 @@ if (
 )
  {
 
-        //////////////////////////////////////////////////////
-        // PROGRESS FILTER
-        //////////////////////////////////////////////////////
 
         const progressWhere = {
           riderId,
@@ -223,18 +185,11 @@ if (
           progressWhere.week = weekKey;
         }
 
-        //////////////////////////////////////////////////////
-        // FIND PROGRESS
-        //////////////////////////////////////////////////////
 
         let progress =
           await prisma.programProgress.findFirst({
             where: progressWhere
           });
-
-        //////////////////////////////////////////////////////
-        // CREATE PROGRESS
-        //////////////////////////////////////////////////////
 
         if (!progress) {
 
@@ -261,15 +216,11 @@ if (
             });
         }
 
-        //////////////////////////////////////////////////////
-        // UPDATE PROGRESS
-        //////////////////////////////////////////////////////
-
-      progress =
-  await prisma.programProgress.update({
-    where: {
-      id: progress.id
-    },
+        progress =
+          await prisma.programProgress.update({
+            where: {
+              id: progress.id
+            },
 
     data: {
       totalOrders: {
@@ -282,9 +233,6 @@ if (
     }
   });
 
-////////////////////////////////////////////////////
-// REFETCH UPDATED PROGRESS
-////////////////////////////////////////////////////
 
 progress =
   await prisma.programProgress.findUnique({
@@ -293,15 +241,10 @@ progress =
     }
   });
 
-        //////////////////////////////////////////////////////
-        // CHECK REWARD
-        //////////////////////////////////////////////////////
+    
 
         let reward = 0;
 
-        //////////////////////////////////////////////////////
-        // SLAB
-        //////////////////////////////////////////////////////
 
         if (program.ruleType === "SLAB") {
 
@@ -317,10 +260,7 @@ progress =
           }
         }
 
-        //////////////////////////////////////////////////////
-        // FIXED TARGET
-        //////////////////////////////////////////////////////
-
+    
         if (program.ruleType === "FIXED_TARGET") {
 
           const target = program.targets?.[0];
@@ -333,9 +273,6 @@ progress =
           }
         }
 
-        //////////////////////////////////////////////////////
-        // HYBRID
-        //////////////////////////////////////////////////////
 
         if (program.ruleType === "HYBRID") {
 
@@ -351,18 +288,12 @@ progress =
           }
         }
 
-        //////////////////////////////////////////////////////
-        // CREDIT ONLY EXTRA REWARD
-        //////////////////////////////////////////////////////
 
         if (reward > progress.rewardAmount) {
 
           const extraReward =
             reward - progress.rewardAmount;
 
-          ////////////////////////////////////////////////////
-          // UPDATE PROGRESS
-          ////////////////////////////////////////////////////
 
           await prisma.programProgress.update({
             where: {
@@ -375,10 +306,6 @@ progress =
             }
           });
 
-          ////////////////////////////////////////////////////
-          // CREATE PAYOUT
-          ////////////////////////////////////////////////////
-
           await prisma.programPayout.create({
             data: {
               riderId,
@@ -388,9 +315,6 @@ progress =
             }
           });
 
-          ////////////////////////////////////////////////////
-          // UPDATE WALLET
-          ////////////////////////////////////////////////////
 
           await prisma.riderWallet.upsert({
             where: { riderId },
@@ -414,9 +338,6 @@ progress =
         }
       }
 
-      /* =====================================================
-         PEAK SLOT INCENTIVE
-      ===================================================== */
 
    if (program.programType === "PEAK_SLOT")
 {
@@ -446,9 +367,6 @@ const orderHour =
             continue;
           }
 
-          ////////////////////////////////////////////////////
-          // FIND SLOT PROGRESS
-          ////////////////////////////////////////////////////
 
           let slotProgress =
   await prisma.programProgress.findFirst({
@@ -463,9 +381,6 @@ const orderHour =
     }
   });
 
-          ////////////////////////////////////////////////////
-          // CREATE SLOT PROGRESS
-          ////////////////////////////////////////////////////
 
           if (!slotProgress) {
 
@@ -484,9 +399,6 @@ const orderHour =
   });
           }
 
-          ////////////////////////////////////////////////////
-          // UPDATE SLOT PROGRESS
-          ////////////////////////////////////////////////////
 
           slotProgress =
             await prisma.programProgress.update({
@@ -501,25 +413,15 @@ const orderHour =
               }
             });
 
-          ////////////////////////////////////////////////////
-          // PEAK REWARD
-          ////////////////////////////////////////////////////
 
           let peakReward = 0;
 
-          ////////////////////////////////////////////////////
-          // PER ORDER
-          ////////////////////////////////////////////////////
 
           if (slot.ruleType === "PER_ORDER") {
 
             peakReward =
               slot.rewardPerOrder || 0;
           }
-
-          ////////////////////////////////////////////////////
-          // SLAB
-          ////////////////////////////////////////////////////
 
           if (slot.ruleType === "SLAB") {
 
@@ -532,10 +434,6 @@ const orderHour =
               peakReward = slab.rewardAmount;
             }
           }
-
-          ////////////////////////////////////////////////////
-          // CREDIT PEAK REWARD
-          ////////////////////////////////////////////////////
 
           if (peakReward > 0) {
 
@@ -571,10 +469,6 @@ const orderHour =
         }
       }
 
-      /* =====================================================
-         REFERRAL BONUS
-      ===================================================== */
-
       if (
         program.programType === "REFERRAL"
       ) {
@@ -591,10 +485,6 @@ const orderHour =
           continue;
         }
 
-        //////////////////////////////////////////////////////
-        // UPDATE REFERRAL ORDERS
-        //////////////////////////////////////////////////////
-
         const updatedReferral =
           await prisma.referral.update({
             where: {
@@ -608,9 +498,6 @@ const orderHour =
             }
           });
 
-        //////////////////////////////////////////////////////
-        // CHECK TARGET
-        //////////////////////////////////////////////////////
 
         if (
           updatedReferral.totalOrders >=
@@ -622,10 +509,6 @@ const orderHour =
 
           const reward =
             slab?.rewardAmount || 0;
-
-          ////////////////////////////////////////////////////
-          // CHECK DUPLICATE PAYOUT
-          ////////////////////////////////////////////////////
 
           const existingReferralPayout =
             await prisma.programPayout.findFirst({
@@ -643,9 +526,6 @@ const orderHour =
             continue;
           }
 
-          ////////////////////////////////////////////////////
-          // CREDIT REFERRER
-          ////////////////////////////////////////////////////
 
           await prisma.riderWallet.upsert({
             where: {
@@ -672,9 +552,6 @@ const orderHour =
             }
           });
 
-          ////////////////////////////////////////////////////
-          // CREATE PAYOUT
-          ////////////////////////////////////////////////////
 
           await prisma.programPayout.create({
             data: {
@@ -689,9 +566,6 @@ const orderHour =
             }
           });
 
-          ////////////////////////////////////////////////////
-          // MARK COMPLETED
-          ////////////////////////////////////////////////////
 
           await prisma.referral.update({
             where: {
@@ -708,9 +582,6 @@ const orderHour =
         }
       }
 
-      /* =====================================================
-         JOINING BONUS
-      ===================================================== */
 
       if (
         program.programType === "JOINING_BONUS"
@@ -728,9 +599,6 @@ const orderHour =
           continue;
         }
 
-        //////////////////////////////////////////////////////
-        // PREVENT DUPLICATE PAYOUT
-        //////////////////////////////////////////////////////
 
         const existingPayout =
           await prisma.programPayout.findFirst({
@@ -745,9 +613,6 @@ const orderHour =
           continue;
         }
 
-        //////////////////////////////////////////////////////
-        // TARGET
-        //////////////////////////////////////////////////////
 
         const target =
           program.targets?.[0];
@@ -755,10 +620,6 @@ const orderHour =
         if (!target) {
           continue;
         }
-
-        //////////////////////////////////////////////////////
-        // COUNT ORDERS
-        //////////////////////////////////////////////////////
 
         const deliveredOrders =
           await prisma.order.count({
@@ -768,19 +629,13 @@ const orderHour =
             }
           });
 
-        //////////////////////////////////////////////////////
-        // CHECK ELIGIBILITY
-        //////////////////////////////////////////////////////
-
+  
         if (
           deliveredOrders >=
           target.targetOrders
         ) {
 
-          ////////////////////////////////////////////////////
-          // CREDIT WALLET
-          ////////////////////////////////////////////////////
-
+  
           await prisma.riderWallet.upsert({
             where: { riderId },
 
@@ -806,9 +661,6 @@ const orderHour =
             }
           });
 
-          ////////////////////////////////////////////////////
-          // CREATE PAYOUT
-          ////////////////////////////////////////////////////
 
           await prisma.programPayout.create({
             data: {
@@ -823,20 +675,13 @@ const orderHour =
       }
     }
 
-    ////////////////////////////////////////////////////////
-    // MARK ORDER PROCESSED
-    ////////////////////////////////////////////////////////
-
     await prisma.processedOrder.create({
       data: {
         orderId
       }
     });
 
-    ////////////////////////////////////////////////////////
-    // RESPONSE
-    ////////////////////////////////////////////////////////
-
+  
     return res.json({
       success: true,
       message:
