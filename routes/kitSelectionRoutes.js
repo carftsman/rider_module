@@ -151,14 +151,11 @@ router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
  * /api/kit/rider/joining-kit:
  *   post:
  *     summary: Request joining kit
- *     description: >
- *       Allows an authenticated rider to request a joining kit.
- *       Joining kit includes T_SHIRT, BAG, HELMET, JACKET and ID_CARD.
- *       Items are free until the configured freeLimit is reached in assetMaster.
  *     tags:
  *       - Joining Kit
  *     security:
  *       - bearerAuth: []
+ *     description: Rider can request joining kit using HOME_DELIVERY or PICKUP. If kit is already pending/in progress, request will be blocked.
  *     requestBody:
  *       required: true
  *       content:
@@ -178,10 +175,10 @@ router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
  *                     example: HOME_DELIVERY
  *                   name:
  *                     type: string
- *                     example: Ramu Kumar
+ *                     example: Ravi Kumar
  *                   completeAddress:
  *                     type: string
- *                     example: H.No 12-34, Madhapur, Hyderabad
+ *                     example: H.No 12, Madhapur, Hyderabad
  *                   pincode:
  *                     type: string
  *                     example: "500081"
@@ -196,131 +193,16 @@ router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
  *                     example: PICKUP
  *                   pickupLocationId:
  *                     type: string
- *                     example: 7f4b2c8a-91e2-4e49-bc7d-74f6e29f1a21
+ *                     example: pickup-location-id
  *     responses:
  *       201:
  *         description: Joining kit requested successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Joining kit requested successfully
- *                 totalItems:
- *                   type: integer
- *                   example: 5
- *                 totalPrice:
- *                   type: number
- *                   example: 897
- *                 isEntireKitFree:
- *                   type: boolean
- *                   example: false
- *                 freeItemCount:
- *                   type: integer
- *                   example: 2
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                         example: eb311c97-8da7-4805-8952-8f920fca96a2
- *                       riderId:
- *                         type: string
- *                         example: r1
- *                       assetType:
- *                         type: string
- *                         enum: [T_SHIRT, BAG, HELMET, JACKET, ID_CARD]
- *                         example: HELMET
- *                       quantity:
- *                         type: integer
- *                         example: 1
- *                       status:
- *                         type: string
- *                         enum: [READY_FOR_DISPATCH, PAYMENT_PENDING]
- *                         example: PAYMENT_PENDING
- *                       price:
- *                         type: number
- *                         example: 299
- *                       isFree:
- *                         type: boolean
- *                         example: false
- *                       deliveryDetails:
- *                         type: object
- *                         oneOf:
- *                           - type: object
- *                             properties:
- *                               deliveryMode:
- *                                 type: string
- *                                 example: HOME_DELIVERY
- *                               name:
- *                                 type: string
- *                                 example: Ramu Kumar
- *                               completeAddress:
- *                                 type: string
- *                                 example: H.No 12-34, Madhapur, Hyderabad
- *                               pincode:
- *                                 type: string
- *                                 example: "500081"
- *                           - type: object
- *                             properties:
- *                               deliveryMode:
- *                                 type: string
- *                                 example: PICKUP
- *                               pickupLocationId:
- *                                 type: string
- *                                 example: 7f4b2c8a-91e2-4e49-bc7d-74f6e29f1a21
  *       400:
- *         description: Bad request / validation error / joining kit already requested
- *         content:
- *           application/json:
- *             examples:
- *               deliveryModeRequired:
- *                 summary: deliveryMode missing
- *                 value:
- *                   success: false
- *                   message: deliveryMode is required
- *               invalidDeliveryMode:
- *                 summary: Invalid delivery mode
- *                 value:
- *                   success: false
- *                   message: Invalid deliveryMode
- *               homeDeliveryFieldsRequired:
- *                 summary: HOME_DELIVERY fields missing
- *                 value:
- *                   success: false
- *                   message: name, completeAddress and pincode required for HOME_DELIVERY
- *               pickupLocationRequired:
- *                 summary: PICKUP location missing
- *                 value:
- *                   success: false
- *                   message: pickupLocationId required for PICKUP
- *               alreadyRequested:
- *                 summary: Joining kit already requested
- *                 value:
- *                   success: false
- *                   message: Joining kit already requested
+ *         description: Validation error or joining kit already in progress
  *       401:
- *         description: Unauthorized rider
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Unauthorized
+ *         description: Unauthorized
  *       500:
- *         description: Internal server error
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Something went wrong
- *               error: Internal server error
+ *         description: Something went wrong
  */
 router.post("/rider/joining-kit", riderAuthMiddleWare, requestJoiningKit);
 router.post('/admin/assets', createAsset)

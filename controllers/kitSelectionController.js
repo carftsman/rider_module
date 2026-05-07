@@ -714,7 +714,6 @@ exports.requestJoiningKit = async (req, res) => {
       pickupLocationId
     } = req.body;
 
-    // delivery mode validation
     if (!deliveryMode) {
       return res.status(400).json({
         success: false,
@@ -722,10 +721,7 @@ exports.requestJoiningKit = async (req, res) => {
       });
     }
 
-    if (
-      deliveryMode !== "HOME_DELIVERY" &&
-      deliveryMode !== "PICKUP"
-    ) {
+    if (!["HOME_DELIVERY", "PICKUP"].includes(deliveryMode)) {
       return res.status(400).json({
         success: false,
         message: "Invalid deliveryMode"
@@ -736,115 +732,168 @@ exports.requestJoiningKit = async (req, res) => {
       if (!name || !completeAddress || !pincode) {
         return res.status(400).json({
           success: false,
-          message:
-            "name, completeAddress and pincode required for HOME_DELIVERY"
+          message: "name, completeAddress and pincode required for HOME_DELIVERY"
         });
       }
     }
 
-    if (deliveryMode === "PICKUP") {
-      if (!pickupLocationId) {
-        return res.status(400).json({
-          success: false,
-          message: "pickupLocationId required for PICKUP"
-        });
-      }
+    if (deliveryMode === "PICKUP" && !pickupLocationId) {
+      return res.status(400).json({
+        success: false,
+        message: "pickupLocationId required for PICKUP"
+      });
     }
 
     const joiningKitAssets = [
-      AssetType.T_SHIRT,
-      AssetType.BAG,
-      AssetType.HELMET,
-      AssetType.JACKET,
-      AssetType.ID_CARD
+      "T_SHIRT",
+      "BAG",
+      "HELMET",
+      "JACKET",
+      "ID_CARD"
     ];
 
-    const existingRequests = await prisma.assetRequest.findMany({
+    // Block only if kit request is still pending/in progress
+    const pendingStatuses = [
+      "PENDING",
+      "APPROVED",
+      "PAYMENT_PENDING",
+      "READY_FOR_DISPATCH",
+      "DISPATCHED"
+    ];
+
+    const existingPendingRequests = await prisma.assetRequest.findMany({
       where: {
         riderId,
-        assetType: { in: joiningKitAssets }
+        assetType: {
+          in: joiningKitAssets
+        },
+        status: {
+          in: pendingStatuses
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
       }
     });
 
-    if (existingRequests.length > 0) {
+    if (existingPendingRequests.length > 0) {
+      const statusSummary = existingPendingRequests.reduce((acc, item) => {
+        acc[item.status] = (acc[item.status] || 0) + 1;
+        return acc;
+      }, {});
+
       return res.status(400).json({
         success: false,
-        message: "Joining kit already requested"
+        message: "Joining kit already in progress",
+        statusSummary,
+        totalPendingItems: existingPendingRequests.length,
+        data: existingPendingRequests
       });
     }
 
-    const createdRequests = [];
-    let totalPrice = 0;
-    let freeItemCount = 0;
+    const result = await prisma.$transaction(async (tx) => {
+      const createdRequests = [];
+      let totalPrice = 0;
+      let freeItemCount = 0;
 
-    for (const assetType of joiningKitAssets) {
-      const asset = await prisma.assetMaster.findFirst({
-        where: { assetType }
-      });
-
-      if (!asset) continue;
-
-      const isFree = asset.issuedCount < asset.freeLimit;
-      const price = isFree ? 0 : Number(asset.price);
-
-      if (isFree) {
-        freeItemCount++;
+      if (deliveryMode === "HOME_DELIVERY") {
+        await tx.riderKitAddress.upsert({
+          where: { riderId },
+          update: {
+            name,
+            completeAddress,
+            pincode,
+            onboardingKitStatus: false
+          },
+          create: {
+            riderId,
+            name,
+            completeAddress,
+            pincode,
+            onboardingKitStatus: false
+          }
+        });
       }
 
-      const request = await prisma.assetRequest.create({
-        data: {
-          riderId,
-          assetType,
-          quantity: 1,
-          status: isFree
-            ? RequestStatus.READY_FOR_DISPATCH
-            : RequestStatus.PAYMENT_PENDING
-        }
-      });
+      for (const assetType of joiningKitAssets) {
+        const asset = await tx.assetMaster.findUnique({
+          where: { assetType }
+        });
 
-      createdRequests.push({
-        ...request,
-        deliveryDetails:
-          deliveryMode === "HOME_DELIVERY"
-            ? {
-                deliveryMode,
-                name,
-                completeAddress,
-                pincode
-              }
-            : {
-                deliveryMode,
-                pickupLocationId
-              },
-        price,
-        isFree
-      });
+        if (!asset) continue;
 
-      totalPrice += price;
+        const isFree = asset.issuedCount < asset.freeLimit;
+        const price = isFree ? 0 : Number(asset.price);
 
-      await prisma.assetMaster.update({
-        where: { id: asset.id },
-        data: {
-          issuedCount: { increment: 1 }
-        }
-      });
-    }
+        if (isFree) freeItemCount++;
 
-    const isEntireKitFree = freeItemCount === createdRequests.length;
+        const request = await tx.assetRequest.create({
+          data: {
+            riderId,
+            assetType,
+            quantity: 1,
+            deliveryMode,
+            pickupLocationId:
+              deliveryMode === "PICKUP" ? pickupLocationId : null,
+            status: isFree ? "READY_FOR_DISPATCH" : "PAYMENT_PENDING"
+          }
+        });
+
+        await tx.assetMaster.update({
+          where: { id: asset.id },
+          data: {
+            issuedCount: {
+              increment: 1
+            }
+          }
+        });
+
+        totalPrice += price;
+
+        createdRequests.push({
+          ...request,
+          deliveryDetails:
+            deliveryMode === "HOME_DELIVERY"
+              ? {
+                  deliveryMode,
+                  name,
+                  completeAddress,
+                  pincode
+                }
+              : {
+                  deliveryMode,
+                  pickupLocationId
+                },
+          price,
+          isFree
+        });
+      }
+
+      return {
+        createdRequests,
+        totalPrice,
+        freeItemCount
+      };
+    });
+
+    const isEntireKitFree =
+      result.createdRequests.length > 0 &&
+      result.freeItemCount === result.createdRequests.length;
 
     return res.status(201).json({
       success: true,
       message: isEntireKitFree
         ? "Congratulations! You got the free joining kit."
         : "Joining kit requested successfully",
-      totalItems: createdRequests.length,
-      totalPrice,
+      totalItems: result.createdRequests.length,
+      totalPrice: result.totalPrice,
       isEntireKitFree,
-      freeItemCount,
-      data: createdRequests
+      freeItemCount: result.freeItemCount,
+      data: result.createdRequests
     });
-
   } catch (error) {
+    console.error("Request Joining Kit Error:", error);
+
     return res.status(500).json({
       success: false,
       message: "Something went wrong",
@@ -852,7 +901,6 @@ exports.requestJoiningKit = async (req, res) => {
     });
   }
 };
-
 exports.verifyIssue = async (req, res) => {
   try {
     const { issueId } = req.params;
