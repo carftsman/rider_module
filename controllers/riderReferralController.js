@@ -789,3 +789,428 @@ exports.getReferralProgressByNewRider = async (req, res) => {
     });
   }
 };
+exports.getRefereeProgress = async (req, res) => {
+  try {
+    const riderId = req.rider?.id;
+
+    if (!riderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized rider",
+      });
+    }
+
+    const now = new Date();
+
+    const program = await prisma.program.findFirst({
+      where: {
+        programType: "REFERRAL",
+        isActive: true,
+        validFrom: { lte: now },
+        validTill: { gte: now },
+      },
+      include: {
+        referralConfig: true,
+        tasks: true,
+      },
+      orderBy: {
+        priority: "desc",
+      },
+    });
+
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        message: "No active referral program found",
+      });
+    }
+
+    const refereeTask = program.tasks.find((task) => task.role === "REFEREE");
+
+    if (!refereeTask) {
+      return res.status(404).json({
+        success: false,
+        message: "No referee rule found",
+      });
+    }
+
+    const completedOrders = await prisma.order.count({
+      where: {
+        riderId,
+        orderStatus: "DELIVERED",
+        createdAt: {
+          gte: program.validFrom,
+          lte: program.validTill,
+        },
+      },
+    });
+
+    const targetOrders =
+      refereeTask.targetOrders ||
+      refereeTask.maxOrders ||
+      refereeTask.minOrders ||
+      0;
+
+    const remainingOrders = Math.max(targetOrders - completedOrders, 0);
+
+    const isTargetCompleted =
+      targetOrders > 0 && completedOrders >= targetOrders;
+
+    const rewardAmount = isTargetCompleted
+      ? refereeTask.rewardAmount || refereeTask.fixedReward || 0
+      : 0;
+
+    return res.status(200).json({
+      success: true,
+      message: "Referee progress fetched successfully",
+      data: {
+        programId: program.id,
+        programName: program.name,
+        ruleType: program.ruleType,
+        trackingType: program.trackingType,
+
+        targetOrders,
+        completedOrders,
+        remainingOrders,
+
+        isTargetCompleted,
+
+        reward: {
+          eligible: isTargetCompleted,
+          amount: rewardAmount,
+        },
+
+        validFrom: program.validFrom,
+        validTill: program.validTill,
+      },
+    });
+  } catch (error) {
+    console.error("Get referee progress error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+exports.getReferrerSummary = async (req, res) => {
+  try {
+    const riderId = req.rider?.id;
+
+    if (!riderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized rider",
+      });
+    }
+
+    const referrer = await prisma.rider.findUnique({
+      where: { id: riderId },
+      include: {
+        profile: true,
+      },
+    });
+
+    if (!referrer) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    if (!referrer.partnerId) {
+      return res.status(400).json({
+        success: false,
+        message: "Rider does not have referral code",
+      });
+    }
+
+    const now = new Date();
+
+    const program = await prisma.program.findFirst({
+      where: {
+        programType: "REFERRAL",
+        isActive: true,
+        validFrom: { lte: now },
+        validTill: { gte: now },
+      },
+      include: {
+        referralConfig: true,
+        tasks: true,
+      },
+      orderBy: {
+        priority: "desc",
+      },
+    });
+
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        message: "No active referral program found",
+      });
+    }
+
+    const refereeTask = program.tasks.find((task) => task.role === "REFEREE");
+    const referrerTask = program.tasks.find((task) => task.role === "REFERRER");
+
+    const targetOrders =
+      refereeTask?.targetOrders ||
+      refereeTask?.maxOrders ||
+      refereeTask?.minOrders ||
+      0;
+
+    const referrerRewardAmount =
+      referrerTask?.rewardAmount ||
+      referrerTask?.fixedReward ||
+      referrerTask?.rewardPerOrder ||
+      0;
+
+    const referredRiders = await prisma.rider.findMany({
+      where: {
+        referredByPartnerId: referrer.partnerId,
+      },
+      include: {
+        profile: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    const referrals = await Promise.all(
+      referredRiders.map(async (referee) => {
+        const completedOrders = await prisma.order.count({
+          where: {
+            riderId: referee.id,
+            orderStatus: "DELIVERED",
+            createdAt: {
+              gte: program.validFrom,
+              lte: program.validTill,
+            },
+          },
+        });
+
+        const isCompleted =
+          targetOrders > 0 && completedOrders >= targetOrders;
+
+        return {
+          riderId: referee.id,
+          name: referee.profile?.fullName || null,
+          phoneNumber: referee.phoneNumber,
+
+          targetOrders,
+          completedOrders,
+          remainingOrders: Math.max(targetOrders - completedOrders, 0),
+
+          status: isCompleted ? "COMPLETED" : "PENDING",
+
+          referrerReward: {
+            eligible: isCompleted,
+            amount: isCompleted ? referrerRewardAmount : 0,
+          },
+        };
+      })
+    );
+
+    const completedReferrals = referrals.filter(
+      (item) => item.status === "COMPLETED"
+    ).length;
+
+    const pendingReferrals = referrals.filter(
+      (item) => item.status === "PENDING"
+    ).length;
+
+    const totalEarnings = referrals.reduce(
+      (sum, item) => sum + item.referrerReward.amount,
+      0
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Referrer summary fetched successfully",
+      data: {
+        referrer: {
+          riderId: referrer.id,
+          name: referrer.profile?.fullName || null,
+          referralCode: referrer.partnerId,
+        },
+
+        program: {
+          programId: program.id,
+          programName: program.name,
+          ruleType: program.ruleType,
+          trackingType: program.trackingType,
+        },
+
+        summary: {
+          totalReferredRiders: referredRiders.length,
+          completedReferrals,
+          pendingReferrals,
+          rewardPerSuccessfulReferral: referrerRewardAmount,
+          totalEarnings,
+        },
+
+        referrals,
+      },
+    });
+  } catch (error) {
+    console.error("Get referrer summary error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+exports.getReferralEarnings = async (req, res) => {
+  try {
+    const riderId = req.rider?.id;
+
+    if (!riderId) {
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized rider",
+      });
+    }
+
+    const rider = await prisma.rider.findUnique({
+      where: { id: riderId },
+      include: {
+        profile: true,
+      },
+    });
+
+    if (!rider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found",
+      });
+    }
+
+    const now = new Date();
+
+    const program = await prisma.program.findFirst({
+      where: {
+        programType: "REFERRAL",
+        isActive: true,
+        validFrom: { lte: now },
+        validTill: { gte: now },
+      },
+      include: {
+        referralConfig: true,
+        tasks: true,
+      },
+      orderBy: {
+        priority: "desc",
+      },
+    });
+
+    if (!program) {
+      return res.status(404).json({
+        success: false,
+        message: "No active referral program found",
+      });
+    }
+
+    const refereeTask = program.tasks.find((task) => task.role === "REFEREE");
+    const referrerTask = program.tasks.find((task) => task.role === "REFERRER");
+
+    const targetOrders =
+      refereeTask?.targetOrders ||
+      refereeTask?.maxOrders ||
+      refereeTask?.minOrders ||
+      0;
+
+    const completedOrders = await prisma.order.count({
+      where: {
+        riderId,
+        orderStatus: "DELIVERED",
+        createdAt: {
+          gte: program.validFrom,
+          lte: program.validTill,
+        },
+      },
+    });
+
+    const refereeCompleted =
+      targetOrders > 0 && completedOrders >= targetOrders;
+
+    const refereeEarning = refereeCompleted
+      ? refereeTask?.rewardAmount || refereeTask?.fixedReward || 0
+      : 0;
+
+    let referredRiders = [];
+
+    if (rider.partnerId) {
+      referredRiders = await prisma.rider.findMany({
+        where: {
+          referredByPartnerId: rider.partnerId,
+        },
+      });
+    }
+
+    const referrerRewardAmount =
+      referrerTask?.rewardAmount ||
+      referrerTask?.fixedReward ||
+      referrerTask?.rewardPerOrder ||
+      0;
+
+    let completedReferralCount = 0;
+
+    for (const referredRider of referredRiders) {
+      const referredCompletedOrders = await prisma.order.count({
+        where: {
+          riderId: referredRider.id,
+          orderStatus: "DELIVERED",
+          createdAt: {
+            gte: program.validFrom,
+            lte: program.validTill,
+          },
+        },
+      });
+
+      if (targetOrders > 0 && referredCompletedOrders >= targetOrders) {
+        completedReferralCount++;
+      }
+    }
+
+    const referrerEarning = completedReferralCount * referrerRewardAmount;
+
+    return res.status(200).json({
+      success: true,
+      message: "Referral earnings fetched successfully",
+      data: {
+        riderId: rider.id,
+        riderName: rider.profile?.fullName || null,
+
+        refereeProgress: {
+          targetOrders,
+          completedOrders,
+          remainingOrders: Math.max(targetOrders - completedOrders, 0),
+          isCompleted: refereeCompleted,
+          earning: refereeEarning,
+        },
+
+        referrerProgress: {
+          referralCode: rider.partnerId,
+          totalReferredRiders: referredRiders.length,
+          completedReferralCount,
+          rewardPerReferral: referrerRewardAmount,
+          earning: referrerEarning,
+        },
+
+        totalReferralEarnings: refereeEarning + referrerEarning,
+      },
+    });
+  } catch (error) {
+    console.error("Get referral earnings error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};

@@ -207,7 +207,7 @@ exports.createReferralConfig = async (req, res) => {
       },
       include: {
         referralConfig: true,
-        tasks: true,
+        // tasks: true,
       },
     });
 

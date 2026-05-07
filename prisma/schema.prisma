@@ -1944,9 +1944,9 @@ model Program {
 
   name String
 
-  description String?
-
-  programType ProgramType
+  description      String?
+  joiningBonusType JoiningBonusType?
+  programType      ProgramType
 
   cityId String[]
 
@@ -2026,9 +2026,9 @@ model ProgramRule {
 
   minOrders Int?
 
-  minEarnings Float?
-
-  program Program @relation(fields: [programId], references: [id], onDelete: Cascade)
+  minEarnings    Float?
+  perOrderAmount Float?
+  program        Program @relation(fields: [programId], references: [id], onDelete: Cascade)
 
   @@index([programId])
 }
@@ -2076,18 +2076,18 @@ model ProgramTask {
 
   programId String
 
-  role              IncentiveRole?
-  taskRuleType      RuleType?
-  dayNumber         Int?
-  rewardPerOrder    Float?
-  maxOrders         Int?
-  maxEarning        Float?
-  minOrders         Int?
-  minAcceptanceRate Float?
-  minPeakSlots      Int?
-  minEarnings       Float?
-  targetOrders      Int?
-
+  role                  IncentiveRole?
+  taskRuleType          RuleType?
+  dayNumber             Int?
+  rewardPerOrder        Float?
+  maxOrders             Int?
+  maxEarning            Float?
+  minOrders             Int?
+  minAcceptanceRate     Float?
+  minPeakSlots          Int?
+  minEarnings           Float?
+  targetOrders          Int?
+  minCompletionRate     Float?
   fixedReward           Float?
   rewardAmount          Float                 @default(0)
   taskType              TaskType              @default(ORDERS)
@@ -2491,4 +2491,10 @@ model ZonePincode {
   zone Zone @relation(fields: [zoneId], references: [id])
 
   @@unique([pincode, zoneId])
+}
+
+enum JoiningBonusType {
+  TASK_BASED
+  PER_ORDER
+  HYBRID
 }

@@ -1,7 +1,10 @@
 const express = require("express");
 const router = express.Router();
 const{getReferralProgress,getReferralRewards,getReferralCampaign,shareReferralByCode,referRider,getMyReferralSummary,
-  getReferralProgressByNewRider
+  getReferralProgressByNewRider,
+  getRefereeProgress,
+  getReferrerSummary,
+  getReferralEarnings
 }=require('../controllers/riderReferralController')
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 /**
@@ -629,4 +632,21 @@ router.get("/summary", riderAuthMiddleWare, getMyReferralSummary);
  *               error: Something went wrong
  */
 router.get("/referral/progress/:newRiderId", getReferralProgressByNewRider);
+router.get(
+  "/referral/referee-progress",
+  riderAuthMiddleWare,
+  getRefereeProgress
+);
+
+router.get(
+  "/referral/referrer-summary",
+  riderAuthMiddleWare,
+  getReferrerSummary
+);
+
+router.get(
+  "/referral/earnings",
+  riderAuthMiddleWare,
+  getReferralEarnings
+);
 module.exports=router;

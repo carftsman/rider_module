@@ -236,216 +236,589 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
 }
 
 async function confirmOrder(req, res) {
+
   try {
+
     const { orderId } = req.params;
  
+    /* =========================================================
+
+       FETCH ORDER
+
+    ========================================================= */
+ 
     const order = await prisma.order.findFirst({
+
       where: { orderId },
+
       include: {
+
         OrderPickupAddress: true,
+
         OrderDeliveryAddress: true
+
       }
+
     });
  
-    if (!order)
-      return res.status(404).json({ success: false, message: "Order not found" });
+    if (!order) {
+
+      return res.status(404).json({
+
+        success: false,
+
+        message: "Order not found"
+
+      });
+
+    }
  
-    if (order.orderStatus !== "CREATED")
-      return res.status(400).json({ success: false, message: "Order already processed" });
+    if (order.orderStatus !== "CREATED") {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "Order already processed"
+
+      });
+
+    }
  
     const now = new Date();
  
-    const pickupPincode = order.OrderPickupAddress?.pincode;
+    const pickupPincode =
+
+      order.OrderPickupAddress?.pincode;
  
     if (!pickupPincode) {
+
       return res.status(400).json({
+
         success: false,
+
         message: "Pickup pincode missing"
+
       });
+
     }
  
-    //  RIDER FILTER 
+    /* =========================================================
+
+       RIDER FILTER
+
+    ========================================================= */
+ 
     const riders = await prisma.rider.findMany({
+
       where: {
-        isFullyRegistered:true,
+
+        isFullyRegistered: true,
+ 
         orderState: "READY",
+ 
         isOnline: true,
+ 
         slotBookings: {
+
           some: {
+
             status: "BOOKED",
-            slotEndAt: { gte: now }
+ 
+            slotEndAt: {
+
+              gte: now
+
+            }
+
           }
+
         },
-        location: { pincode: pickupPincode }
+ 
+        location: {
+
+          is: {
+
+            pincode: pickupPincode
+
+          }
+
+        }
+
       },
+ 
       take: 10,
+ 
       select: {
+
         id: true,
-        location: { select: { pincode: true } }
+ 
+        isFullyRegistered: true,
+ 
+        location: {
+
+          select: {
+
+            pincode: true
+
+          }
+
+        }
+
       }
+
     });
  
-    if (!riders.length)
-      return res.status(400).json({ success: false, message: "No riders available" });
- 
-    //  ROUTE
-    const routeInfo = await getRouteInfo(
-      order.OrderPickupAddress,
-      order.OrderDeliveryAddress
+    console.log(
+
+      "✅ Eligible Riders:",
+
+      riders.map(r => ({
+
+        id: r.id,
+
+        isFullyRegistered: r.isFullyRegistered,
+
+        pincode: r.location?.pincode
+
+      }))
+
     );
  
-    //  FETCH PAYOUT CONFIG 
-    const payoutConfig = await prisma.payoutConfig.findFirst({
-      where: {
-        isActive: true,
-        OR: [
-          { pincodeIds: { has: pickupPincode } },
-          { pincodeIds: { isEmpty: true } } // fallback config
-        ]
-      },
-      orderBy: { version: "desc" }
-    });
+    if (!riders.length) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "No riders available"
+
+      });
+
+    }
+ 
+    /* =========================================================
+
+       ROUTE INFO
+
+    ========================================================= */
+ 
+    const routeInfo = await getRouteInfo(
+
+      order.OrderPickupAddress,
+
+      order.OrderDeliveryAddress
+
+    );
+ 
+    /* =========================================================
+
+       PAYOUT CONFIG
+
+    ========================================================= */
+ 
+    const payoutConfig =
+
+      await prisma.payoutConfig.findFirst({
+
+        where: {
+
+          isActive: true,
+ 
+          OR: [
+
+            {
+
+              pincodeIds: {
+
+                has: pickupPincode
+
+              }
+
+            },
+ 
+            {
+
+              pincodeIds: {
+
+                isEmpty: true
+
+              }
+
+            }
+
+          ]
+
+        },
+ 
+        orderBy: {
+
+          version: "desc"
+
+        }
+
+      });
  
     if (!payoutConfig) {
+
       return res.status(400).json({
+
         success: false,
+
         message: "No payout config found"
+
       });
+
     }
  
     const {
+
       basePay,
+
       perKmRate,
+
       surgeConfig,
+
       peakConfig,
+
       weatherConfig
+
     } = payoutConfig;
  
-    //  DISTANCE PAY
+    /* =========================================================
+
+       DISTANCE PAY
+
+    ========================================================= */
+ 
     let distancePay = 0;
  
     if (routeInfo.distanceKm > 4) {
-      distancePay = (routeInfo.distanceKm - 4) * perKmRate;
+
+      distancePay =
+
+        (routeInfo.distanceKm - 4) * perKmRate;
+
     }
  
-    // SURGE 
+    /* =========================================================
+
+       SURGE PAY
+
+    ========================================================= */
+ 
     let surgePay = 0;
  
     if (surgeConfig?.enabled) {
-      const multiplier = surgeConfig.multiplier || 1;
-      surgePay = (basePay + distancePay) * (multiplier - 1);
+
+      const multiplier =
+
+        surgeConfig.multiplier || 1;
+ 
+      surgePay =
+
+        (basePay + distancePay) *
+
+        (multiplier - 1);
+
     }
  
-    //  PEAK BONUS 
+    /* =========================================================
+
+       PEAK BONUS
+
+    ========================================================= */
+ 
     let peakBonus = 0;
  
     if (peakConfig?.enabled) {
-      const currentHour = new Date().getHours();
+
+      const currentHour =
+
+        new Date().getHours();
  
-      const start = parseInt(peakConfig.start.split(":")[0]);
-      const end = parseInt(peakConfig.end.split(":")[0]);
+      const start = parseInt(
+
+        peakConfig.start.split(":")[0]
+
+      );
  
-      if (currentHour >= start && currentHour <= end) {
+      const end = parseInt(
+
+        peakConfig.end.split(":")[0]
+
+      );
+ 
+      if (
+
+        currentHour >= start &&
+
+        currentHour <= end
+
+      ) {
+
         peakBonus = peakConfig.bonus || 0;
+
       }
+
     }
  
-    //  WEATHER BONUS 
+    /* =========================================================
+
+       WEATHER BONUS
+
+    ========================================================= */
+ 
     let weatherBonus = 0;
  
     const weather = await getWeather(
-  order.OrderPickupAddress.latitude,
-  order.OrderPickupAddress.longitude
-);
 
-const isRaining = weather.isRaining;
+      order.OrderPickupAddress.latitude,
+
+      order.OrderPickupAddress.longitude
+
+    );
  
-    if (isRaining && weatherConfig?.RAIN) {
+    const isRaining = weather.isRaining;
+ 
+    if (
+
+      isRaining &&
+
+      weatherConfig?.RAIN
+
+    ) {
+
       weatherBonus = weatherConfig.RAIN;
+
     }
  
-    //  TOTAL
+    /* =========================================================
+
+       TOTAL EARNING
+
+    ========================================================= */
+ 
     const totalEarning =
+
       basePay +
+
       distancePay +
+
       surgePay +
+
       peakBonus +
+
       weatherBonus;
  
-    //  TRANSACTION 
+    /* =========================================================
+
+       TRANSACTION
+
+    ========================================================= */
+ 
     await prisma.$transaction(async (tx) => {
+
+      /* -------------------------
+
+         UPDATE ORDER
+
+      ------------------------- */
  
       await tx.order.update({
-        where: { id: order.id },
-        data: { orderStatus: "CONFIRMED" }
+
+        where: {
+
+          id: order.id
+
+        },
+ 
+        data: {
+
+          orderStatus: "CONFIRMED"
+
+        }
+
       });
+ 
+      /* -------------------------
+
+         CREATE ORDER ALLOCATION
+
+      ------------------------- */
  
       await tx.orderAllocation.create({
+
         data: {
+
           orderId: order.orderId,
-          expiresAt: new Date(Date.now() + 120000),
+ 
+          expiresAt: new Date(
+
+            Date.now() + 120000
+
+          ),
+ 
           OrderCandidateRiders: {
+
             create: riders.map(r => ({
+
               riderId: r.id,
+
               status: "PENDING",
+
               notifiedAt: new Date()
+
             }))
+
           }
+
         }
+
       });
+ 
+      /* -------------------------
+
+         CREATE EARNING
+
+      ------------------------- */
  
       await tx.orderRiderEarning.create({
+
         data: {
+
           orderId: order.orderId,
+ 
           basePay,
+ 
           distancePay,
+ 
           surgePay,
+ 
           tips: 0,
+ 
           totalEarning,
+ 
           credited: false
+
         }
+
       });
+ 
+      /* -------------------------
+
+         CREATE TRACKING
+
+      ------------------------- */
  
       await tx.orderTracking.create({
+
         data: {
+
           orderId: order.orderId,
-          distanceInKm: routeInfo.distanceKm,
-          durationInMin: routeInfo.etaMinutes
+ 
+          distanceInKm:
+
+            routeInfo.distanceKm,
+ 
+          durationInMin:
+
+            routeInfo.etaMinutes
+
         }
+
       });
- 
+
     });
  
-    //  NOTIFY 
-    riders.forEach(rider => {
-      notifyRider(rider.id, {
+    /* =========================================================
+
+       NOTIFY RIDERS
+
+    ========================================================= */
+ 
+    for (const rider of riders) {
+
+      await notifyRider(rider.id, {
+
         type: "ORDER_POPUP",
+ 
         orderId: order.orderId,
-        vendorShopName: order.vendorShopName,
-        pickupLocation: order.OrderPickupAddress,
-        dropLocation: order.OrderDeliveryAddress,
-        distanceKm: routeInfo.distanceKm,
-        etaMinutes: routeInfo.etaMinutes,
-        estimatedEarning: totalEarning
+ 
+        vendorShopName:
+
+          order.vendorShopName,
+ 
+        pickupLocation:
+
+          order.OrderPickupAddress,
+ 
+        dropLocation:
+
+          order.OrderDeliveryAddress,
+ 
+        distanceKm:
+
+          routeInfo.distanceKm,
+ 
+        etaMinutes:
+
+          routeInfo.etaMinutes,
+ 
+        estimatedEarning:
+
+          totalEarning
+
       });
-    });
+
+    }
+ 
+    /* =========================================================
+
+       RESPONSE
+
+    ========================================================= */
  
     return res.status(200).json({
+
       success: true,
-      message: "Order confirmed and sent to riders",
+ 
+      message:
+
+        "Order confirmed and sent to riders",
+ 
       estimatedEarning: totalEarning,
+ 
       notifiedRiders: riders.length
+
     });
  
   } catch (err) {
-    console.error("Confirm order error:", err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || "Failed to confirm order"
-    });
-  }
-}
 
+    console.error(
+
+      "❌ Confirm order error:",
+
+      err
+
+    );
+ 
+    return res.status(500).json({
+
+      success: false,
+ 
+      message:
+
+        err.message ||
+
+        "Failed to confirm order"
+
+    });
+
+  }
+
+}
+ 
 
 
 
