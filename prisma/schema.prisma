@@ -2078,13 +2078,17 @@ model ProgramTask {
 
   role IncentiveRole?
 
-  dayNumber Int?
-
+  dayNumber         Int?
+  rewardPerOrder    Float?
+  maxOrders         Int?
+  maxEarning        Float?
   minOrders         Int?
   minAcceptanceRate Float?
   minPeakSlots      Int?
   minEarnings       Float?
+  targetOrders      Int?
 
+  fixedReward           Float?
   rewardAmount          Float
   taskType              TaskType              @default(ORDERS)
   program               Program               @relation(fields: [programId], references: [id], onDelete: Cascade)
