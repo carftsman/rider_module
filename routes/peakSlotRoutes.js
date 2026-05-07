@@ -10,7 +10,7 @@ const prisma = require("../config/prisma");
  *   post:
  *     summary: Create Peak Slot Incentive (PER_ORDER)
  *     tags: [Peak Slot Incentives]
- *     description: Create peak slot incentive using PER_ORDER structure.
+ *     description: Create peak slot incentive using PER_ORDER, SLAB or FIXED_TARGET.
  *
  *     requestBody:
  *       required: true

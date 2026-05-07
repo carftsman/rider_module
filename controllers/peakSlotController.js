@@ -26,6 +26,14 @@ const createPeakSlot = async (req, res) => {
       return await createSlabPeakSlot(req, res);
     }
 
+    if (body.ruleType === "FIXED_TARGET") {
+  return await createFixedTargetIncentive(req, res);
+}
+
+if (body.ruleType === "HYBRID") {
+  return await createHybridDailyIncentive(req, res);
+}
+
     return res.status(400).json({
       success: false,
       message: "Invalid ruleType"
@@ -115,49 +123,70 @@ const createPerOrderPeakSlot = async (req, res) => {
       ? body.pincodeIds.map(String)
       : [String(body.pincodeIds)];
 
-    const existingPrograms = await prisma.program.findMany({
-      where: {
-        pincodeIds: {
-          equals: pincodeIds,
-        },
-        isActive: true,
-        validFrom: {
-          lte: end,
-        },
-        validTill: {
-          gte: start,
-        },
+   const existingPrograms =
+  await prisma.program.findMany({
+
+    where: {
+
+      programType: "PEAK_SLOT",
+
+      isActive: true,
+
+      pincodeIds: {
+        hasSome: pincodeIds
       },
-      include: {
-        slots: true,
+
+      validFrom: {
+        lte: end
       },
-    });
 
-    const conflict = existingPrograms.some(program =>
-      program.slots.some(existingSlot =>
-        body.slots.some(newSlot => {
+      validTill: {
+        gte: start
+      }
+    },
 
-          const newStart = toMinutes(newSlot.startTime);
-          const newEnd = toMinutes(newSlot.endTime);
+    include: {
+      slots: true
+    }
+  });
 
-          const existingStart = existingSlot.startMinutes;
-          const existingEnd = existingSlot.endMinutes;
+    const conflict = existingPrograms.some(program => {
 
-          const timeOverlap =
-            newStart < existingEnd &&
-            newEnd > existingStart;
+  // DATE OVERLAP
 
-          const existingDays = existingSlot.daysOfWeek || [];
-          const newDays = newSlot.daysOfWeek || [];
+  const dateOverlap =
+    start <= program.validTill &&
+    end >= program.validFrom;
 
-          const dayOverlap = existingDays.some(day =>
-            newDays.includes(day)
-          );
+  if (!dateOverlap) {
+    return false;
+  }
 
-          return timeOverlap && dayOverlap;
-        })
-      )
-    );
+  return program.slots.some(existingSlot =>
+
+    body.slots.some(newSlot => {
+
+      const newStart =
+        toMinutes(newSlot.startTime);
+
+      const newEnd =
+        toMinutes(newSlot.endTime);
+
+      const existingStart =
+        existingSlot.startMinutes;
+
+      const existingEnd =
+        existingSlot.endMinutes;
+
+      // TIME OVERLAP
+
+      return (
+        newStart < existingEnd &&
+        newEnd > existingStart
+      );
+    })
+  );
+});
 
     if (conflict) {
       return res.status(400).json({
@@ -256,11 +285,11 @@ const createSlabPeakSlot = async (req, res) => {
     }
 
     //  Normalize pincodeIds
-    const pincodeIds = Array.isArray(body.pincode)
-      ? body.pincode.map(String)
-      : body.pincode
-        ? [String(body.pincode)]
-        : [];
+    const pincodeIds = Array.isArray(body.pincodeIds)
+  ? body.pincodeIds.map(String)
+  : body.pincodeIds
+    ? [String(body.pincodeIds)]
+    : [];
 
     //  Validate slots BEFORE DB
     for (const slot of body.slots) {
@@ -291,50 +320,71 @@ const createSlabPeakSlot = async (req, res) => {
     const start = new Date(body.dateRange.startDate);
     const end = new Date(body.dateRange.endDate);
 
-    const existingPrograms = await prisma.program.findMany({
-      where: {
-        pincodeIds: {
-          hasSome: pincodeIds, 
-        },
-        isActive: true,
-        validFrom: {
-          lte: end,
-        },
-        validTill: {
-          gte: start,
-        },
+    const existingPrograms =
+  await prisma.program.findMany({
+
+    where: {
+
+      programType: "PEAK_SLOT",
+
+      isActive: true,
+
+      pincodeIds: {
+        hasSome: pincodeIds
       },
-      include: {
-        slots: true,
+
+      validFrom: {
+        lte: end
       },
-    });
+
+      validTill: {
+        gte: start
+      }
+    },
+
+    include: {
+      slots: true
+    }
+  });
 
     // CONFLICT CHECK
-    const conflict = existingPrograms.some(program =>
-      program.slots.some(existingSlot =>
-        body.slots.some(newSlot => {
+   const conflict = existingPrograms.some(program => {
 
-          const newStart = toMinutes(newSlot.startTime);
-          const newEnd = toMinutes(newSlot.endTime);
+  // DATE OVERLAP
 
-          const existingStart = existingSlot.startMinutes;
-          const existingEnd = existingSlot.endMinutes;
+  const dateOverlap =
+    start <= program.validTill &&
+    end >= program.validFrom;
 
-          const timeOverlap =
-            newStart < existingEnd &&
-            newEnd > existingStart;
+  if (!dateOverlap) {
+    return false;
+  }
 
-          const existingDays = existingSlot.daysOfWeek || [];
-          const newDays = newSlot.daysOfWeek || [];
+  return program.slots.some(existingSlot =>
 
-          const dayOverlap = existingDays.some(day =>
-            newDays.includes(day)
-          );
+    body.slots.some(newSlot => {
 
-          return timeOverlap && dayOverlap;
-        })
-      )
-    );
+      const newStart =
+        toMinutes(newSlot.startTime);
+
+      const newEnd =
+        toMinutes(newSlot.endTime);
+
+      const existingStart =
+        existingSlot.startMinutes;
+
+      const existingEnd =
+        existingSlot.endMinutes;
+
+      // TIME OVERLAP
+
+      return (
+        newStart < existingEnd &&
+        newEnd > existingStart
+      );
+    })
+  );
+});
 
     if (conflict) {
       return res.status(400).json({
@@ -402,6 +452,627 @@ const createSlabPeakSlot = async (req, res) => {
   }
 };
 
+//FIXED
+const createFixedTargetIncentive = async (req, res) => {
+  try {
+
+    const body = req.body;
+
+    // CITY VALIDATION
+
+    if (!body.cityName) {
+      return res.status(400).json({
+        success: false,
+        message: "cityName is required",
+      });
+    }
+
+    // FIND CITY
+
+    const city = await prisma.city.findFirst({
+      where: {
+        name: {
+          equals: body.cityName,
+          mode: "insensitive",
+        },
+      },
+    });
+
+    if (!city) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid cityName",
+      });
+    }
+
+    // NAME VALIDATION
+
+    if (!body.name) {
+      return res.status(400).json({
+        success: false,
+        message: "name is required",
+      });
+    }
+
+    // DATE VALIDATION
+
+    if (
+      !body.dateRange?.startDate ||
+      !body.dateRange?.endDate
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "dateRange is required",
+      });
+    }
+
+    const start = new Date(body.dateRange.startDate);
+
+    const end = new Date(body.dateRange.endDate);
+
+    if (start > end) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date range",
+      });
+    }
+
+    // PINCODES
+
+    const pincodeIds = Array.isArray(body.pincodeIds)
+      ? body.pincodeIds.map(String)
+      : [String(body.pincodeIds)];
+
+    // SLOT VALIDATION
+
+    if (!Array.isArray(body.slots) || !body.slots.length) {
+      return res.status(400).json({
+        success: false,
+        message: "slots are required",
+      });
+    }
+
+    // TEMP RESTRICTION
+
+    if (body.slots.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Only one slot allowed for FIXED_TARGET",
+      });
+    }
+
+    for (const slot of body.slots) {
+
+      if (!slot.startTime || !slot.endTime) {
+        return res.status(400).json({
+          success: false,
+          message: "slot time is required",
+        });
+      }
+
+      const startMin = toMinutes(slot.startTime);
+
+      const endMin = toMinutes(slot.endTime);
+
+      if (startMin >= endMin) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid slot timing",
+        });
+      }
+
+      if (!slot.target?.orders) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "slot.target.orders is required",
+        });
+      }
+
+      if (!slot.reward?.amount) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "slot.reward.amount is required",
+        });
+      }
+    }
+
+    // FETCH EXISTING PROGRAMS
+
+   const existingPrograms =
+  await prisma.program.findMany({
+
+    where: {
+
+      programType: "PEAK_SLOT",
+
+      isActive: true,
+
+      pincodeIds: {
+        hasSome: pincodeIds
+      },
+
+      validFrom: {
+        lte: end
+      },
+
+      validTill: {
+        gte: start
+      }
+    },
+
+    include: {
+      slots: true
+    }
+  });
+    // SLOT OVERLAP CHECK
+
+    const conflict = existingPrograms.some(program => {
+
+  // DATE OVERLAP
+
+  const dateOverlap =
+    start <= program.validTill &&
+    end >= program.validFrom;
+
+  if (!dateOverlap) {
+    return false;
+  }
+
+  return program.slots.some(existingSlot =>
+
+    body.slots.some(newSlot => {
+
+      const newStart =
+        toMinutes(newSlot.startTime);
+
+      const newEnd =
+        toMinutes(newSlot.endTime);
+
+      const existingStart =
+        existingSlot.startMinutes;
+
+      const existingEnd =
+        existingSlot.endMinutes;
+
+      // TIME OVERLAP
+
+      return (
+        newStart < existingEnd &&
+        newEnd > existingStart
+      );
+    })
+  );
+});
+
+    if (conflict) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Fixed target slot already exists for this time range and pincode",
+      });
+    }
+
+    // CREATE PROGRAM
+
+    const program =
+  await prisma.program.create({
+    data: {
+
+      name: body.name,
+
+      programType: "PEAK_SLOT",
+
+      trackingType: "DAILY",
+
+      ruleType: "FIXED_TARGET",
+
+      validFrom: start,
+
+      validTill: end,
+
+      cityId: [String(city.id)],
+
+      pincodeIds,
+
+      daysOfWeek:
+        body.slots[0].daysOfWeek || [],
+
+      weekStartDay:
+        body.weekStartDay || "MON",
+
+      isActive:
+        body.isActive ?? true
+    }
+  });
+
+    // CREATE SLOT + TARGET
+
+    for (const slot of body.slots) {
+
+      await prisma.programSlot.create({
+
+        data: {
+
+          programId: program.id,
+
+          startMinutes:
+            toMinutes(slot.startTime),
+
+          endMinutes:
+            toMinutes(slot.endTime),
+
+          daysOfWeek:
+            slot.daysOfWeek || [],
+
+          ruleType: "FIXED_TARGET"
+        }
+      });
+
+      await prisma.programTarget.create({
+
+        data: {
+
+          programId: program.id,
+
+          targetOrders:
+            slot.target.orders,
+
+          rewardAmount:
+            slot.reward.amount
+        }
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Peak fixed target created",
+
+      data: {
+        id: program.id,
+      },
+    });
+
+  } catch (err) {
+
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+//HYBRID
+const createHybridDailyIncentive = async (req, res) => {
+  try {
+
+    const body = req.body;
+
+    // CITY VALIDATION
+
+    if (!body.cityName) {
+      return res.status(400).json({
+        success: false,
+        message: "cityName is required"
+      });
+    }
+
+    // FIND CITY
+
+    const city = await prisma.city.findFirst({
+      where: {
+        name: {
+          equals: body.cityName,
+          mode: "insensitive"
+        }
+      }
+    });
+
+    if (!city) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid cityName"
+      });
+    }
+
+    // NAME VALIDATION
+
+    if (!body.name) {
+      return res.status(400).json({
+        success: false,
+        message: "name is required"
+      });
+    }
+
+    // DATE VALIDATION
+
+    if (
+      !body.dateRange?.startDate ||
+      !body.dateRange?.endDate
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "dateRange is required"
+      });
+    }
+
+    const start =
+      new Date(body.dateRange.startDate);
+
+    const end =
+      new Date(body.dateRange.endDate);
+
+    if (start > end) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date range"
+      });
+    }
+
+    // PINCODES
+
+    const pincodeIds = Array.isArray(body.pincodeIds)
+      ? body.pincodeIds.map(String)
+      : [String(body.pincodeIds)];
+
+    // SLOT VALIDATION
+
+    if (
+      !Array.isArray(body.slots) ||
+      !body.slots.length
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "slots are required"
+      });
+    }
+
+    // TEMP LIMIT
+
+    if (body.slots.length > 1) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Only one slot allowed for HYBRID"
+      });
+    }
+
+    for (const slot of body.slots) {
+
+      if (
+        !slot.startTime ||
+        !slot.endTime
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "slot time is required"
+        });
+      }
+
+      const startMin =
+        toMinutes(slot.startTime);
+
+      const endMin =
+        toMinutes(slot.endTime);
+
+      if (startMin >= endMin) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid slot timing"
+        });
+      }
+
+      if (!slot.conditions) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "slot.conditions are required"
+        });
+      }
+
+      if (!slot.reward?.amount) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "slot.reward.amount is required"
+        });
+      }
+    }
+
+    // EXISTING PROGRAM CHECK
+
+    const existingPrograms =
+  await prisma.program.findMany({
+
+    where: {
+
+      programType: "PEAK_SLOT",
+
+      isActive: true,
+
+      pincodeIds: {
+        hasSome: pincodeIds
+      },
+
+      validFrom: {
+        lte: end
+      },
+
+      validTill: {
+        gte: start
+      }
+    },
+
+    include: {
+      slots: true
+    }
+  });
+    // SLOT OVERLAP CHECK
+
+    const conflict = existingPrograms.some(program => {
+
+  // DATE OVERLAP
+
+  const dateOverlap =
+    start <= program.validTill &&
+    end >= program.validFrom;
+
+  if (!dateOverlap) {
+    return false;
+  }
+
+  return program.slots.some(existingSlot =>
+
+    body.slots.some(newSlot => {
+
+      const newStart =
+        toMinutes(newSlot.startTime);
+
+      const newEnd =
+        toMinutes(newSlot.endTime);
+
+      const existingStart =
+        existingSlot.startMinutes;
+
+      const existingEnd =
+        existingSlot.endMinutes;
+
+      // TIME OVERLAP
+
+      return (
+        newStart < existingEnd &&
+        newEnd > existingStart
+      );
+    })
+  );
+});
+
+    if (conflict) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Hybrid incentive already exists for this slot and pincode"
+      });
+    }
+
+    // CREATE PROGRAM
+
+    const program =
+      await prisma.program.create({
+
+        data: {
+
+          name: body.name,
+
+          programType: "PEAK_SLOT",
+
+          trackingType: "DAILY",
+
+          ruleType: "HYBRID",
+
+          validFrom: start,
+
+          validTill: end,
+
+          cityId: [String(city.id)],
+
+          pincodeIds,
+
+          daysOfWeek:
+            body.slots[0].daysOfWeek || [],
+
+          weekStartDay:
+            body.weekStartDay || "MON",
+
+          minAcceptanceRate:
+            body.slots[0].conditions
+              ?.minAcceptanceRate || null,
+
+          minCompletionRate:
+            body.slots[0].conditions
+              ?.minCompletionRate || null,
+
+          maxPayoutPerDay:
+            body.slots[0]
+              ?.maxPayoutPerDay || null,
+
+          isActive:
+            body.isActive ?? true
+        }
+      });
+
+    // CREATE SLOT
+
+    for (const slot of body.slots) {
+
+      await prisma.programSlot.create({
+
+        data: {
+
+          programId: program.id,
+
+          startMinutes:
+            toMinutes(slot.startTime),
+
+          endMinutes:
+            toMinutes(slot.endTime),
+
+          daysOfWeek:
+            slot.daysOfWeek || [],
+
+          ruleType: "HYBRID"
+        }
+      });
+
+      // CREATE TARGET
+
+      await prisma.programTarget.create({
+
+        data: {
+
+          programId: program.id,
+
+          targetOrders:
+            slot.conditions
+              ?.minOrders || 0,
+
+          targetEarnings:
+            slot.conditions
+              ?.minEarnings || 0,
+
+          rewardAmount:
+            slot.reward
+              ?.amount || 0
+        }
+      });
+    }
+
+    return res.status(201).json({
+      success: true,
+      message:
+        "Hybrid daily incentive created",
+
+      data: {
+        id: program.id
+      }
+    });
+
+  } catch (err) {
+
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
 
 const getAllPeakSlots = async (req, res) => {
   try {
@@ -410,17 +1081,31 @@ const getAllPeakSlots = async (req, res) => {
         programType: "PEAK_SLOT"
       },
       include: {
-        slots: true
-      },
+  slots: true,
+  targets: true
+},
       orderBy: {
         createdAt: "desc"
       }
     });
 
-    const result = programs.map((p) => ({
-      id: p.id,
-      name: p.name,
-      isActive: p.isActive,
+   const result = programs.map((p) => {
+
+  const base = {
+    id: p.id,
+    name: p.name,
+    ruleType: p.ruleType,
+    isActive: p.isActive
+  };
+
+  // SLOT BASED
+
+  if (
+    p.ruleType === "PER_ORDER" ||
+    p.ruleType === "SLAB"
+  ) {
+    return {
+      ...base,
 
       slots: (p.slots || []).map((s) => ({
         startTime: `${Math.floor(s.startMinutes / 60)
@@ -437,7 +1122,61 @@ const getAllPeakSlots = async (req, res) => {
 
         ruleType: s.ruleType
       }))
-    }));
+    };
+  }
+
+  // TARGET BASED
+// FIXED TARGET
+
+if (p.ruleType === "FIXED_TARGET") {
+
+  const target = p.targets?.[0];
+
+  return {
+    ...base,
+
+    target: {
+      orders: target?.targetOrders || 0
+    },
+
+    reward: {
+      amount: target?.rewardAmount || 0
+    }
+  };
+}
+
+// HYBRID
+
+if (p.ruleType === "HYBRID") {
+
+  const target = p.targets?.[0];
+
+  return {
+    ...base,
+
+    conditions: {
+      minOrders: target?.targetOrders || 0,
+
+      minEarnings: target?.targetEarnings || 0,
+
+      minAcceptanceRate:
+        p.minAcceptanceRate || 0,
+
+      minCompletionRate:
+        p.minCompletionRate || 0
+    },
+
+    reward: {
+      amount: target?.rewardAmount || 0
+    },
+
+    maxPayoutPerDay:
+      p.maxPayoutPerDay || 0
+  };
+}
+
+  return base;
+});
 
     return res.status(200).json({
       success: true,
@@ -460,8 +1199,13 @@ const getPeakSlotById = async (req, res) => {
     const program = await prisma.program.findUnique({
       where: { id },
       include: {
-        slots: true
-      }
+  slots: {
+    include: {
+      slabs: true
+    }
+  },
+  targets: true
+}
     });
 
     if (!program) {
@@ -484,21 +1228,111 @@ const getPeakSlotById = async (req, res) => {
     }
 
     //  RESULT
-    const result = {
-      id: program.id,
-      name: program.name,
-      cityName, 
+   let result = {
+  id: program.id,
+  name: program.name,
+  cityName,
+  ruleType: program.ruleType,
+  isActive: program.isActive
+};
 
-      slots: (program.slots || []).map((s) => ({
-        startTime: `${String(Math.floor(s.startMinutes / 60)).padStart(2, "0")}:${String(s.startMinutes % 60).padStart(2, "0")}`,
-        endTime: `${String(Math.floor(s.endMinutes / 60)).padStart(2, "0")}:${String(s.endMinutes % 60).padStart(2, "0")}`,
-        daysOfWeek: s.daysOfWeek || [],
-        ruleType: s.ruleType,
-        reward: {
-          amount: s.rewardPerOrder || 0
-        }
-      }))
-    };
+// PER ORDER
+
+if (program.ruleType === "PER_ORDER") {
+
+  result.slots = (program.slots || []).map((s) => ({
+    startTime: `${String(
+      Math.floor(s.startMinutes / 60)
+    ).padStart(2, "0")}:${String(
+      s.startMinutes % 60
+    ).padStart(2, "0")}`,
+
+    endTime: `${String(
+      Math.floor(s.endMinutes / 60)
+    ).padStart(2, "0")}:${String(
+      s.endMinutes % 60
+    ).padStart(2, "0")}`,
+
+    daysOfWeek: s.daysOfWeek || [],
+
+    ruleType: s.ruleType,
+
+    reward: {
+      amount: s.rewardPerOrder || 0
+    }
+  }));
+}
+
+// SLAB
+
+if (program.ruleType === "SLAB") {
+
+  result.slots = (program.slots || []).map((s) => ({
+    startTime: `${String(
+      Math.floor(s.startMinutes / 60)
+    ).padStart(2, "0")}:${String(
+      s.startMinutes % 60
+    ).padStart(2, "0")}`,
+
+    endTime: `${String(
+      Math.floor(s.endMinutes / 60)
+    ).padStart(2, "0")}:${String(
+      s.endMinutes % 60
+    ).padStart(2, "0")}`,
+
+    daysOfWeek: s.daysOfWeek || [],
+
+    ruleType: s.ruleType,
+
+    slabs: (s.slabs || []).map((slab) => ({
+      minOrders: slab.minOrders,
+      maxOrders: slab.maxOrders,
+      rewardAmount: slab.rewardAmount
+    }))
+  }));
+}
+
+// FIXED TARGET
+
+if (program.ruleType === "FIXED_TARGET") {
+
+  const target = program.targets?.[0];
+
+  result.target = {
+    orders: target?.targetOrders || 0
+  };
+
+  result.reward = {
+    amount: target?.rewardAmount || 0
+  };
+}
+
+// HYBRID
+
+if (program.ruleType === "HYBRID") {
+
+  const target = program.targets?.[0];
+
+  result.conditions = {
+    minOrders: target?.targetOrders || 0,
+
+    minEarnings:
+      target?.targetEarnings || 0,
+
+    minAcceptanceRate:
+      program.minAcceptanceRate || 0,
+
+    minCompletionRate:
+      program.minCompletionRate || 0
+  };
+
+  result.reward = {
+    amount: target?.rewardAmount || 0
+  };
+
+  result.maxPayoutPerDay =
+    program.maxPayoutPerDay || 0;
+}
 
     return res.status(200).json({
       success: true,

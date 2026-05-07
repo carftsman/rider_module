@@ -10,7 +10,8 @@ const getPeakSlotProgress = async (req, res) => {
   try {
     const riderId = req.rider.id;
 
-    //  Get rider pincode
+    // GET RIDER PINCODE
+
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId },
       select: { pincode: true },
@@ -24,34 +25,55 @@ const getPeakSlotProgress = async (req, res) => {
     }
 
     const riderPincode = riderLocation.pincode;
+
     const today = new Date();
 
-    //  Get active programs for rider
+    // GET ACTIVE PROGRAMS
+
     const programs = await prisma.program.findMany({
       where: {
         isActive: true,
+
         programType: "PEAK_SLOT",
+
         trackingType: "DAILY",
+
         pincodeIds: {
           has: riderPincode,
         },
-        validFrom: { lte: today },
-        validTill: { gte: today },
+
       },
+
       select: {
         id: true,
-        slots: true,
+
+        ruleType: true,
+
+        minAcceptanceRate: true,
+
+        minCompletionRate: true,
+
+        maxPayoutPerDay: true,
+
+        slots: {
+          include: {
+            slabs: true,
+          },
+        },
+
+        targets: true,
       },
     });
 
     if (!programs.length) {
       return res.status(200).json({
         success: true,
-        slots: [],
+        data: [],
       });
     }
 
-    // Create / Fetch progress
+    // CREATE / FETCH PROGRESS
+
     const progressMap = {};
 
     for (const p of programs) {
@@ -62,15 +84,21 @@ const getPeakSlotProgress = async (req, res) => {
         },
       });
 
-      // If not exists → create zero progress
+      // CREATE EMPTY PROGRESS
+
       if (!progProgress) {
         progProgress = await prisma.programProgress.create({
           data: {
             riderId,
+
             programId: p.id,
+
             totalOrders: 0,
+
             totalEarnings: 0,
+
             rewardAmount: 0,
+
             achieved: false,
           },
         });
@@ -79,34 +107,139 @@ const getPeakSlotProgress = async (req, res) => {
       progressMap[p.id] = progProgress;
     }
 
-    //Build response
-  const allSlots = programs.flatMap((p) =>
-  p.slots.map((slot) => {
-    const progProgress = progressMap[p.id];
-    const orders = progProgress?.totalOrders || 0;
+    // BUILD RESPONSE
 
-    return {
-      slotId: slot.id,
-      time: `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
+    const incentives = programs.flatMap((p) => {
 
-      ordersCompleted: orders,
+      const progProgress = progressMap[p.id];
 
-      reward: orders > 0
-        ? orders * (slot.rewardPerOrder || 0)
+      const orders =
+        progProgress?.totalOrders || 0;
+
+      const earnings =
+        progProgress?.totalEarnings || 0;
+
+      // PER_ORDER + SLAB
+
+      if (
+        p.ruleType === "PER_ORDER" ||
+        p.ruleType === "SLAB"
+      ) {
+
+        return p.slots.map((slot) => ({
+
+          ruleType: p.ruleType,
+
+          slotId: slot.id,
+
+          time:
+            `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
+
+          ordersCompleted: orders,
+
+          reward:
+            orders > 0
+              ? orders * (slot.rewardPerOrder || 0)
+              : 0,
+
+          status:
+            progProgress?.achieved
+              ? "ACHIEVED"
+              : orders > 0
+              ? "IN_PROGRESS"
+              : "NOT_STARTED"
+        }));
+      }
+
+      // FIXED TARGET
+
+      if (p.ruleType === "FIXED_TARGET") {
+
+  const target = p.targets?.[0];
+
+  const targetOrders =
+    target?.targetOrders || 0;
+
+  const rewardAmount =
+    target?.rewardAmount || 0;
+
+  return [{
+  ruleType: "FIXED_TARGET",
+
+  slotId: p.id,
+
+  ordersCompleted: orders,
+
+  rewardAmount:
+  targetOrders > 0
+    ? Math.floor(
+        orders / targetOrders
+      ) * rewardAmount
+    : 0,
+
+  status:
+    orders >= targetOrders
+      ? "ACHIEVED"
+      : orders > 0
+      ? "IN_PROGRESS"
+      : "NOT_STARTED"
+}];
+}
+
+      // HYBRID
+if (p.ruleType === "HYBRID") {
+
+  const target = p.targets?.[0];
+
+  const targetOrders =
+    target?.targetOrders || 0;
+
+  const targetEarnings =
+    target?.targetEarnings || 0;
+
+  // CURRENT RIDER VALUES
+
+  const acceptanceRate =
+    progProgress?.acceptanceRate || 0;
+
+  const completionRate =
+    progProgress?.completionRate || 0;
+
+  // ALL CONDITIONS CHECK
+
+  const achieved =
+    orders >= targetOrders &&
+    earnings >= targetEarnings &&
+    acceptanceRate >= (p.minAcceptanceRate || 0) &&
+    completionRate >= (p.minCompletionRate || 0);
+
+  return [{
+    ruleType: "HYBRID",
+
+    slotId: p.id,
+
+    ordersCompleted: orders,
+
+
+    rewardAmount:
+      achieved
+        ? target?.rewardAmount || 0
         : 0,
 
-      status: progProgress?.achieved
+    status:
+      achieved
         ? "ACHIEVED"
-        : orders > 0
+        : orders > 0 || earnings > 0
         ? "IN_PROGRESS"
-        : "NOT_STARTED",
-    };
-  })
-);
+        : "NOT_STARTED"
+  }];
+}
+      return [];
+    });
 
     return res.status(200).json({
       success: true,
-      slots: allSlots,
+      data: incentives,
     });
 
   } catch (error) {
@@ -147,17 +280,26 @@ const getRiderPeakSlotPrograms = async (req, res) => {
     const riderCityId = riderLocation.cityId || null;
 
     const now = new Date();
+    const currentMinutes =
+  now.getHours() * 60 + now.getMinutes();
 
     // FETCH PROGRAMS 
     
     let programs = [];
 
     const baseQuery = {
-      programType: "PEAK_SLOT",
-      isActive: true,
-      validFrom: { lte: now },
-      validTill: { gte: now }
-    };
+  programType: "PEAK_SLOT",
+
+  isActive: true,
+
+  validFrom: {
+    lte: now
+  },
+
+  validTill: {
+    gte: now
+  }
+};
 
     if (riderPincode) {
       programs = await prisma.program.findMany({
@@ -166,32 +308,51 @@ const getRiderPeakSlotPrograms = async (req, res) => {
           pincodeIds: { has: riderPincode }
         },
         include: {
-          slots: {
-            include: {
-              slabs: true
-            }
-          }
-        }
+  slots: {
+    orderBy: {
+      startMinutes: "asc"
+    },
+    include: {
+      slabs: true
+    }
+  },
+
+  targets: true
+}
       });
     }
 
     // FALLBACK TO CITY
-    
-    if (!programs.length && riderCityId) {
-      programs = await prisma.program.findMany({
-        where: {
-          ...baseQuery,
-          cityId: { has: riderCityId }
+  // FALLBACK TO CITY
+
+if (!programs.length && riderCityId) {
+
+  programs = await prisma.program.findMany({
+
+    where: {
+      ...baseQuery,
+
+      cityId: {
+        has: riderCityId
+      }
+    },
+
+    include: {
+
+      slots: {
+        orderBy: {
+          startMinutes: "asc"
         },
+
         include: {
-          slots: {
-            include: {
-              slabs: true
-            }
-          }
+          slabs: true
         }
-      });
+      },
+
+      targets: true
     }
+  });
+}
 
     //REMOVE DUPLICATES
     
@@ -241,70 +402,223 @@ for (const p of pincodes) {
     // FORMAT RESPONSE
     
     const response = uniquePrograms
-      .map(program => {
-        // filter only PER_ORDER + SLAB slots
-        const validSlots = program.slots.filter(slot =>
-          ["PER_ORDER", "SLAB"].includes(slot.ruleType)
-        );
+  .map(program => {
 
-        if (!validSlots.length) return null;
+    // CITY NAME LOGIC
 
-        // CITY NAME LOGIC
-        
-        let cityName = null;
+    let cityName = null;
 
-        if (program.cityId?.length) {
-          cityName = cityMap[program.cityId[0]] || null;
-        } else if (program.pincodeIds?.length) {
-          cityName =
-            pincodeCityMap[program.pincodeIds[0]] || null;
-        }
+    if (program.cityId?.length) {
+      cityName = cityMap[program.cityId[0]] || null;
 
-        return {
-          name: program.name,
+    } else if (program.pincodeIds?.length) {
 
-          cityName,
+      cityName =
+        pincodeCityMap[program.pincodeIds[0]] || null;
+    }
 
-          pincodeIds: program.pincodeIds || [],
+    const base = {
+      name: program.name,
 
-          dateRange: {
-            startDate: program.validFrom,
-            endDate: program.validTill
-          },
+      cityName,
 
-          slots: validSlots.map(slot => {
-            const formattedSlot = {
-              startTime: minutesToTime(slot.startMinutes),
-              endTime: minutesToTime(slot.endMinutes),
-              daysOfWeek: slot.daysOfWeek,
-              ruleType: slot.ruleType
+      ruleType: program.ruleType,
+
+      isActive: program.isActive
+    };
+
+    // PER_ORDER + SLAB
+
+    if (
+      program.ruleType === "PER_ORDER" ||
+      program.ruleType === "SLAB"
+    ) {
+
+      return {
+        ...base,
+
+        slots: program.slots
+  .filter(slot => {
+
+    const start =
+      slot.startMinutes;
+
+    const end =
+      slot.endMinutes;
+
+    return (
+      currentMinutes >= start &&
+      currentMinutes <= end
+    );
+  })
+
+  .map(slot => {
+
+          const formattedSlot = {
+            startTime: minutesToTime(slot.startMinutes),
+
+            endTime: minutesToTime(slot.endMinutes),
+
+            ruleType: slot.ruleType
+          };
+
+          // PER ORDER
+
+          if (slot.ruleType === "PER_ORDER") {
+
+            formattedSlot.reward = {
+              amount: slot.rewardPerOrder || 0
             };
+          }
 
-            // PER ORDER
-            
-            if (slot.ruleType === "PER_ORDER") {
-              formattedSlot.reward = {
-                amount: slot.rewardPerOrder || 0
-              };
-            }
+          // SLAB
 
-            // SLAB
-            
-            if (slot.ruleType === "SLAB") {
-              formattedSlot.slabs = slot.slabs.map(s => ({
-                minOrders: s.minOrders,
-                maxOrders: s.maxOrders,
-                rewardAmount: s.rewardAmount
-              }));
-            }
+          if (slot.ruleType === "SLAB") {
 
-            return formattedSlot;
-          }),
+            formattedSlot.slabs = slot.slabs.map(s => ({
+              minOrders: s.minOrders,
+              maxOrders: s.maxOrders,
+              rewardAmount: s.rewardAmount
+            }));
+          }
 
-          isActive: program.isActive
-        };
-      })
-      .filter(Boolean);
+          return formattedSlot;
+        })
+      };
+    }
+
+    // FIXED TARGET
+
+  if (program.ruleType === "FIXED_TARGET") {
+
+  const activeSlot = program.slots.find(slot => {
+
+    return (
+      currentMinutes >= slot.startMinutes &&
+      currentMinutes <= slot.endMinutes
+    );
+  });
+
+  // NO ACTIVE SLOT
+
+  if (!activeSlot) {
+    return null;
+  }
+
+  const target = program.targets?.[0];
+
+  return {
+
+    ...base,
+
+    slots: [{
+      startTime:
+        minutesToTime(activeSlot.startMinutes),
+
+      endTime:
+        minutesToTime(activeSlot.endMinutes),
+
+      
+    }],
+
+    target: {
+      orders:
+        target?.targetOrders || 0
+    },
+
+    reward: {
+      amount:
+        target?.rewardAmount || 0
+    }
+  };
+}
+
+    // HYBRID
+
+    if (program.ruleType === "HYBRID") {
+
+  const activeSlot = program.slots.find(slot => {
+
+    return (
+      currentMinutes >= slot.startMinutes &&
+      currentMinutes <= slot.endMinutes
+    );
+  });
+
+  // NO ACTIVE SLOT
+
+  if (!activeSlot) {
+    return null;
+  }
+
+  const target = program.targets?.[0];
+
+  return {
+
+    ...base,
+
+    slots: [{
+      startTime:
+        minutesToTime(activeSlot.startMinutes),
+
+      endTime:
+        minutesToTime(activeSlot.endMinutes),
+
+      
+    }],
+
+    conditions: {
+
+      minOrders:
+        target?.targetOrders || 0,
+
+      minEarnings:
+        target?.targetEarnings || 0,
+
+      minAcceptanceRate:
+        program.minAcceptanceRate || 0,
+
+      minCompletionRate:
+        program.minCompletionRate || 0
+    },
+
+    reward: {
+      amount:
+        target?.rewardAmount || 0
+    },
+
+    maxPayoutPerDay:
+      program.maxPayoutPerDay || 0
+  };
+}
+
+    return null;
+  })
+  
+  .filter(program => {
+
+  // remove null
+  if (!program) return false;
+
+  // remove empty slot programs
+  if (
+    (program.ruleType === "PER_ORDER" ||
+     program.ruleType === "SLAB") &&
+    (!program.slots || !program.slots.length)
+  ) {
+    return false;
+  }
+
+  return true;
+});
+
+      response.sort((a, b) => {
+  const aStart = a.slots?.[0]?.startTime || "99:99";
+  const bStart = b.slots?.[0]?.startTime || "99:99";
+
+  return aStart.localeCompare(bStart);
+});
+
 
     // RESPONSE
     

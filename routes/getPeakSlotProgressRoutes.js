@@ -84,6 +84,7 @@ router.get(
  *             schema:
  *               type: object
  *               properties:
+ *
  *                 success:
  *                   type: boolean
  *                   example: true
@@ -91,89 +92,196 @@ router.get(
  *                 data:
  *                   type: array
  *                   items:
- *                     type: object
- *                     properties:
- *                       name:
- *                         type: string
- *                         example: Weekend Peak Slab Bonus
+ *                     oneOf:
  *
- *                       cityId:
- *                         type: string
- *                         example: city_123
+ *                       # PER ORDER
  *
- *                       pincodeIds:
- *                         type: array
- *                         items:
- *                           type: string
- *                         example: ["500081"]
- *
- *                       dateRange:
- *                         type: object
+ *                       - type: object
  *                         properties:
- *                           startDate:
+ *
+ *                           name:
  *                             type: string
- *                             format: date-time
- *                             example: 2026-05-01T00:00:00.000Z
+ *                             example: Evening Peak Bonus
  *
- *                           endDate:
+ *                           cityName:
  *                             type: string
- *                             format: date-time
- *                             example: 2026-05-31T23:59:59.000Z
+ *                             example: Hyderabad
  *
- *                       slots:
- *                         type: array
- *                         items:
- *                           type: object
- *                           properties:
- *                             startTime:
- *                               type: string
- *                               example: "19:00"
+ *                           ruleType:
+ *                             type: string
+ *                             example: PER_ORDER
  *
- *                             endTime:
- *                               type: string
- *                               example: "23:00"
- *
- *                             daysOfWeek:
- *                               type: array
- *                               items:
- *                                 type: string
- *                                 enum: [MON, TUE, WED, THU, FRI, SAT, SUN]
- *                               example: ["SAT", "SUN"]
- *
- *                             ruleType:
- *                               type: string
- *                               enum: [PER_ORDER, SLAB]
- *                               example: SLAB
- *
- *                             reward:
+ *                           slots:
+ *                             type: array
+ *                             items:
  *                               type: object
- *                               nullable: true
  *                               properties:
- *                                 amount:
- *                                   type: number
- *                                   example: 20
  *
- *                             slabs:
- *                               type: array
- *                               nullable: true
- *                               items:
- *                                 type: object
- *                                 properties:
- *                                   minOrders:
- *                                     type: integer
- *                                     example: 5
+ *                                 startTime:
+ *                                   type: string
+ *                                   example: "18:00"
  *
- *                                   maxOrders:
- *                                     type: integer
- *                                     example: 10
+ *                                 endTime:
+ *                                   type: string
+ *                                   example: "21:00"
  *
- *                                   rewardAmount:
- *                                     type: number
- *                                     example: 100
+ *                                 reward:
+ *                                   type: object
+ *                                   properties:
  *
- *                       isActive:
- *                         type: boolean
- *                         example: true
+ *                                     amount:
+ *                                       type: number
+ *                                       example: 20
+ *
+ *                           isActive:
+ *                             type: boolean
+ *                             example: true
+ *
+ *
+ *                       # SLAB
+ *
+ *                       - type: object
+ *                         properties:
+ *
+ *                           name:
+ *                             type: string
+ *                             example: Weekend Peak Slab Bonus
+ *
+ *                           cityName:
+ *                             type: string
+ *                             example: Hyderabad
+ *
+ *                           ruleType:
+ *                             type: string
+ *                             example: SLAB
+ *
+ *                           slots:
+ *                             type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *
+ *                                 startTime:
+ *                                   type: string
+ *                                   example: "19:00"
+ *
+ *                                 endTime:
+ *                                   type: string
+ *                                   example: "23:00"
+ *
+ *                                 slabs:
+ *                                   type: array
+ *                                   items:
+ *                                     type: object
+ *                                     properties:
+ *
+ *                                       minOrders:
+ *                                         type: integer
+ *                                         example: 5
+ *
+ *                                       maxOrders:
+ *                                         type: integer
+ *                                         example: 10
+ *
+ *                                       rewardAmount:
+ *                                         type: number
+ *                                         example: 100
+ *
+ *                           isActive:
+ *                             type: boolean
+ *                             example: true
+ *
+ *
+ *                       # FIXED TARGET
+ *
+ *                       - type: object
+ *                         properties:
+ *
+ *                           name:
+ *                             type: string
+ *                             example: Daily Flat Bonus
+ *
+ *                           cityName:
+ *                             type: string
+ *                             example: Hyderabad
+ *
+ *                           ruleType:
+ *                             type: string
+ *                             example: FIXED_TARGET
+ *
+ *                           target:
+ *                             type: object
+ *                             properties:
+ *
+ *                               orders:
+ *                                 type: integer
+ *                                 example: 20
+ *
+ *                           reward:
+ *                             type: object
+ *                             properties:
+ *
+ *                               amount:
+ *                                 type: number
+ *                                 example: 200
+ *
+ *                           isActive:
+ *                             type: boolean
+ *                             example: true
+ *
+ *
+ *                       # HYBRID
+ *
+ *                       - type: object
+ *                         properties:
+ *
+ *                           name:
+ *                             type: string
+ *                             example: Peak Hybrid Bonus
+ *
+ *                           cityName:
+ *                             type: string
+ *                             example: Hyderabad
+ *
+ *                           ruleType:
+ *                             type: string
+ *                             example: HYBRID
+ *
+ *                           conditions:
+ *                             type: object
+ *                             properties:
+ *
+ *                               minOrders:
+ *                                 type: integer
+ *                                 example: 20
+ *
+ *                               minEarnings:
+ *                                 type: number
+ *                                 example: 1000
+ *
+ *                               minAcceptanceRate:
+ *                                 type: number
+ *                                 example: 90
+ *
+ *                               minCompletionRate:
+ *                                 type: number
+ *                                 example: 95
+ *
+ *                           reward:
+ *                             type: object
+ *                             properties:
+ *
+ *                               amount:
+ *                                 type: number
+ *                                 example: 300
+ *
+ *                           maxPayoutPerDay:
+ *                             type: number
+ *                             example: 300
+ *
+ *                           isActive:
+ *                             type: boolean
+ *                             example: true
  *
  *       401:
  *         description: Unauthorized
@@ -181,7 +289,6 @@ router.get(
  *       500:
  *         description: Failed to fetch peak slot programs
  */
-
 router.get(
   "/peak-slot-programs",
   riderAuthMiddleWare,
