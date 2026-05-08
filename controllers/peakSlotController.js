@@ -52,7 +52,6 @@ const createPerOrderPeakSlot = async (req, res) => {
   try {
     const body = req.body;
 
-
     if (!body.cityName) {
       return res.status(400).json({
         success: false,
@@ -222,7 +221,8 @@ const createPerOrderPeakSlot = async (req, res) => {
           programId: program.id,
           startMinutes: toMinutes(slot.startTime),
           endMinutes: toMinutes(slot.endTime),
-          daysOfWeek: slot.daysOfWeek || [],
+          daysOfWeek:
+  body.slots?.[0]?.daysOfWeek || [],
           ruleType: "PER_ORDER",
           rewardPerOrder: slot.reward.amount
         }
@@ -252,6 +252,8 @@ const createPerOrderPeakSlot = async (req, res) => {
 const createSlabPeakSlot = async (req, res) => {
   try {
     const body = req.body;
+
+
 
     //  Basic validations
     if (!body.name) {
@@ -285,11 +287,16 @@ const createSlabPeakSlot = async (req, res) => {
     }
 
     //  Normalize pincodeIds
-    const pincodeIds = Array.isArray(body.pincodeIds)
+  console.log("BODY:", body);
+console.log("BODY PINCODES:", body.pincodeIds);
+
+const pincodeIds = Array.isArray(body.pincodeIds)
   ? body.pincodeIds.map(String)
   : body.pincodeIds
     ? [String(body.pincodeIds)]
     : [];
+
+console.log("NORMALIZED PINCODES:", pincodeIds);
 
     //  Validate slots BEFORE DB
     for (const slot of body.slots) {
@@ -320,37 +327,34 @@ const createSlabPeakSlot = async (req, res) => {
     const start = new Date(body.dateRange.startDate);
     const end = new Date(body.dateRange.endDate);
 
-    const existingPrograms =
-  await prisma.program.findMany({
+    const existingPrograms = await prisma.program.findMany({
+  where: {
+    programType: "PEAK_SLOT",
 
-    where: {
+    isActive: true,
 
-      programType: "PEAK_SLOT",
+    ...(pincodeIds.length > 0 && {
+  pincodeIds: {
+    hasSome: pincodeIds
+  }
+}),
 
-      isActive: true,
-
-      pincodeIds: {
-        hasSome: pincodeIds
-      },
-
-      validFrom: {
-        lte: end
-      },
-
-      validTill: {
-        gte: start
-      }
+    validFrom: {
+      lte: end
     },
 
-    include: {
-      slots: true
+    validTill: {
+      gte: start
     }
-  });
+  },
+
+  include: {
+    slots: true
+  }
+});
 
     // CONFLICT CHECK
-   const conflict = existingPrograms.some(program => {
-
-  // DATE OVERLAP
+const conflict = existingPrograms.some(program => {
 
   const dateOverlap =
     start <= program.validTill &&
@@ -364,28 +368,36 @@ const createSlabPeakSlot = async (req, res) => {
 
     body.slots.some(newSlot => {
 
-      const newStart =
-        toMinutes(newSlot.startTime);
+      const newStart = toMinutes(newSlot.startTime);
+      const newEnd = toMinutes(newSlot.endTime);
 
-      const newEnd =
-        toMinutes(newSlot.endTime);
+      const existingStart = existingSlot.startMinutes;
+      const existingEnd = existingSlot.endMinutes;
 
-      const existingStart =
-        existingSlot.startMinutes;
+      //  exact same slot
+      const sameTime =
+        newStart === existingStart &&
+        newEnd === existingEnd;
 
-      const existingEnd =
-        existingSlot.endMinutes;
+      const existingDays =
+        existingSlot.daysOfWeek?.length
+          ? existingSlot.daysOfWeek
+          : program.daysOfWeek || [];
 
-      // TIME OVERLAP
+      const newDays =
+        newSlot.daysOfWeek?.length
+          ? newSlot.daysOfWeek
+          : body.daysOfWeek || [];
 
-      return (
-        newStart < existingEnd &&
-        newEnd > existingStart
-      );
+      const dayOverlap =
+        existingDays.some(day =>
+          newDays.includes(day)
+        );
+
+      return sameTime && dayOverlap;
     })
   );
 });
-
     if (conflict) {
       return res.status(400).json({
         success: false,
@@ -394,25 +406,27 @@ const createSlabPeakSlot = async (req, res) => {
     }
 
     //  Create program
-    const program = await prisma.program.create({
-      data: {
-        name: body.name,
-        programType: "PEAK_SLOT",
-        trackingType: "DAILY",
-        ruleType: "SLAB",
+   const program = await prisma.program.create({
+  data: {
+    name: body.name,
+    programType: "PEAK_SLOT",
+    trackingType: "DAILY",
+    ruleType: "SLAB",
 
-        validFrom: new Date(body.dateRange.startDate),
-        validTill: new Date(body.dateRange.endDate),
+    validFrom: new Date(body.dateRange.startDate),
+    validTill: new Date(body.dateRange.endDate),
 
-        cityId: [String(city.id)],
-        pincodeIds,
+    // ✅ FIX
+    cityId: [String(city.id)],
 
-        weekStartDay: body.weekStartDay || "MON",
-        daysOfWeek: body.daysOfWeek || [],
-        isActive: body.isActive ?? true
-      }
-    });
+    // ✅ store correctly
+    pincodeIds: pincodeIds,
 
+    weekStartDay: body.weekStartDay || "MON",
+    daysOfWeek: body.daysOfWeek || [],
+    isActive: body.isActive ?? true
+  }
+});
     //  Create slots + slabs
     for (const slot of body.slots) {
       const createdSlot = await prisma.programSlot.create({
@@ -421,7 +435,8 @@ const createSlabPeakSlot = async (req, res) => {
           startMinutes: toMinutes(slot.startTime),
           endMinutes: toMinutes(slot.endTime),
           ruleType: "SLAB",
-          daysOfWeek: slot.daysOfWeek || []
+          daysOfWeek:
+  body.slots?.[0]?.daysOfWeek || []
         }
       });
 
@@ -677,8 +692,9 @@ const createFixedTargetIncentive = async (req, res) => {
 
       pincodeIds,
 
-      daysOfWeek:
-        body.slots[0].daysOfWeek || [],
+      
+        daysOfWeek:
+  body.slots?.[0]?.daysOfWeek || [],
 
       weekStartDay:
         body.weekStartDay || "MON",
@@ -1076,107 +1092,187 @@ const createHybridDailyIncentive = async (req, res) => {
 
 const getAllPeakSlots = async (req, res) => {
   try {
+
+    const minutesToTime = (mins) => {
+      const hrs = Math.floor(mins / 60)
+        .toString()
+        .padStart(2, "0");
+
+      const min = (mins % 60)
+        .toString()
+        .padStart(2, "0");
+
+      return `${hrs}:${min}`;
+    };
+
     const programs = await prisma.program.findMany({
       where: {
         programType: "PEAK_SLOT"
       },
+
       include: {
-  slots: true,
+  slots: {
+    include: {
+      slabs: true
+    }
+  },
+
   targets: true
 },
+
       orderBy: {
         createdAt: "desc"
       }
     });
 
-   const result = programs.map((p) => {
+    const result = programs.map((p) => {
 
-  const base = {
-    id: p.id,
-    name: p.name,
-    ruleType: p.ruleType,
-    isActive: p.isActive
+      const base = {
+        id: p.id,
+
+        name: p.name,
+
+        ruleType: p.ruleType,
+
+        isActive: p.isActive,
+
+        pincodeIds: p.pincodeIds || []
+      };
+
+      // =========================
+      // PER_ORDER + SLAB
+      // =========================
+
+      if (
+        p.ruleType === "PER_ORDER" ||
+        p.ruleType === "SLAB"
+      ) {
+
+        return {
+          ...base,
+
+          slots: (p.slots || []).map((s) => {
+
+  const slotData = {
+
+    slotId: s.id,
+
+    slotTiming:
+      `${minutesToTime(s.startMinutes)} - ${minutesToTime(s.endMinutes)}`
   };
 
-  // SLOT BASED
+  // PER ORDER
 
-  if (
-    p.ruleType === "PER_ORDER" ||
-    p.ruleType === "SLAB"
-  ) {
-    return {
-      ...base,
+  if (p.ruleType === "PER_ORDER") {
 
-      slots: (p.slots || []).map((s) => ({
-        startTime: `${Math.floor(s.startMinutes / 60)
-          .toString()
-          .padStart(2, "0")}:${(s.startMinutes % 60)
-            .toString()
-            .padStart(2, "0")}`,
-
-        endTime: `${Math.floor(s.endMinutes / 60)
-          .toString()
-          .padStart(2, "0")}:${(s.endMinutes % 60)
-            .toString()
-            .padStart(2, "0")}`,
-
-        ruleType: s.ruleType
-      }))
-    };
+    slotData.rewardAmount =
+      s.rewardPerOrder || 0;
   }
 
-  // TARGET BASED
-// FIXED TARGET
+  // SLAB
 
-if (p.ruleType === "FIXED_TARGET") {
+  if (p.ruleType === "SLAB") {
 
-  const target = p.targets?.[0];
+    slotData.slabs =
+      (s.slabs || []).map((slab) => ({
 
-  return {
-    ...base,
+        minOrders:
+          slab.minOrders,
 
-    target: {
-      orders: target?.targetOrders || 0
-    },
+        maxOrders:
+          slab.maxOrders,
 
-    reward: {
-      amount: target?.rewardAmount || 0
-    }
-  };
-}
+        rewardAmount:
+          slab.rewardAmount
+      }));
+  }
 
-// HYBRID
+  return slotData;
+})
+        };
+      }
 
-if (p.ruleType === "HYBRID") {
+      // =========================
+      // FIXED TARGET
+      // =========================
 
-  const target = p.targets?.[0];
+      if (p.ruleType === "FIXED_TARGET") {
 
-  return {
-    ...base,
+        const target = p.targets?.[0];
 
-    conditions: {
-      minOrders: target?.targetOrders || 0,
+        const slot = p.slots?.[0];
 
-      minEarnings: target?.targetEarnings || 0,
+        return {
+          ...base,
 
-      minAcceptanceRate:
-        p.minAcceptanceRate || 0,
+          slotId: slot?.id || null,
 
-      minCompletionRate:
-        p.minCompletionRate || 0
-    },
+         
 
-    reward: {
-      amount: target?.rewardAmount || 0
-    },
+          slotTiming: slot
+            ? `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`
+            : null,
 
-    maxPayoutPerDay:
-      p.maxPayoutPerDay || 0
-  };
-}
+          
 
-  return base;
-});
+          target: {
+            orders:
+              target?.targetOrders || 0
+          },
+
+          rewardAmount:
+  target?.rewardAmount || 0,
+        };
+      }
+
+      // =========================
+      // HYBRID
+      // =========================
+
+      if (p.ruleType === "HYBRID") {
+
+        const target = p.targets?.[0];
+
+        const slot = p.slots?.[0];
+
+        return {
+          ...base,
+
+          slotId: slot?.id || null,
+
+          
+
+          slotTiming: slot
+            ? `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`
+            : null,
+
+         
+
+          conditions: {
+
+            minOrders:
+              target?.targetOrders || 0,
+
+            minEarnings:
+              target?.targetEarnings || 0,
+
+            minAcceptanceRate:
+              p.minAcceptanceRate || 0,
+
+            minCompletionRate:
+              p.minCompletionRate || 0
+          },
+
+          rewardAmount:
+  target?.rewardAmount || 0,
+
+          maxPayoutPerDay:
+            p.maxPayoutPerDay || 0
+        };
+      }
+
+      return base;
+    });
 
     return res.status(200).json({
       success: true,
@@ -1184,6 +1280,7 @@ if (p.ruleType === "HYBRID") {
     });
 
   } catch (err) {
+
     return res.status(500).json({
       success: false,
       message: err.message

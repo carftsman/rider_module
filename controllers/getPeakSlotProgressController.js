@@ -122,34 +122,39 @@ const getPeakSlotProgress = async (req, res) => {
       // PER_ORDER + SLAB
 
       if (
-        p.ruleType === "PER_ORDER" ||
-        p.ruleType === "SLAB"
-      ) {
+  p.ruleType === "PER_ORDER" ||
+  p.ruleType === "SLAB"
+) {
 
-        return p.slots.map((slot) => ({
+  return p.slots.map((slot) => ({
 
-          ruleType: p.ruleType,
+    ruleType: p.ruleType,
 
-          slotId: slot.id,
+    slotId: slot.id,
 
-          time:
-            `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
+    pincode: riderPincode,
 
-          ordersCompleted: orders,
+    slotTiming:
+      `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
 
-          reward:
-            orders > 0
-              ? orders * (slot.rewardPerOrder || 0)
-              : 0,
+    
 
-          status:
-            progProgress?.achieved
-              ? "ACHIEVED"
-              : orders > 0
-              ? "IN_PROGRESS"
-              : "NOT_STARTED"
-        }));
-      }
+    ordersCompleted: orders,
+
+    rewardAmount:
+      orders > 0
+        ? orders *
+          (slot.rewardPerOrder || 0)
+        : 0,
+
+    status:
+      progProgress?.achieved
+        ? "ACHIEVED"
+        : orders > 0
+        ? "IN_PROGRESS"
+        : "NOT_STARTED"
+  }));
+}
 
       // FIXED TARGET
 
@@ -160,30 +165,47 @@ const getPeakSlotProgress = async (req, res) => {
   const targetOrders =
     target?.targetOrders || 0;
 
-  const rewardAmount =
+  const singleReward =
     target?.rewardAmount || 0;
 
+  const completedCycles =
+    targetOrders > 0
+      ? Math.floor(
+          orders / targetOrders
+        )
+      : 0;
+
+  // SLOT
+
+  const slot = p.slots?.[0];
+
   return [{
-  ruleType: "FIXED_TARGET",
+    ruleType: "FIXED_TARGET",
 
-  slotId: p.id,
+    slotId: slot?.id || null,
 
-  ordersCompleted: orders,
+    pincode: riderPincode,
 
-  rewardAmount:
-  targetOrders > 0
-    ? Math.floor(
-        orders / targetOrders
-      ) * rewardAmount
-    : 0,
+    slotTiming:
+      slot
+        ? `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`
+        : null,
 
-  status:
-    orders >= targetOrders
-      ? "ACHIEVED"
-      : orders > 0
-      ? "IN_PROGRESS"
-      : "NOT_STARTED"
-}];
+    ordersCompleted: orders,
+
+    completedCycles,
+
+    rewardAmount:
+      completedCycles *
+      singleReward,
+
+    status:
+      completedCycles > 0
+        ? "ACHIEVED"
+        : orders > 0
+        ? "IN_PROGRESS"
+        : "NOT_STARTED"
+  }];
 }
 
       // HYBRID
@@ -196,6 +218,10 @@ if (p.ruleType === "HYBRID") {
 
   const targetEarnings =
     target?.targetEarnings || 0;
+
+  // SLOT
+
+  const slot = p.slots?.[0];
 
   // CURRENT RIDER VALUES
 
@@ -216,10 +242,18 @@ if (p.ruleType === "HYBRID") {
   return [{
     ruleType: "HYBRID",
 
-    slotId: p.id,
+    slotId: slot?.id || null,
+
+    pincode: riderPincode,
+
+    slotTiming:
+      slot
+        ? `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`
+        : null,
 
     ordersCompleted: orders,
 
+   
 
     rewardAmount:
       achieved
@@ -263,376 +297,578 @@ function minutesToTime(mins) {
 
 const getRiderPeakSlotPrograms = async (req, res) => {
   try {
+
     const riderId = req.rider.id;
 
-    
-    //  GET RIDER LOCATION
-   
-    const riderLocation = await prisma.riderLocation.findUnique({
-      where: { riderId }
-    });
+    // GET RIDER LOCATION
+
+    const riderLocation =
+      await prisma.riderLocation.findUnique({
+        where: { riderId }
+      });
 
     if (!riderLocation) {
-      return res.json({ success: true, data: [] });
-    }
-
-    const riderPincode = riderLocation.pincode?.trim();
-    const riderCityId = riderLocation.cityId || null;
-
-    const now = new Date();
-    const currentMinutes =
-  now.getHours() * 60 + now.getMinutes();
-
-    // FETCH PROGRAMS 
-    
-    let programs = [];
-
-    const baseQuery = {
-  programType: "PEAK_SLOT",
-
-  isActive: true,
-
-  validFrom: {
-    lte: now
-  },
-
-  validTill: {
-    gte: now
-  }
-};
-
-    if (riderPincode) {
-      programs = await prisma.program.findMany({
-        where: {
-          ...baseQuery,
-          pincodeIds: { has: riderPincode }
-        },
-        include: {
-  slots: {
-    orderBy: {
-      startMinutes: "asc"
-    },
-    include: {
-      slabs: true
-    }
-  },
-
-  targets: true
-}
+      return res.json({
+        success: true,
+        data: []
       });
     }
 
-    // FALLBACK TO CITY
-  // FALLBACK TO CITY
+    const riderPincode =
+      riderLocation.pincode?.trim();
 
-if (!programs.length && riderCityId) {
+    const riderCityId =
+      riderLocation.cityId || null;
 
-  programs = await prisma.program.findMany({
+    const now = new Date();
 
-    where: {
-      ...baseQuery,
+    const today = now
+      .toLocaleDateString("en-US", {
+        weekday: "short"
+      })
+      .toUpperCase();
 
-      cityId: {
-        has: riderCityId
+    const currentMinutes =
+      now.getHours() * 60 +
+      now.getMinutes();
+
+    // FETCH PROGRAMS
+
+    let programs = [];
+
+    const baseQuery = {
+
+      programType: "PEAK_SLOT",
+
+      isActive: true,
+
+      validFrom: {
+        lte: now
+      },
+
+      validTill: {
+        gte: now
       }
-    },
+    };
 
-    include: {
+    // FETCH BY PINCODE
 
-      slots: {
-        orderBy: {
-          startMinutes: "asc"
+    if (riderPincode) {
+
+      programs =
+        await prisma.program.findMany({
+
+          where: {
+            ...baseQuery,
+
+            pincodeIds: {
+              has: riderPincode
+            }
+          },
+
+          include: {
+
+            slots: {
+
+              orderBy: {
+                startMinutes: "asc"
+              },
+
+              include: {
+                slabs: true
+              }
+            },
+
+            targets: true
+          }
+        });
+    }
+
+    // FALLBACK TO CITY
+
+    if (
+      !programs.length &&
+      riderCityId
+    ) {
+
+      programs =
+        await prisma.program.findMany({
+
+          where: {
+            ...baseQuery,
+
+            cityId: {
+              has: riderCityId
+            }
+          },
+
+          include: {
+
+            slots: {
+
+              orderBy: {
+                startMinutes: "asc"
+              },
+
+              include: {
+                slabs: true
+              }
+            },
+
+            targets: true
+          }
+        });
+    }
+
+    // REMOVE DUPLICATES
+
+    const uniquePrograms =
+      Array.from(
+        new Map(
+          programs.map(p => [p.id, p])
+        ).values()
+      );
+
+    // FETCH CITY NAMES
+
+    const allCityIds = [
+
+      ...new Set(
+        uniquePrograms.flatMap(
+          p => p.cityId || []
+        )
+      )
+    ];
+
+    const cities =
+      await prisma.city.findMany({
+
+        where: {
+          id: {
+            in: allCityIds
+          }
+        },
+
+        select: {
+          id: true,
+          name: true
+        }
+      });
+
+    const cityMap = {};
+
+    cities.forEach(city => {
+      cityMap[city.id] = city.name;
+    });
+
+    // FETCH PINCODE -> CITY
+
+    const allPincodes = [
+
+      ...new Set(
+        uniquePrograms.flatMap(
+          p => p.pincodeIds || []
+        )
+      )
+    ];
+
+    const pincodes =
+      await prisma.pincode.findMany({
+
+        where: {
+
+          code: {
+            in: allPincodes
+          },
+
+          ...(riderCityId && {
+            cityId: riderCityId
+          })
         },
 
         include: {
-          slabs: true
+          city: true
         }
-      },
+      });
 
-      targets: true
+    const pincodeCityMap = {};
+
+    for (const p of pincodes) {
+
+      if (!pincodeCityMap[p.code]) {
+
+        pincodeCityMap[p.code] =
+          p.city?.name || null;
+      }
     }
-  });
-}
-
-    //REMOVE DUPLICATES
-    
-    const uniquePrograms = Array.from(
-      new Map(programs.map(p => [p.id, p])).values()
-    );
-
-    // FETCH CITY NAMES (FROM cityId)
-    
-    const allCityIds = [
-      ...new Set(uniquePrograms.flatMap(p => p.cityId || []))
-    ];
-
-    const cities = await prisma.city.findMany({
-      where: { id: { in: allCityIds } },
-      select: { id: true, name: true }
-    });
-
-    const cityMap = {};
-    cities.forEach(c => {
-      cityMap[c.id] = c.name;
-    });
-
-    // FETCH PINCODE → CITY
-    
-    const allPincodes = [
-      ...new Set(uniquePrograms.flatMap(p => p.pincodeIds || []))
-    ];
-
-const pincodes = await prisma.pincode.findMany({
-  where: {
-    code: { in: allPincodes },
-    ...(riderCityId && { cityId: riderCityId }) //  ADD THIS
-  },
-  include: { city: true }
-});
-
-   const pincodeCityMap = {};
-
-for (const p of pincodes) {
-  // only assign if not already set
-  if (!pincodeCityMap[p.code]) {
-    pincodeCityMap[p.code] = p.city?.name || null;
-  }
-}
 
     // FORMAT RESPONSE
-    
-    const response = uniquePrograms
-  .map(program => {
 
-    // CITY NAME LOGIC
+    const response =
+      uniquePrograms
+        .map(program => {
 
-    let cityName = null;
+          // CITY NAME
 
-    if (program.cityId?.length) {
-      cityName = cityMap[program.cityId[0]] || null;
+          let cityName = null;
 
-    } else if (program.pincodeIds?.length) {
+          if (program.cityId?.length) {
 
-      cityName =
-        pincodeCityMap[program.pincodeIds[0]] || null;
-    }
+            cityName =
+              cityMap[
+                program.cityId[0]
+              ] || null;
 
-    const base = {
-      name: program.name,
+          } else if (
+            program.pincodeIds?.length
+          ) {
 
-      cityName,
+            cityName =
+              pincodeCityMap[
+                program.pincodeIds[0]
+              ] || null;
+          }
 
-      ruleType: program.ruleType,
+          const base = {
 
-      isActive: program.isActive
-    };
+            name: program.name,
 
-    // PER_ORDER + SLAB
+            cityName,
 
-    if (
-      program.ruleType === "PER_ORDER" ||
-      program.ruleType === "SLAB"
-    ) {
+            ruleType:
+              program.ruleType,
 
-      return {
-        ...base,
-
-        slots: program.slots
-  .filter(slot => {
-
-    const start =
-      slot.startMinutes;
-
-    const end =
-      slot.endMinutes;
-
-    return (
-      currentMinutes >= start &&
-      currentMinutes <= end
-    );
-  })
-
-  .map(slot => {
-
-          const formattedSlot = {
-            startTime: minutesToTime(slot.startMinutes),
-
-            endTime: minutesToTime(slot.endMinutes),
-
-            ruleType: slot.ruleType
+            isActive:
+              program.isActive
           };
 
-          // PER ORDER
+          // COMMON SLOT FILTERING
 
-          if (slot.ruleType === "PER_ORDER") {
+          const filteredSlots =
+            program.slots
 
-            formattedSlot.reward = {
-              amount: slot.rewardPerOrder || 0
-            };
-          }
+              // DAY FILTER
+              .filter(slot => {
 
-          // SLAB
+                const slotDays =
+                  slot.daysOfWeek?.length
+                    ? slot.daysOfWeek
+                    : program.daysOfWeek || [];
 
-          if (slot.ruleType === "SLAB") {
+                return slotDays.includes(
+                  today
+                );
+              })
 
-            formattedSlot.slabs = slot.slabs.map(s => ({
-              minOrders: s.minOrders,
-              maxOrders: s.maxOrders,
-              rewardAmount: s.rewardAmount
-            }));
-          }
+              // REMOVE EXPIRED
+              .filter(slot => {
 
-          return formattedSlot;
+                return (
+                  currentMinutes <=
+                  slot.endMinutes
+                );
+              })
+
+              // FORMAT SLOT
+              .map(slot => {
+
+                const isActive =
+
+                  currentMinutes >=
+                    slot.startMinutes &&
+
+                  currentMinutes <=
+                    slot.endMinutes;
+
+                const isUpcoming =
+                  currentMinutes <
+                  slot.startMinutes;
+
+                const commonSlot = {
+
+                  startTime:
+                    minutesToTime(
+                      slot.startMinutes
+                    ),
+
+                  endTime:
+                    minutesToTime(
+                      slot.endMinutes
+                    ),
+
+                  ruleType:
+                    slot.ruleType,
+
+                  
+
+                  isActive,
+
+                  isUpcoming
+                };
+
+                // PER ORDER
+
+                if (
+                  program.ruleType ===
+                  "PER_ORDER"
+                ) {
+
+                  return {
+
+                    ...commonSlot,
+
+                    reward: {
+
+                      amount:
+                        slot.rewardPerOrder || 0
+                    }
+                  };
+                }
+
+                // SLAB
+
+                if (
+                  program.ruleType ===
+                  "SLAB"
+                ) {
+
+                  return {
+
+                    ...commonSlot,
+
+                    slabs:
+                      slot.slabs.map(s => ({
+
+                        minOrders:
+                          s.minOrders,
+
+                        maxOrders:
+                          s.maxOrders,
+
+                        rewardAmount:
+                          s.rewardAmount
+                      }))
+                  };
+                }
+
+                // FIXED TARGET
+
+                if (
+                  program.ruleType ===
+                  "FIXED_TARGET"
+                ) {
+
+                  const target =
+                    program.targets?.[0];
+
+                  return {
+
+                    ...commonSlot,
+
+                    target: {
+
+                      orders:
+                        target?.targetOrders || 0
+                    },
+
+                    reward: {
+
+                      amount:
+                        target?.rewardAmount || 0
+                    }
+                  };
+                }
+
+                // HYBRID
+
+                if (
+                  program.ruleType ===
+                  "HYBRID"
+                ) {
+
+                  const target =
+                    program.targets?.[0];
+
+                  return {
+
+                    ...commonSlot,
+
+                    conditions: {
+
+                      minOrders:
+                        target?.targetOrders || 0,
+
+                      minEarnings:
+                        target?.targetEarnings || 0,
+
+                      minAcceptanceRate:
+                        program.minAcceptanceRate || 0,
+
+                      minCompletionRate:
+                        program.minCompletionRate || 0
+                    },
+
+                    reward: {
+
+                      amount:
+                        target?.rewardAmount || 0
+                    },
+
+                    maxPayoutPerDay:
+                      program.maxPayoutPerDay || 0
+                  };
+                }
+
+                return commonSlot;
+              });
+
+          return {
+
+            ...base,
+
+            slots: filteredSlots
+          };
         })
-      };
+
+        // REMOVE NULL PROGRAMS
+        .filter(program => program);
+
+    // GLOBAL ACTIVE SLOT CHECK
+
+   // GLOBAL ACTIVE SLOT CHECK
+
+const hasAnyActiveSlot =
+
+  response.some(program =>
+
+    program.slots?.some(slot =>
+      slot.isActive
+    )
+  );
+
+let filteredResponse = [];
+
+if (hasAnyActiveSlot) {
+
+  // SHOW ONLY ACTIVE SLOTS
+
+  filteredResponse =
+
+    response
+
+      .map(program => {
+
+        const activeSlots =
+
+          program.slots.filter(
+            slot => slot.isActive
+          );
+
+        return {
+          ...program,
+          slots: activeSlots
+        };
+      })
+
+      .filter(program =>
+        program.slots.length > 0
+      );
+
+} else {
+
+  // GET ALL UPCOMING PROGRAMS
+
+  const upcomingPrograms =
+
+    response
+
+      .map(program => {
+
+        const upcomingSlots =
+
+          program.slots.filter(
+            slot => slot.isUpcoming
+          );
+
+        return {
+          ...program,
+          slots: upcomingSlots
+        };
+      })
+
+      .filter(program =>
+        program.slots.length > 0
+      );
+
+  // FIND NEAREST UPCOMING SLOT
+
+  let nearestProgram = null;
+
+  let nearestSlot = null;
+
+  let nearestStart = Infinity;
+
+  for (const program of upcomingPrograms) {
+
+    for (const slot of program.slots) {
+
+      const slotStart =
+        parseInt(
+          slot.startTime.split(":")[0]
+        ) * 60 +
+
+        parseInt(
+          slot.startTime.split(":")[1]
+        );
+
+      if (slotStart < nearestStart) {
+
+        nearestStart = slotStart;
+
+        nearestProgram = program;
+
+        nearestSlot = slot;
+      }
     }
-
-    // FIXED TARGET
-
-  if (program.ruleType === "FIXED_TARGET") {
-
-  const activeSlot = program.slots.find(slot => {
-
-    return (
-      currentMinutes >= slot.startMinutes &&
-      currentMinutes <= slot.endMinutes
-    );
-  });
-
-  // NO ACTIVE SLOT
-
-  if (!activeSlot) {
-    return null;
   }
 
-  const target = program.targets?.[0];
+  // RETURN ONLY NEAREST SLOT
 
-  return {
-
-    ...base,
-
-    slots: [{
-      startTime:
-        minutesToTime(activeSlot.startMinutes),
-
-      endTime:
-        minutesToTime(activeSlot.endMinutes),
-
-      
-    }],
-
-    target: {
-      orders:
-        target?.targetOrders || 0
-    },
-
-    reward: {
-      amount:
-        target?.rewardAmount || 0
-    }
-  };
-}
-
-    // HYBRID
-
-    if (program.ruleType === "HYBRID") {
-
-  const activeSlot = program.slots.find(slot => {
-
-    return (
-      currentMinutes >= slot.startMinutes &&
-      currentMinutes <= slot.endMinutes
-    );
-  });
-
-  // NO ACTIVE SLOT
-
-  if (!activeSlot) {
-    return null;
-  }
-
-  const target = program.targets?.[0];
-
-  return {
-
-    ...base,
-
-    slots: [{
-      startTime:
-        minutesToTime(activeSlot.startMinutes),
-
-      endTime:
-        minutesToTime(activeSlot.endMinutes),
-
-      
-    }],
-
-    conditions: {
-
-      minOrders:
-        target?.targetOrders || 0,
-
-      minEarnings:
-        target?.targetEarnings || 0,
-
-      minAcceptanceRate:
-        program.minAcceptanceRate || 0,
-
-      minCompletionRate:
-        program.minCompletionRate || 0
-    },
-
-    reward: {
-      amount:
-        target?.rewardAmount || 0
-    },
-
-    maxPayoutPerDay:
-      program.maxPayoutPerDay || 0
-  };
-}
-
-    return null;
-  })
-  
-  .filter(program => {
-
-  // remove null
-  if (!program) return false;
-
-  // remove empty slot programs
   if (
-    (program.ruleType === "PER_ORDER" ||
-     program.ruleType === "SLAB") &&
-    (!program.slots || !program.slots.length)
+    nearestProgram &&
+    nearestSlot
   ) {
-    return false;
+
+    filteredResponse = [{
+
+      ...nearestProgram,
+
+      slots: [nearestSlot]
+    }];
   }
-
-  return true;
-});
-
-      response.sort((a, b) => {
-  const aStart = a.slots?.[0]?.startTime || "99:99";
-  const bStart = b.slots?.[0]?.startTime || "99:99";
-
-  return aStart.localeCompare(bStart);
-});
-
-
+}
     // RESPONSE
-    
+
     return res.json({
+
       success: true,
-      data: response
+
+      data: filteredResponse
     });
 
   } catch (error) {
-    console.error("Peak slot programs error:", error);
+
+    console.error(
+      "Peak slot programs error:",
+      error
+    );
 
     return res.status(500).json({
+
       success: false,
-      message: "Failed to fetch peak slot programs"
+
+      message:
+        "Failed to fetch peak slot programs"
     });
   }
 };

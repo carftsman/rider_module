@@ -37,11 +37,11 @@ const prisma = require("../config/prisma");
  *                 type: string
  *                 example: Hyderabad
  *
- *               pincode:
+ *               pincodeIds:
  *                 type: array
  *                 items:
  *                   type: string
- *                 example: ["500001"]
+ *                 example: ["500082"]
  *
  *               dateRange:
  *                 type: object
@@ -156,10 +156,12 @@ router.put("/peak-slot/:id", controller.updatePeakSlot);
  *     responses:
  *       200:
  *         description: Successfully fetched peak slot incentives
+ *
  *         content:
  *           application/json:
  *             schema:
  *               type: object
+ *
  *               properties:
  *                 success:
  *                   type: boolean
@@ -167,9 +169,12 @@ router.put("/peak-slot/:id", controller.updatePeakSlot);
  *
  *                 data:
  *                   type: array
+ *
  *                   items:
  *                     type: object
+ *
  *                     properties:
+ *
  *                       id:
  *                         type: string
  *                         example: peak_001
@@ -178,15 +183,58 @@ router.put("/peak-slot/:id", controller.updatePeakSlot);
  *                         type: string
  *                         example: Evening Peak Bonus
  *
+ *                       ruleType:
+ *                         type: string
+ *                         example: PER_ORDER
+ *
  *                       isActive:
  *                         type: boolean
  *                         example: true
  *
- *                       slots:
+ *                       pincodeIds:
  *                         type: array
  *                         items:
+ *                           type: string
+ *                         example:
+ *                           - "500081"
+ *                           - "500032"
+ *
+ *                       slotId:
+ *                         type: string
+ *                         example: slot_001
+ *
+ *                       startTime:
+ *                         type: string
+ *                         example: "18:00"
+ *
+ *                       endTime:
+ *                         type: string
+ *                         example: "21:00"
+ *
+ *                       slotTiming:
+ *                         type: string
+ *                         example: "18:00 - 21:00"
+ *
+ *                       daysOfWeek:
+ *                         type: array
+ *                         items:
+ *                           type: string
+ *                         example:
+ *                           - MON
+ *                           - TUE
+ *
+ *                       slots:
+ *                         type: array
+ *
+ *                         items:
  *                           type: object
+ *
  *                           properties:
+ *
+ *                             slotId:
+ *                               type: string
+ *                               example: slot_001
+ *
  *                             startTime:
  *                               type: string
  *                               example: "18:00"
@@ -195,14 +243,65 @@ router.put("/peak-slot/:id", controller.updatePeakSlot);
  *                               type: string
  *                               example: "21:00"
  *
+ *                             slotTiming:
+ *                               type: string
+ *                               example: "18:00 - 21:00"
+ *
+ *                             daysOfWeek:
+ *                               type: array
+ *                               items:
+ *                                 type: string
+ *                               example:
+ *                                 - SAT
+ *                                 - SUN
+ *
  *                             ruleType:
  *                               type: string
  *                               example: PER_ORDER
  *
+ *                       target:
+ *                         type: object
+ *
+ *                         properties:
+ *                           orders:
+ *                             type: number
+ *                             example: 20
+ *
+ *                       conditions:
+ *                         type: object
+ *
+ *                         properties:
+ *                           minOrders:
+ *                             type: number
+ *                             example: 20
+ *
+ *                           minEarnings:
+ *                             type: number
+ *                             example: 1000
+ *
+ *                           minAcceptanceRate:
+ *                             type: number
+ *                             example: 90
+ *
+ *                           minCompletionRate:
+ *                             type: number
+ *                             example: 95
+ *
+ *                       reward:
+ *                         type: object
+ *
+ *                         properties:
+ *                           amount:
+ *                             type: number
+ *                             example: 300
+ *
+ *                       maxPayoutPerDay:
+ *                         type: number
+ *                         example: 300
+ *
  *       500:
  *         description: Server error
  */
- 
 router.get("/peak-slot",controller.getAllPeakSlots)
  
  
