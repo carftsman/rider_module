@@ -9,18 +9,12 @@ const{getReferralProgress,getReferralRewards,getReferralCampaign,shareReferralBy
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 /**
  * @swagger
- * /api/refer/rider/all/referrals:
+ *  /api/refer/rider/all/referrals:
  *   get:
- *     summary: Get referral progress for logged-in rider
- *     tags: [Referral]
- *     description: |
- *       Fetch referral progress including:
- *       - Active referral program details
- *       - Referred riders list
- *       - Order completion status
- *       - Earnings summary
- *       - Optional filtering by status and date
- *
+ *     summary: Get rider referral progress
+ *     description: Fetch referral progress, earnings, target completion and referred rider details for active referral program only.
+ *     tags:
+ *       - Referral
  *     security:
  *       - bearerAuth: []
  *
@@ -29,23 +23,28 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *         name: status
  *         schema:
  *           type: string
- *           enum: [all, pending, completed]
- *           default: all
- *         description: Filter referrals by target status
+ *           enum:
+ *             - all
+ *             - pending
+ *             - completed
+ *         required: false
+ *         description: Filter referral status
  *
  *       - in: query
  *         name: fromDate
  *         schema:
  *           type: string
  *           format: date
- *         description: Filter referred riders created from this date (YYYY-MM-DD)
+ *         required: false
+ *         description: Filter referrals from date
  *
  *       - in: query
  *         name: toDate
  *         schema:
  *           type: string
  *           format: date
- *         description: Filter referred riders created till this date (YYYY-MM-DD)
+ *         required: false
+ *         description: Filter referrals till date
  *
  *     responses:
  *       200:
@@ -69,27 +68,36 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                     status:
  *                       type: string
  *                       example: all
+ *
  *                     fromDate:
  *                       type: string
  *                       nullable: true
- *                       example: "2026-05-01"
+ *                       example: 2026-05-01
+ *
  *                     toDate:
  *                       type: string
  *                       nullable: true
- *                       example: "2026-05-05"
+ *                       example: 2026-05-31
  *
  *                 program:
  *                   type: object
  *                   properties:
  *                     programId:
  *                       type: string
- *                       example: "uuid"
+ *                       example: 40fbb733-2980-4601-b947-f0b647b8ef04
+ *
  *                     programName:
  *                       type: string
- *                       example: "Refer & Earn May Campaign"
+ *                       example: Task Based Referral
+ *
+ *                     ruleType:
+ *                       type: string
+ *                       example: TASK
+ *
  *                     validFrom:
  *                       type: string
  *                       format: date-time
+ *
  *                     validTill:
  *                       type: string
  *                       format: date-time
@@ -99,35 +107,34 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                   properties:
  *                     riderId:
  *                       type: string
- *                       example: "rider-uuid"
+ *                       example: rider_id
+ *
  *                     partnerId:
  *                       type: string
- *                       example: "P1001"
+ *                       example: REF123
+ *
  *                     name:
  *                       type: string
- *                       example: "Ramu Kumar"
+ *                       example: John Rider
  *
  *                 summary:
  *                   type: object
  *                   properties:
- *                     referralAmountPerRider:
- *                       type: number
- *                       example: 500
- *                     targetOrdersPerRider:
- *                       type: number
- *                       example: 10
  *                     totalRidersOnboarded:
- *                       type: number
+ *                       type: integer
  *                       example: 5
+ *
  *                     targetReachedRiders:
- *                       type: number
+ *                       type: integer
  *                       example: 2
+ *
  *                     targetPendingRiders:
- *                       type: number
+ *                       type: integer
  *                       example: 3
+ *
  *                     totalEarnings:
  *                       type: number
- *                       example: 1000
+ *                       example: 2500
  *
  *                 referredRiders:
  *                   type: array
@@ -136,85 +143,107 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                     properties:
  *                       newRiderId:
  *                         type: string
+ *                         example: rider_id
+ *
  *                       newRiderName:
  *                         type: string
- *                         nullable: true
+ *                         example: New Rider
+ *
  *                       newRiderPartnerId:
  *                         type: string
- *                         nullable: true
+ *                         example: PARTNER123
+ *
  *                       usedReferralCode:
  *                         type: string
+ *                         example: REF123
  *
  *                       referredAt:
  *                         type: string
  *                         format: date-time
+ *
  *                       referredDate:
  *                         type: string
- *                         example: "2026-05-05"
+ *                         example: 2026-05-08
+ *
  *                       referredAtIST:
  *                         type: string
- *                         example: "05/05/2026, 11:30:00 AM"
+ *                         example: 08/05/2026, 12:30:00 pm
  *
  *                       ordersCompleted:
- *                         type: number
+ *                         type: integer
  *                         example: 6
+ *
  *                       targetOrders:
- *                         type: number
+ *                         type: integer
  *                         example: 10
  *
  *                       targetStatus:
  *                         type: string
- *                         enum: [TARGET_REACHED, TARGET_PENDING]
+ *                         enum:
+ *                           - TARGET_PENDING
+ *                           - TARGET_REACHED
+ *                         example: TARGET_PENDING
  *
  *                       remainingOrders:
- *                         type: number
+ *                         type: integer
  *                         example: 4
  *
  *                       rewardAmount:
  *                         type: number
  *                         example: 500
+ *
  *                       rewardEarned:
  *                         type: number
  *                         example: 0
- *
- *       400:
- *         description: Invalid configuration or missing partnerId
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Referral program targetOrders or rewardAmount not configured properly
  *
  *       401:
  *         description: Unauthorized rider
  *         content:
  *           application/json:
- *             example:
- *               success: false
- *               message: Unauthorized rider
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Unauthorized rider
  *
  *       404:
- *         description: Rider or program not found
+ *         description: No active referral program found
  *         content:
  *           application/json:
- *             examples:
- *               riderNotFound:
- *                 value:
- *                   success: false
- *                   message: Rider not found
- *               programNotFound:
- *                 value:
- *                   success: false
- *                   message: No active referral program found
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: No active referral program found for current date
  *
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
- *             example:
- *               success: false
- *               message: Internal server error
- *               error: Something went wrong
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
+ *
+ *                 error:
+ *                   type: string
+ *                   example: error message
  */
 router.get("/rider/all/referrals",riderAuthMiddleWare, getReferralProgress);
 router.get(
