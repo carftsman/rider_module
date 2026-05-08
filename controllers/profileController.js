@@ -694,6 +694,8 @@ exports.getSlotHistory = async (req, res) => {
 
         bookedSlotsCount: 0,
         completedSlotsCount: 0,
+        missedSlotsCount: 0,
+        cancelledSlotsCount: 0,
         totalSlots: 0,
         totalEarnings: 0,
 
@@ -839,29 +841,43 @@ else if (slotEndMs < Date.now()) {
       };
     });
 
-    // COMPLETED SLOTS COUNT
-    const completedSlotsCount = data.filter(
-      (slot) => slot.slotStatus === "COMPLETED"
-    ).length;
+ // COUNTS
+const bookedSlotsCount = data.length;
 
-    // RESPONSE
-    return res.status(200).json({
-      success: true,
+const completedSlotsCount = data.filter(
+  (slot) => slot.slotStatus === "COMPLETED"
+).length;
 
-      filter: filter || "all",
+const missedSlotsCount = data.filter(
+  (slot) => slot.slotStatus === "MISSED"
+).length;
 
-      bookedSlotsCount: bookings.length,
+const cancelledSlotsCount = data.filter(
+  (slot) => slot.slotStatus === "CANCELLED"
+).length;
 
-      completedSlotsCount,
+// RESPONSE
+return res.status(200).json({
+  success: true,
 
-      totalSlots: bookings.length,
+  filter: filter || "all",
 
-      totalEarnings: Number(
-        totalEarnings.toFixed(2)
-      ),
+  bookedSlotsCount,
 
-      data,
-    });
+  completedSlotsCount,
+
+  missedSlotsCount,
+
+  cancelledSlotsCount,
+
+  totalSlots: bookedSlotsCount,
+
+  totalEarnings: Number(
+    totalEarnings.toFixed(2)
+  ),
+
+  data,
+});
   } catch (err) {
     console.error("Slot History Error:", err);
 
