@@ -206,7 +206,7 @@ const getRiderDailyPrograms = async (req, res) => {
           slabs: true,
           targets: true,
           rules: true,
-  tasks: true
+          tasks: true
         },
         orderBy: { createdAt: "desc" }
       });
@@ -370,101 +370,232 @@ const response = programs.map((p) => {
     };
   }
 
+  // if (
+  //   p.ruleType === "TASK"
+  //   && p.tasks?.length
+  // ) {
 
-  if (
-    p.ruleType === "TASK"
-    && p.tasks?.length
-  ) {
+  //   result.tasks = p.tasks.map((t) => {
 
-    result.tasks = p.tasks.map((t) => {
+  //     const task = {
 
-      const task = {
+  //       dayNumber:
+  //         t.dayNumber,
 
-        dayNumber:
-          t.dayNumber,
+  //       taskRuleType:
+  //         t.taskRuleType
+  //     };
 
-        taskRuleType:
-          t.taskRuleType
+
+  //     if (
+  //       t.taskRuleType === "FIXED_TARGET"
+  //     ) {
+
+  //       task.target = {
+  //         orders:
+  //           t.targetOrders
+  //       };
+
+  //       task.reward = {
+  //         amount:
+  //           t.fixedReward
+  //       };
+  //     }
+
+  //     else if (
+  //       t.taskRuleType === "PER_ORDER"
+  //     ) {
+
+  //       task.rewardPerOrder =
+  //         t.rewardPerOrder;
+
+  //       task.maxOrders =
+  //         t.maxOrders;
+
+  //       task.maxEarning =
+  //         t.maxEarning;
+  //     }
+
+
+  //     else if (
+  //       t.taskRuleType === "HYBRID"
+  //     ) {
+
+  //       task.conditions = {
+
+  //         minOrders:
+  //           t.minOrders,
+
+  //         minAcceptanceRate:
+  //           t.minAcceptanceRate,
+
+  //         minEarnings:
+  //           t.minEarnings
+  //       };
+
+  //       task.reward = {
+  //         amount:
+  //           t.rewardAmount
+  //       };
+  //     }
+
+  //     else if (
+  //       t.taskRuleType === "SLAB"
+  //     ) {
+
+  //       task.slabs = p.slabs
+  //         .sort(
+  //           (a, b) =>
+  //             a.minValue - b.minValue
+  //         )
+  //         .map((s) => ({
+  //           minOrders:
+  //             s.minValue,
+
+  //           maxOrders:
+  //             s.maxValue,
+
+  //           rewardAmount:
+  //             s.rewardAmount
+  //         }));
+  //     }
+
+  //     return task;
+  //   });
+  // }
+if (
+  p.ruleType === "TASK"
+  && p.tasks?.length
+) {
+
+  result.slots = p.tasks.map((t) => {
+
+    const slot = {
+
+      slotId: t.id,
+
+      slotName:
+        t.slotName || t.name,
+
+      slotType:
+        t.slotType || "NORMAL_SLOT",
+
+      startTime:
+        t.startTime,
+
+      endTime:
+        t.endTime,
+
+      tasks: []
+    };
+
+    const task = {
+      taskRuleType:
+        t.taskRuleType
+    };
+
+    if (
+      t.taskRuleType === "FIXED_TARGET"
+    ) {
+
+      task.target = {
+        orders:
+          t.targetOrders || 0
       };
 
+      task.reward = {
+        amount:
+          t.fixedReward || 0
+      };
+    }
 
-      if (
-        t.taskRuleType === "FIXED_TARGET"
-      ) {
+    else if (
+      t.taskRuleType === "PER_ORDER"
+    ) {
 
-        task.target = {
-          orders:
-            t.targetOrders
-        };
+      task.rewardPerOrder =
+        t.rewardPerOrder || 0;
 
-        task.reward = {
-          amount:
-            t.fixedReward
-        };
-      }
+      task.maxOrders =
+        t.maxOrders || 0;
 
-      else if (
-        t.taskRuleType === "PER_ORDER"
-      ) {
+      task.maxEarning =
+        t.maxEarning || 0;
+    }
 
-        task.rewardPerOrder =
-          t.rewardPerOrder;
+    else if (
+      t.taskRuleType === "HYBRID"
+    ) {
 
-        task.maxOrders =
-          t.maxOrders;
+      task.conditions = {
 
-        task.maxEarning =
-          t.maxEarning;
-      }
+        minOrders:
+          t.minOrders || 0,
 
+        minAcceptanceRate:
+          t.minAcceptanceRate || 0,
 
-      else if (
-        t.taskRuleType === "HYBRID"
-      ) {
+        minEarnings:
+          t.minEarnings || 0
+      };
 
-        task.conditions = {
+      task.reward = {
+        amount:
+          t.rewardAmount || 0
+      };
+    }
+    else if (
+      t.taskRuleType === "SLAB"
+    ) {
 
+      task.slabs = p.slabs
+        ?.filter(
+          (s) => s.taskId === t.id
+        )
+        ?.sort(
+          (a, b) =>
+            a.minValue - b.minValue
+        )
+        ?.map((s) => ({
           minOrders:
-            t.minOrders,
+            s.minValue,
 
-          minAcceptanceRate:
-            t.minAcceptanceRate,
+          maxOrders:
+            s.maxValue,
 
-          minEarnings:
-            t.minEarnings
-        };
+          rewardAmount:
+            s.rewardAmount
+        })) || [];
+    }
 
-        task.reward = {
-          amount:
-            t.rewardAmount
-        };
-      }
+    slot.tasks.push(task);
 
-      else if (
-        t.taskRuleType === "SLAB"
-      ) {
+    return slot;
+  });
 
-        task.slabs = p.slabs
-          .sort(
-            (a, b) =>
-              a.minValue - b.minValue
-          )
-          .map((s) => ({
-            minOrders:
-              s.minValue,
+  result.slotSummary = {
 
-            maxOrders:
-              s.maxValue,
+    totalSlots:
+      result.slots.length,
 
-            rewardAmount:
-              s.rewardAmount
-          }));
-      }
+    normalSlots:
+      result.slots.filter(
+        (s) =>
+          s.slotType ===
+          "NORMAL_SLOT"
+      ).length,
 
-      return task;
-    });
-  }
+    peakSlots:
+      result.slots.filter(
+        (s) =>
+          s.slotType ===
+          "PEAK_SLOT"
+      ).length
+  };
 
+  // REMOVE OLD TASKS KEY
+  delete result.tasks;
+}
   return result;
 });
     // RESPONSE
