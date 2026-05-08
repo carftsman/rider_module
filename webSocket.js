@@ -484,7 +484,6 @@ const notifyRider = async (riderId, payload) => {
   }
 
 };
-<<<<<<< Updated upstream
 
 const notifyRiderIncentive =async (
   riderId,
@@ -515,49 +514,13 @@ const notifyRiderIncentive =async (
     );
   }
 };
-module.exports = {
-=======
->>>>>>> Stashed changes
+
 
 /* =========================================================
    INCENTIVE NOTIFY
 ========================================================= */
 
-const notifyRiderIncentive = async (
-  riderId,
-  payload
-) => {
 
-  try {
-
-    const ws =
-      riderSockets.get(String(riderId));
-
-    if (
-      ws &&
-      ws.readyState === WebSocket.OPEN
-    ) {
-
-      ws.send(JSON.stringify(payload));
-
-      console.log("✅ Incentive sent:", riderId);
-
-    } else {
-
-      console.log("❌ Incentive socket unavailable");
-    }
-
-  } catch (err) {
-
-    console.log(
-      "❌ notify incentive error:",
-      err.message
-    );
-  }
-
-  notifyRiderIncentive
-
-};
 
 module.exports = {
   initWebSocket,
