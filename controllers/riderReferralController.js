@@ -1,510 +1,6 @@
 const prisma = require("../config/prisma");
 
-// exports.getReferralProgress = async (req, res) => {
-//   try {
-//     const riderId = req.rider?.id;
 
-//     const {
-//       status = "all", // all | pending | completed
-//       fromDate,
-//       toDate
-//     } = req.query;
-
-//     if (!riderId) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "Unauthorized rider"
-//       });
-//     }
-
-//     const rider = await prisma.rider.findUnique({
-//       where: { id: riderId },
-//       include: {
-//         profile: true
-//       }
-//     });
-
-//     if (!rider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found"
-//       });
-//     }
-
-//     if (!rider.partnerId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Rider does not have partnerId"
-//       });
-//     }
-
-//     // Get active referral program created by admin
-// const now = new Date();
-
-// const program = await prisma.program.findFirst({
-//   where: {
-//     programType: "REFERRAL",
-//     isActive: true,
-
-//     validFrom: {
-//       lte: now
-//     },
-//     validTill: {
-//       gte: now
-//     }
-//   },
-//   include: {
-//     targets: true,
-//     tasks: true,
-//     slabs: true,
-//     referralConfig: true
-//   },
-//   orderBy: {
-//     createdAt: "desc"
-//   }
-// });
-//     if (!program) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "No active referral program found"
-//       });
-//     }
-
-//     // ✅ Admin decides these values
-//     const targetOrders =
-//       program.targets?.[0]?.targetOrders ||
-//       program.tasks?.[0]?.minOrders ||
-//       0;
-
-//     const rewardAmount =
-//       program.targets?.[0]?.rewardAmount ||
-//       program.tasks?.[0]?.rewardAmount ||
-//       program.slabs?.[0]?.rewardAmount ||
-//       0;
-
-//     if (!targetOrders || !rewardAmount) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Referral program targetOrders or rewardAmount not configured properly"
-//       });
-//     }
-
-//     const completedOrderStatuses = ["DELIVERED"];
-
-//     const riderWhere = {
-//       referredByPartnerId: rider.partnerId
-//     };
-
-//     // ✅ Date filter based on referred rider createdAt
-//     if (fromDate || toDate) {
-//       riderWhere.createdAt = {};
-
-//       if (fromDate) {
-//         riderWhere.createdAt.gte = new Date(fromDate);
-//       }
-
-//       if (toDate) {
-//         const endDate = new Date(toDate);
-//         endDate.setHours(23, 59, 59, 999);
-//         riderWhere.createdAt.lte = endDate;
-//       }
-//     }
-
-//     const referredRiders = await prisma.rider.findMany({
-//       where: riderWhere,
-//       include: {
-//         profile: true
-//       },
-//       orderBy: {
-//         createdAt: "desc"
-//       }
-//     });
-
-//     let referrals = await Promise.all(
-//       referredRiders.map(async (referee) => {
-//         const ordersCompleted = await prisma.order.count({
-//           where: {
-//             riderId: referee.id,
-//             orderStatus: {
-//               in: completedOrderStatuses
-//             }
-//           }
-//         });
-
-//         const targetReached = ordersCompleted >= targetOrders;
-//         // ✅ Update Referral table also
-// await prisma.referral.updateMany({
-//   where: {
-//     referrerId: rider.id,
-//     refereeId: referee.id,
-//     programId: program.id
-//   },
-//   data: {
-//     totalOrders: ordersCompleted,
-//     targetOrders: targetOrders,
-//     isCompleted: targetReached,
-//     completedAt: targetReached ? new Date() : null,
-
-//     rewardGiven: targetReached,
-//     rewardGivenAt: targetReached ? new Date() : null
-//   }
-// });
-
-//         const referredAtIST = referee.createdAt.toLocaleString("en-IN", {
-//           timeZone: "Asia/Kolkata"
-//         });
-
-//         return {
-//           newRiderId: referee.id,
-//           newRiderName: referee.profile?.fullName || null,
-//           newRiderPartnerId: referee.partnerId || null,
-//           usedReferralCode: referee.referredByPartnerId,
-
-//           referredAt: referee.createdAt,
-//           referredDate: referee.createdAt.toISOString().split("T")[0],
-//           referredAtIST,
-
-//           ordersCompleted,
-//           targetOrders,
-
-//           targetStatus: targetReached ? "TARGET_REACHED" : "TARGET_PENDING",
-//           remainingOrders: targetReached ? 0 : targetOrders - ordersCompleted,
-
-//           rewardAmount,
-//           rewardEarned: targetReached ? rewardAmount : 0
-//         };
-//       })
-//     );
-
-//     // ✅ Status filter
-//     if (status === "pending") {
-//       referrals = referrals.filter(
-//         (item) => item.targetStatus === "TARGET_PENDING"
-//       );
-//     }
-
-//     if (status === "completed") {
-//       referrals = referrals.filter(
-//         (item) => item.targetStatus === "TARGET_REACHED"
-//       );
-//     }
-
-//     const targetReachedCount = referrals.filter(
-//       (item) => item.targetStatus === "TARGET_REACHED"
-//     ).length;
-
-//     const totalEarnings = referrals.reduce(
-//       (sum, item) => sum + item.rewardEarned,
-//       0
-//     );
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Referral progress fetched successfully",
-
-//       filters: {
-//         status,
-//         fromDate: fromDate || null,
-//         toDate: toDate || null
-//       },
-
-//       program: {
-//         programId: program.id,
-//         programName: program.name,
-//         validFrom: program.validFrom,
-//         validTill: program.validTill
-//       },
-
-//       referrer: {
-//         riderId: rider.id,
-//         partnerId: rider.partnerId,
-//         name: rider.profile?.fullName || null
-//       },
-
-//       summary: {
-//         referralAmountPerRider: rewardAmount,
-//         targetOrdersPerRider: targetOrders,
-//         totalRidersOnboarded: referrals.length,
-//         targetReachedRiders: targetReachedCount,
-//         targetPendingRiders: referrals.length - targetReachedCount,
-//         totalEarnings
-//       },
-
-//       referredRiders: referrals
-//     });
-//   } catch (error) {
-//     console.error("Referral Progress Error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: error.message
-//     });
-//   }
-// };
-// exports.getReferralProgress = async (req, res) => {
-//   try {
-//     const riderId = req.rider?.id;
-//     const { status = "all", fromDate, toDate } = req.query;
-
-//     if (!riderId) {
-//       return res.status(401).json({
-//         success: false,
-//         message: "Unauthorized rider"
-//       });
-//     }
-
-//     const rider = await prisma.rider.findUnique({
-//       where: { id: riderId },
-//       include: { profile: true }
-//     });
-
-//     if (!rider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found"
-//       });
-//     }
-
-//     if (!rider.partnerId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Rider does not have partnerId"
-//       });
-//     }
-
-//     const now = new Date();
-
-//     const program = await prisma.program.findFirst({
-//       where: {
-//         programType: "REFERRAL",
-//         isActive: true,
-//         validFrom: { lte: now },
-//         validTill: { gte: now }
-//       },
-//       include: {
-//         targets: true,
-//         tasks: true,
-//         slabs: true,
-//         referralConfig: true
-//       },
-//       orderBy: { createdAt: "desc" }
-//     });
-
-//     if (!program) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "No active referral program found"
-//       });
-//     }
-
-//     // -------------------------------
-//     // ADMIN RULE BASED CONFIG
-//     // -------------------------------
-//     let targetOrders = 0;
-//     let rewardAmount = 0;
-
-//     if (program.ruleType === "FIXED_TARGET") {
-//       targetOrders =
-//         program.targets?.[0]?.targetOrders ||
-//         program.referralConfig?.refereeRules?.targetOrders ||
-//         0;
-
-//       rewardAmount =
-//         program.targets?.[0]?.rewardAmount ||
-//         program.referralConfig?.referrerReward?.rewardAmount ||
-//         0;
-//     }
-
-//     if (program.ruleType === "TASK") {
-//       targetOrders =
-//         program.tasks?.[0]?.minOrders ||
-//         program.tasks?.[0]?.targetOrders ||
-//         program.referralConfig?.refereeRules?.minOrders ||
-//         0;
-
-//       rewardAmount =
-//         program.tasks?.[0]?.rewardAmount ||
-//         program.referralConfig?.referrerReward?.rewardAmount ||
-//         0;
-//     }
-
-// if (program.ruleType === "SLAB") {
-//   const referrerSlab = program.slabs?.find(
-//     (slab) => slab.role === "REFERRER"
-//   );
-
-//   const refereeSlab = program.slabs?.find(
-//     (slab) => slab.role === "REFEREE"
-//   );
-
-//   targetOrders =
-//     program.targets?.[0]?.targetOrders ||
-//     refereeSlab?.minValue ||
-//     referrerSlab?.minValue ||
-//     0;
-
-//   rewardAmount =
-//     referrerSlab?.rewardAmount ||
-//     program.targets?.[0]?.rewardAmount ||
-//     0;
-// }
-//     if (!targetOrders || !rewardAmount) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Referral program targetOrders or rewardAmount not configured properly",
-//         debug: {
-//           ruleType: program.ruleType,
-//           targets: program.targets,
-//           tasks: program.tasks,
-//           slabs: program.slabs,
-//           referralConfig: program.referralConfig
-//         }
-//       });
-//     }
-
-//     const riderWhere = {
-//       referredByPartnerId: rider.partnerId
-//     };
-
-//     if (fromDate || toDate) {
-//       riderWhere.createdAt = {};
-
-//       if (fromDate) {
-//         riderWhere.createdAt.gte = new Date(fromDate);
-//       }
-
-//       if (toDate) {
-//         const endDate = new Date(toDate);
-//         endDate.setHours(23, 59, 59, 999);
-//         riderWhere.createdAt.lte = endDate;
-//       }
-//     }
-
-//     const referredRiders = await prisma.rider.findMany({
-//       where: riderWhere,
-//       include: { profile: true },
-//       orderBy: { createdAt: "desc" }
-//     });
-
-//     let referrals = await Promise.all(
-//       referredRiders.map(async (referee) => {
-//         const ordersCompleted = await prisma.order.count({
-//           where: {
-//             riderId: referee.id,
-//             orderStatus: "DELIVERED"
-//           }
-//         });
-
-//         const targetReached = ordersCompleted >= targetOrders;
-
-//         await prisma.referral.updateMany({
-//           where: {
-//             referrerId: rider.id,
-//             refereeId: referee.id,
-//             programId: program.id
-//           },
-//           data: {
-//             totalOrders: ordersCompleted,
-//             targetOrders,
-//             isCompleted: targetReached,
-//             completedAt: targetReached ? new Date() : null,
-
-//             rewardGiven: targetReached,
-//             rewardGivenAt: targetReached ? new Date() : null
-//           }
-//         });
-
-//         return {
-//           newRiderId: referee.id,
-//           newRiderName: referee.profile?.fullName || null,
-//           newRiderPartnerId: referee.partnerId || null,
-//           usedReferralCode: referee.referredByPartnerId,
-
-//           referredAt: referee.createdAt,
-//           referredDate: referee.createdAt.toISOString().split("T")[0],
-//           referredAtIST: referee.createdAt.toLocaleString("en-IN", {
-//             timeZone: "Asia/Kolkata"
-//           }),
-
-//           ordersCompleted,
-//           targetOrders,
-
-//           targetStatus: targetReached ? "TARGET_REACHED" : "TARGET_PENDING",
-//           remainingOrders: targetReached ? 0 : targetOrders - ordersCompleted,
-
-//           rewardAmount,
-//           rewardEarned: targetReached ? rewardAmount : 0
-//         };
-//       })
-//     );
-
-//     if (status === "pending") {
-//       referrals = referrals.filter(
-//         (item) => item.targetStatus === "TARGET_PENDING"
-//       );
-//     }
-
-//     if (status === "completed") {
-//       referrals = referrals.filter(
-//         (item) => item.targetStatus === "TARGET_REACHED"
-//       );
-//     }
-
-//     const targetReachedCount = referrals.filter(
-//       (item) => item.targetStatus === "TARGET_REACHED"
-//     ).length;
-
-//     const totalEarnings = referrals.reduce(
-//       (sum, item) => sum + item.rewardEarned,
-//       0
-//     );
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Referral progress fetched successfully",
-
-//       filters: {
-//         status,
-//         fromDate: fromDate || null,
-//         toDate: toDate || null
-//       },
-
-//       program: {
-//         programId: program.id,
-//         programName: program.name,
-//         ruleType: program.ruleType,
-//         validFrom: program.validFrom,
-//         validTill: program.validTill
-//       },
-
-//       referrer: {
-//         riderId: rider.id,
-//         partnerId: rider.partnerId,
-//         name: rider.profile?.fullName || null
-//       },
-
-//       summary: {
-//         referralAmountPerRider: rewardAmount,
-//         targetOrdersPerRider: targetOrders,
-//         totalRidersOnboarded: referrals.length,
-//         targetReachedRiders: targetReachedCount,
-//         targetPendingRiders: referrals.length - targetReachedCount,
-//         totalEarnings
-//       },
-
-//       referredRiders: referrals
-//     });
-//   } catch (error) {
-//     console.error("Referral Progress Error:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: "Internal server error",
-//       error: error.message
-//     });
-//   }
-// };
 const getReferralRewardByRule = (program, ordersCompleted) => {
   let targetOrders = 0;
   let rewardAmount = 0;
@@ -514,35 +10,43 @@ const getReferralRewardByRule = (program, ordersCompleted) => {
     const target = program.targets?.[0];
     const referrerTask = program.tasks?.find((t) => t.role === "REFERRER");
 
-    targetOrders = target?.targetOrders || 0;
-    targetReached = ordersCompleted >= targetOrders;
-    rewardAmount = targetReached ? referrerTask?.rewardAmount || 0 : 0;
+    targetOrders = Number(target?.targetOrders || 0);
+    targetReached = targetOrders > 0 && ordersCompleted >= targetOrders;
+
+    rewardAmount = targetReached
+      ? Number(referrerTask?.rewardAmount || target?.rewardAmount || 0)
+      : 0;
   }
 
   if (program.ruleType === "SLAB") {
-    const refereeSlabs = program.slabs?.filter((s) => s.role === "REFEREE");
+    const refereeSlabs =
+      program.slabs?.filter((s) => s.role === "REFEREE") || [];
+
     const referrerSlab = program.slabs?.find(
       (s) =>
         s.role === "REFERRER" &&
-        ordersCompleted >= s.minValue &&
-        ordersCompleted <= s.maxValue
+        ordersCompleted >= Number(s.minValue || 0) &&
+        ordersCompleted <= Number(s.maxValue || 0)
     );
 
     targetOrders =
-      refereeSlabs?.length > 0
-        ? Math.min(...refereeSlabs.map((s) => s.minValue))
+      refereeSlabs.length > 0
+        ? Math.min(...refereeSlabs.map((s) => Number(s.minValue || 0)))
         : 0;
 
-    targetReached = ordersCompleted >= targetOrders;
-    rewardAmount = targetReached ? referrerSlab?.rewardAmount || 0 : 0;
+    targetReached = targetOrders > 0 && ordersCompleted >= targetOrders;
+
+    rewardAmount = targetReached
+      ? Number(referrerSlab?.rewardAmount || 0)
+      : 0;
   }
 
   if (program.ruleType === "PER_ORDER") {
     const referrerTask = program.tasks?.find((t) => t.role === "REFERRER");
 
-    const rewardPerOrder = referrerTask?.rewardPerOrder || 0;
-    const maxOrders = referrerTask?.maxOrders || ordersCompleted;
-    const maxEarning = referrerTask?.maxEarning || 0;
+    const rewardPerOrder = Number(referrerTask?.rewardPerOrder || 0);
+    const maxOrders = Number(referrerTask?.maxOrders || ordersCompleted);
+    const maxEarning = Number(referrerTask?.maxEarning || 0);
 
     targetOrders = maxOrders;
     targetReached = ordersCompleted > 0;
@@ -559,23 +63,36 @@ const getReferralRewardByRule = (program, ordersCompleted) => {
     const refereeTask = program.tasks?.find((t) => t.role === "REFEREE");
     const referrerTask = program.tasks?.find((t) => t.role === "REFERRER");
 
-    targetOrders = refereeTask?.minOrders || 0;
-    targetReached = ordersCompleted >= targetOrders;
-    rewardAmount = targetReached ? referrerTask?.rewardAmount || 0 : 0;
+    targetOrders = Number(
+      refereeTask?.minOrders ||
+        refereeTask?.targetOrders ||
+        0
+    );
+
+    targetReached = targetOrders > 0 && ordersCompleted >= targetOrders;
+
+    rewardAmount = targetReached
+      ? Number(referrerTask?.rewardAmount || 0)
+      : 0;
   }
 
   if (program.ruleType === "TASK") {
-    const refereeTasks = program.tasks?.filter((t) => t.role === "REFEREE");
+    const refereeTasks =
+      program.tasks?.filter((t) => t.role === "REFEREE") || [];
 
     targetOrders =
-      refereeTasks?.length > 0
-        ? Math.min(...refereeTasks.map((t) => t.minOrders || 0))
+      refereeTasks.length > 0
+        ? Math.min(
+            ...refereeTasks.map((t) =>
+              Number(t.minOrders || t.targetOrders || 0)
+            )
+          )
         : 0;
 
-    const matchedTasks = refereeTasks?.filter(
+    const matchedTasks = refereeTasks.filter(
       (t) =>
-        ordersCompleted >= (t.minOrders || 0) &&
-        ordersCompleted <= (t.maxOrders || 999999)
+        ordersCompleted >= Number(t.minOrders || 0) &&
+        ordersCompleted <= Number(t.maxOrders || 999999)
     );
 
     rewardAmount = matchedTasks.reduce(
@@ -589,7 +106,7 @@ const getReferralRewardByRule = (program, ordersCompleted) => {
   return {
     targetOrders,
     rewardAmount,
-    targetReached,
+    targetReached
   };
 };
 
@@ -601,26 +118,26 @@ exports.getReferralProgress = async (req, res) => {
     if (!riderId) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized rider",
+        message: "Unauthorized rider"
       });
     }
 
     const rider = await prisma.rider.findUnique({
       where: { id: riderId },
-      include: { profile: true },
+      include: { profile: true }
     });
 
     if (!rider) {
       return res.status(404).json({
         success: false,
-        message: "Rider not found",
+        message: "Rider not found"
       });
     }
 
     if (!rider.partnerId) {
       return res.status(400).json({
         success: false,
-        message: "Rider does not have partnerId",
+        message: "Rider does not have partnerId"
       });
     }
 
@@ -631,26 +148,26 @@ exports.getReferralProgress = async (req, res) => {
         programType: "REFERRAL",
         isActive: true,
         validFrom: { lte: now },
-        validTill: { gte: now },
+        validTill: { gte: now }
       },
       include: {
         targets: true,
         tasks: true,
         slabs: true,
-        referralConfig: true,
+        referralConfig: true
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "desc" }
     });
 
     if (!program) {
       return res.status(404).json({
         success: false,
-        message: "No active referral program found",
+        message: "No active referral program found"
       });
     }
 
     const riderWhere = {
-      referredByPartnerId: rider.partnerId,
+      referredByPartnerId: rider.partnerId
     };
 
     if (fromDate || toDate) {
@@ -670,7 +187,7 @@ exports.getReferralProgress = async (req, res) => {
     const referredRiders = await prisma.rider.findMany({
       where: riderWhere,
       include: { profile: true },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "desc" }
     });
 
     let referrals = await Promise.all(
@@ -678,33 +195,77 @@ exports.getReferralProgress = async (req, res) => {
         const ordersCompleted = await prisma.order.count({
           where: {
             riderId: referee.id,
-            orderStatus: "DELIVERED",
-          },
+            orderStatus: "DELIVERED"
+          }
         });
 
-        const ruleResult = getReferralRewardByRule(program, ordersCompleted);
+        const ruleResult = getReferralRewardByRule(
+          program,
+          ordersCompleted
+        );
 
         const targetOrders = ruleResult.targetOrders;
         const rewardAmount = ruleResult.rewardAmount;
         const targetReached = ruleResult.targetReached;
 
-        await prisma.referral.updateMany({
+        const existingReferral = await prisma.referral.findUnique({
           where: {
+            referrerId_refereeId: {
+              referrerId: rider.id,
+              refereeId: referee.id
+            }
+          }
+        });
+
+        const referral = await prisma.referral.upsert({
+          where: {
+            referrerId_refereeId: {
+              referrerId: rider.id,
+              refereeId: referee.id
+            }
+          },
+          update: {
+            programId: program.id,
+            referralCode: rider.partnerId,
+
+            totalOrders: ordersCompleted,
+            targetOrders,
+
+            isCompleted: targetReached,
+
+            completedAt:
+              targetReached && !existingReferral?.completedAt
+                ? new Date()
+                : existingReferral?.completedAt || null,
+
+            rewardGiven: targetReached,
+
+            rewardGivenAt:
+              targetReached && !existingReferral?.rewardGivenAt
+                ? new Date()
+                : existingReferral?.rewardGivenAt || null
+          },
+          create: {
             referrerId: rider.id,
             refereeId: referee.id,
             programId: program.id,
-          },
-          data: {
+
+            referralCode: rider.partnerId,
+
             totalOrders: ordersCompleted,
             targetOrders,
+
             isCompleted: targetReached,
             completedAt: targetReached ? new Date() : null,
+
             rewardGiven: targetReached,
-            rewardGivenAt: targetReached ? new Date() : null,
-          },
+            rewardGivenAt: targetReached ? new Date() : null
+          }
         });
 
         return {
+          referralId: referral.id,
+
           newRiderId: referee.id,
           newRiderName: referee.profile?.fullName || null,
           newRiderPartnerId: referee.partnerId || null,
@@ -713,18 +274,23 @@ exports.getReferralProgress = async (req, res) => {
           referredAt: referee.createdAt,
           referredDate: referee.createdAt.toISOString().split("T")[0],
           referredAtIST: referee.createdAt.toLocaleString("en-IN", {
-            timeZone: "Asia/Kolkata",
+            timeZone: "Asia/Kolkata"
           }),
 
           ordersCompleted,
           targetOrders,
 
           targetStatus: targetReached ? "TARGET_REACHED" : "TARGET_PENDING",
+
           remainingOrders:
-            targetReached || !targetOrders ? 0 : targetOrders - ordersCompleted,
+            targetReached || !targetOrders
+              ? 0
+              : Math.max(targetOrders - ordersCompleted, 0),
 
           rewardAmount,
           rewardEarned: targetReached ? rewardAmount : 0,
+
+          referralUpdated: true
         };
       })
     );
@@ -757,7 +323,7 @@ exports.getReferralProgress = async (req, res) => {
       filters: {
         status,
         fromDate: fromDate || null,
-        toDate: toDate || null,
+        toDate: toDate || null
       },
 
       program: {
@@ -765,23 +331,23 @@ exports.getReferralProgress = async (req, res) => {
         programName: program.name,
         ruleType: program.ruleType,
         validFrom: program.validFrom,
-        validTill: program.validTill,
+        validTill: program.validTill
       },
 
       referrer: {
         riderId: rider.id,
         partnerId: rider.partnerId,
-        name: rider.profile?.fullName || null,
+        name: rider.profile?.fullName || null
       },
 
       summary: {
         totalRidersOnboarded: referrals.length,
         targetReachedRiders: targetReachedCount,
         targetPendingRiders: referrals.length - targetReachedCount,
-        totalEarnings,
+        totalEarnings
       },
 
-      referredRiders: referrals,
+      referredRiders: referrals
     });
   } catch (error) {
     console.error("Referral Progress Error:", error);
@@ -789,7 +355,7 @@ exports.getReferralProgress = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
+      error: error.message
     });
   }
 };

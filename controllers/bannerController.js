@@ -1,5 +1,125 @@
 const prisma = require("../config/prisma");
 
+// If rider city/pincode is missing, don't block program fetching.
+// If rider city/pincode exists, match global programs OR matching location programs.
+const buildProgramLocationFilter = ({ riderCityId, riderPincodeId }) => {
+  if (!riderCityId && !riderPincodeId) {
+    return {};
+  }
+
+  const cityFilter = [
+    {
+      cityId: {
+        isEmpty: true
+      }
+    }
+  ];
+
+  const pincodeFilter = [
+    {
+      pincodeIds: {
+        isEmpty: true
+      }
+    }
+  ];
+
+  if (riderCityId) {
+    cityFilter.push({
+      cityId: {
+        has: riderCityId
+      }
+    });
+  }
+
+  if (riderPincodeId) {
+    pincodeFilter.push({
+      pincodeIds: {
+        has: riderPincodeId
+      }
+    });
+  }
+
+  return {
+    AND: [
+      {
+        OR: cityFilter
+      },
+      {
+        OR: pincodeFilter
+      }
+    ]
+  };
+};
+
+const getTargetDetails = (program, completedOrders = 0) => {
+  let targetOrders = 0;
+  let rewardAmount = 0;
+
+  if (!program) {
+    return {
+      targetOrders,
+      rewardAmount,
+      completedOrders,
+      remainingOrders: 0,
+      targetCompleted: false
+    };
+  }
+
+  // FIXED_TARGET
+  if (program.ruleType === "FIXED_TARGET") {
+    const target = program.targets?.[0];
+
+    targetOrders = Number(target?.targetOrders || 0);
+    rewardAmount = Number(target?.rewardAmount || 0);
+  }
+
+  // TASK
+  if (program.ruleType === "TASK") {
+    const task = program.tasks?.[0];
+
+    targetOrders = Number(
+      task?.targetOrders ||
+      task?.maxOrders ||
+      task?.minOrders ||
+      0
+    );
+
+    rewardAmount = Number(
+      task?.rewardAmount ||
+      task?.fixedReward ||
+      0
+    );
+  }
+
+  // SLAB
+  if (program.ruleType === "SLAB") {
+    const slabs = [...(program.slabs || [])].sort(
+      (a, b) => Number(a.maxValue || 0) - Number(b.maxValue || 0)
+    );
+
+    const nextSlab = slabs.find(
+      (slab) => completedOrders < Number(slab.maxValue || 0)
+    );
+
+    const selectedSlab = nextSlab || slabs[slabs.length - 1];
+
+    if (selectedSlab) {
+      targetOrders = Number(selectedSlab.maxValue || 0);
+      rewardAmount = Number(selectedSlab.rewardAmount || 0);
+    }
+  }
+
+  const remainingOrders = Math.max(targetOrders - completedOrders, 0);
+
+  return {
+    targetOrders,
+    rewardAmount,
+    completedOrders,
+    remainingOrders,
+    targetCompleted: targetOrders > 0 && completedOrders >= targetOrders
+  };
+};
+
 const getRiderHomeBanners = async (req, res) => {
   try {
     const riderId = req.rider?.id;
@@ -11,8 +131,12 @@ const getRiderHomeBanners = async (req, res) => {
       });
     }
 
+    const now = new Date();
+
     const rider = await prisma.rider.findUnique({
-      where: { id: riderId },
+      where: {
+        id: riderId
+      },
       include: {
         bankDetails: true,
         kitAddress: true,
@@ -27,7 +151,26 @@ const getRiderHomeBanners = async (req, res) => {
       });
     }
 
-    // Bank banner condition
+    const riderCityId =
+      rider.cityId ||
+      rider.profile?.cityId ||
+      rider.profile?.city ||
+      null;
+
+    const riderPincodeId =
+      rider.pincodeId ||
+      rider.profile?.pincodeId ||
+      rider.profile?.pincode ||
+      null;
+
+    const locationFilter = buildProgramLocationFilter({
+      riderCityId,
+      riderPincodeId
+    });
+
+    // =====================================================
+    // BANK
+    // =====================================================
     const bankAdded =
       !!rider.bankDetails?.accountNumber &&
       !!rider.bankDetails?.ifscCode;
@@ -35,93 +178,285 @@ const getRiderHomeBanners = async (req, res) => {
     const bankVerified =
       rider.bankDetails?.bankVerificationStatus === "VERIFIED";
 
-    const showBankBanner = !bankAdded || !bankVerified;
+    let bankStatus = "PENDING";
+    let bankMessage = "Please add your bank details to receive payouts.";
 
-    // Kit delivered condition
-    const deliveredKitRequests = await prisma.assetRequest.findMany({
+    if (bankAdded && !bankVerified) {
+      bankStatus = "UNDER_REVIEW";
+      bankMessage = "Bank details are under verification.";
+    }
+
+    if (bankAdded && bankVerified) {
+      bankStatus = "COMPLETED";
+      bankMessage = "Bank details verified successfully.";
+    }
+
+    // true means bank is completed/verified
+    const bank = bankVerified;
+
+    // =====================================================
+    // KIT
+    // =====================================================
+    const kitRequest = await prisma.assetRequest.findFirst({
       where: {
-        riderId,
-        status: "COMPLETED",
-        Shipment: {
-          deliveryStatus: "DELIVERED"
-        }
+        riderId
       },
       include: {
         Shipment: true
-      }
-    });
-
-    const kitDelivered =
-      rider.kitAddress?.onboardingKitStatus === true ||
-      deliveredKitRequests.length > 0;
-
-    const showKitBanner = !kitDelivered;
-
-    //  Joining bonus active for all new riders until payout is completed
-    const joiningBonusPayout = await prisma.programPayout.findFirst({
-      where: {
-        riderId,
-        triggerType: "PROGRAM_COMPLETION"
       },
       orderBy: {
         createdAt: "desc"
       }
     });
 
-    const joiningBonusCompleted = !!joiningBonusPayout;
-    const showJoiningBonusBanner = !joiningBonusCompleted;
+    const shipmentStatus = kitRequest?.Shipment?.deliveryStatus || null;
 
-    const banners = [
-      {
-        key: "ADD_BANK_DETAILS",
-        title: "Add Bank Details",
-        description: "Add your bank details to receive payouts directly.",
-        imageUrl: null,
-        redirectTo: "BANK_DETAILS",
-        isEnabled: showBankBanner,
-        status: showBankBanner ? "PENDING" : "COMPLETED"
+    const kitDelivered =
+      rider.kitAddress?.onboardingKitStatus === true ||
+      kitRequest?.status === "COMPLETED" ||
+      shipmentStatus === "DELIVERED";
+
+    let kitStatus = "NOT_REQUESTED";
+    let kitMessage = "Please select your joining kit.";
+
+    if (kitRequest?.status === "PENDING") {
+      kitStatus = "REQUESTED";
+      kitMessage = "Your joining kit request is submitted.";
+    }
+
+    if (kitRequest?.status === "APPROVED") {
+      kitStatus = "APPROVED";
+      kitMessage = "Your joining kit request is approved.";
+    }
+
+    if (shipmentStatus === "SHIPPED") {
+      kitStatus = "SHIPPED";
+      kitMessage = "Your joining kit has been shipped.";
+    }
+
+    if (shipmentStatus === "DELIVERED" || kitRequest?.status === "COMPLETED") {
+      kitStatus = "DELIVERED";
+      kitMessage = "Your joining kit has been delivered.";
+    }
+
+    // true means kit is delivered
+    const kit = kitDelivered;
+
+    // =====================================================
+    // JOINING BONUS
+    // =====================================================
+    const joiningBonusProgram = await prisma.program.findFirst({
+      where: {
+        programType: "JOINING_BONUS",
+        isActive: true,
+        validFrom: {
+          lte: now
+        },
+        validTill: {
+          gte: now
+        },
+        ...locationFilter
       },
-      {
-        key: "WELCOME_KIT",
-        title: "Welcome Kit",
-        description: "Get your joining kit and start delivering.",
-        imageUrl: null,
-        redirectTo: "WELCOME_KIT",
-        isEnabled: showKitBanner,
-        status: showKitBanner ? "PENDING" : "COMPLETED"
+      include: {
+        targets: true,
+        tasks: true,
+        slabs: true
       },
-      {
-        key: "JOINING_BONUS",
-        title: "Joining Bonus",
-        description: "Complete your joining bonus tasks and earn rewards.",
-        imageUrl: null,
-        redirectTo: "JOINING_BONUS",
-        isEnabled: showJoiningBonusBanner,
-        status: showJoiningBonusBanner ? "ACTIVE" : "COMPLETED"
-      },
-      {
-        key: "REFER_AND_EARN",
-        title: "Refer and Earn",
-        description: "Refer riders and earn rewards.",
-        imageUrl: null,
-        redirectTo: "REFER_AND_EARN",
-        isEnabled: true,
-        status: "ACTIVE"
+      orderBy: {
+        createdAt: "desc"
       }
-    ];
+    });
+
+    let joiningBonus = false;
+    let joiningBonusStatus = "NOT_AVAILABLE";
+    let joiningBonusMessage = "No joining bonus available.";
+    let joiningBonusOrdersCompleted = 0;
+    let joiningBonusTargetOrders = 0;
+    let joiningBonusRemainingOrders = 0;
+    let joiningBonusRewardAmount = 0;
+
+    if (joiningBonusProgram) {
+      const joiningBonusPayout = await prisma.programPayout.findFirst({
+        where: {
+          riderId,
+          programId: joiningBonusProgram.id,
+          triggerType: "PROGRAM_COMPLETION"
+        },
+        orderBy: {
+          createdAt: "desc"
+        }
+      });
+
+      const joiningBonusCompleted = !!joiningBonusPayout;
+
+      const startDate =
+        rider.createdAt && rider.createdAt > joiningBonusProgram.validFrom
+          ? rider.createdAt
+          : joiningBonusProgram.validFrom;
+
+      joiningBonusOrdersCompleted = await prisma.order.count({
+        where: {
+          riderId,
+          orderStatus: "DELIVERED",
+          createdAt: {
+            gte: startDate,
+            lte: joiningBonusProgram.validTill
+          }
+        }
+      });
+
+      const joiningTarget = getTargetDetails(
+        joiningBonusProgram,
+        joiningBonusOrdersCompleted
+      );
+
+      joiningBonusTargetOrders = joiningTarget.targetOrders;
+      joiningBonusRemainingOrders = joiningTarget.remainingOrders;
+      joiningBonusRewardAmount = joiningTarget.rewardAmount;
+
+      // true means joining bonus program is available
+      joiningBonus = true;
+
+      if (joiningBonusCompleted) {
+        joiningBonusStatus = "COMPLETED";
+        joiningBonusMessage = "Joining bonus already completed.";
+      } else if (joiningTarget.targetCompleted) {
+        joiningBonusStatus = "TARGET_COMPLETED";
+        joiningBonusMessage = `Joining bonus target completed. You are eligible to earn ₹${joiningBonusRewardAmount}.`;
+      } else {
+        joiningBonusStatus = "ACTIVE";
+        joiningBonusMessage = `Complete ${joiningBonusRemainingOrders} more orders to earn ₹${joiningBonusRewardAmount} joining bonus.`;
+      }
+    }
+
+    // =====================================================
+    // REFER AND EARN
+    // =====================================================
+    const referralProgram = await prisma.program.findFirst({
+      where: {
+        programType: "REFERRAL",
+        isActive: true,
+        validFrom: {
+          lte: now
+        },
+        validTill: {
+          gte: now
+        },
+        ...locationFilter
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+
+    const referAndEarn = !!referralProgram;
+
+    const referAndEarnStatus = referAndEarn
+      ? "ACTIVE"
+      : "NOT_AVAILABLE";
+
+    const referAndEarnMessage = referAndEarn
+      ? "Refer riders and earn rewards."
+      : "Refer and earn is not available for your location.";
+
+    // =====================================================
+    // DAILY INCENTIVE
+    // =====================================================
+    const dailyIncentiveProgram = await prisma.program.findFirst({
+      where: {
+        programType: "INCENTIVE",
+        trackingType: "DAILY",
+        isActive: true,
+        validFrom: {
+          lte: now
+        },
+        validTill: {
+          gte: now
+        },
+        ...locationFilter
+      },
+      include: {
+        targets: true,
+        tasks: true,
+        slabs: true
+      },
+      orderBy: {
+        createdAt: "desc"
+      }
+    });
+
+    let dailyIncentive = false;
+    let dailyIncentiveStatus = "NOT_AVAILABLE";
+    let dailyIncentiveMessage = "No daily incentive available today.";
+    let dailyIncentiveOrdersCompleted = 0;
+    let dailyIncentiveTargetOrders = 0;
+    let dailyIncentiveRemainingOrders = 0;
+    let dailyIncentiveRewardAmount = 0;
+
+    if (dailyIncentiveProgram) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      dailyIncentiveOrdersCompleted = await prisma.order.count({
+        where: {
+          riderId,
+          orderStatus: "DELIVERED",
+          createdAt: {
+            gte: todayStart,
+            lte: todayEnd
+          }
+        }
+      });
+
+      const dailyTarget = getTargetDetails(
+        dailyIncentiveProgram,
+        dailyIncentiveOrdersCompleted
+      );
+
+      dailyIncentiveTargetOrders = dailyTarget.targetOrders;
+      dailyIncentiveRemainingOrders = dailyTarget.remainingOrders;
+      dailyIncentiveRewardAmount = dailyTarget.rewardAmount;
+
+      // true means daily incentive program is available
+      dailyIncentive = true;
+
+      if (dailyTarget.targetCompleted) {
+        dailyIncentiveStatus = "TARGET_COMPLETED";
+        dailyIncentiveMessage = `Target completed. You are eligible to earn ₹${dailyIncentiveRewardAmount} reward.`;
+      } else {
+        dailyIncentiveStatus = "ACTIVE";
+        dailyIncentiveMessage = `Complete ${dailyIncentiveRemainingOrders} more orders to earn ₹${dailyIncentiveRewardAmount} reward.`;
+      }
+    }
 
     return res.status(200).json({
       success: true,
       message: "Home banners fetched successfully",
       data: {
-        riderId,
-        checks: {
-          bankAdded,
-          bankVerified,
-          kitDelivered,
-          joiningBonusCompleted
-        },
-        banners
+        bank,
+        bankStatus,
+        bankMessage,
+
+        kit,
+        kitStatus,
+        kitMessage,
+
+        joiningBonus,
+        joiningBonusStatus,
+        joiningBonusMessage,
+        joiningBonusOrdersCompleted,
+        joiningBonusTargetOrders,
+        joiningBonusRemainingOrders,
+        joiningBonusRewardAmount,
+
+        referAndEarn,
+        referAndEarnStatus,
+        referAndEarnMessage,
+
+        
       }
     });
   } catch (error) {
