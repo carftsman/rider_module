@@ -1,94 +1,656 @@
 const prisma = require("../config/prisma");
+
 function getWeekKey(date = new Date()) {
   const year = date.getFullYear();
+
   const oneJan = new Date(year, 0, 1);
-  const week = Math.ceil((((date - oneJan) / 86400000) + oneJan.getDay() + 1) / 7);
+
+  const week = Math.ceil(
+    (((date - oneJan) / 86400000) +
+      oneJan.getDay() + 1) / 7
+  );
+
   return `${year}-W${week}`;
 }
-
+const dayMap = {
+  1: "MON",
+  2: "TUE",
+  3: "WED",
+  4: "THU",
+  5: "FRI",
+  6: "SAT",
+  7: "SUN"
+};
 exports.getWeeklyIncentives = async (req, res) => {
   try {
-    const riderId = req.rider.id;
 
-    //  Rider location
-    const riderLocation = await prisma.riderLocation.findUnique({
-      where: { riderId }
-    });
+    const riderId =
+      req.rider?.id || req.rider?.riderId;
+
+    //////////////////////////////////////////////////
+    // RIDER LOCATION
+    //////////////////////////////////////////////////
+
+    const riderLocation =
+      await prisma.riderLocation.findUnique({
+        where: { riderId }
+      });
 
     if (!riderLocation?.pincode) {
-      return res.json({ success: true, data: [] });
+      return res.json({
+        success: true,
+        data: []
+      });
     }
 
-    const today = new Date();
+    //////////////////////////////////////////////////
+    // ACTIVE PROGRAMS
+    //////////////////////////////////////////////////
 
-    //  Get active programs
-    const programs = await prisma.program.findMany({
-      where: {
-        programType: "WEEKLY_TARGET",
-        trackingType: "WEEKLY",
-        isActive: true,
-        pincodeIds: {
-          has: riderLocation.pincode
+    const now = new Date();
+
+    const programs =
+      await prisma.program.findMany({
+        where: {
+          programType: "WEEKLY_TARGET",
+          trackingType: "WEEKLY",
+          isActive: true,
+
+          pincodeIds: {
+            has: riderLocation.pincode
+          },
+
+          validFrom: {
+            lte: now
+          },
+
+          validTill: {
+            gte: now
+          }
         },
-        validFrom: { lte: today },
-        validTill: { gte: today }
-      },
-      select: {
-        id: true,
-        trackingType: true
-      }
-    });
 
-    //  handle empty programs early
+        include: {
+          slabs: true,
+          tasks: true
+        },
+
+        orderBy: {
+          createdAt: "desc"
+        }
+      });
+
     if (!programs.length) {
-      return res.json({ success: true, data: [] });
+      return res.json({
+        success: true,
+        data: []
+      });
     }
 
-    //  Weekly key
-const week = getWeekKey();
+    //////////////////////////////////////////////////
+    // WEEK KEY
+    //////////////////////////////////////////////////
 
-const progresses = await prisma.programProgress.findMany({
-  where: {
-    riderId,
-    week,
-    programId: {
-      in: programs.map(p => p.id)
-    }
-  }
-});
+    const week = getWeekKey();
 
-// IMPORTANT FIX: UPSERT ZERO RECORDS
-const response = [];
+    //////////////////////////////////////////////////
+    // TASK PROGRESSES
+    //////////////////////////////////////////////////
 
-for (const prog of programs) {
+    const taskProgresses =
+      await prisma.programTaskProgress.findMany({
+        where: {
+          riderId,
+          programId: {
+            in: programs.map((p) => p.id)
+          }
+        }
+      });
 
-  let progProgress = progresses.find(p => p.programId === prog.id);
+    //////////////////////////////////////////////////
+    // RESPONSE
+    //////////////////////////////////////////////////
 
-  // If not exists → create ZERO progress
-  if (!progProgress) {
-    progProgress = await prisma.programProgress.create({
-      data: {
-        riderId,
-        programId: prog.id,
-        week,
-        totalOrders: 0,
-        totalEarnings: 0,
-        rewardAmount: 0,
-        achieved: false
+    const response = [];
+
+    for (const program of programs) {
+
+      //////////////////////////////////////////////////
+      // NORMAL PROGRAMS
+      //////////////////////////////////////////////////
+
+      if (program.ruleType !== "TASK") {
+
+        const progProgress =
+          await prisma.programProgress.findFirst({
+            where: {
+              riderId,
+              programId: program.id,
+              week
+            }
+          });
+
+        response.push({
+          programId: program.id,
+
+          name: program.name,
+
+          type: "WEEKLY",
+
+          ruleType: program.ruleType,
+
+          ordersCompleted:
+            progProgress?.totalOrders || 0,
+
+          rewardEarned:
+            progProgress?.rewardAmount || 0,
+
+          status:
+            progProgress?.achieved
+              ? "ACHIEVED"
+              : (
+                  (progProgress?.totalOrders || 0) > 0
+                )
+              ? "IN_PROGRESS"
+              : "NOT_STARTED"
+        });
+
+        continue;
       }
-    });
-  }
 
-  response.push({
-    programId: prog.id,
-    type: "WEEKLY",
-    ordersCompleted: progProgress.totalOrders,
-    rewardEarned: progProgress.rewardAmount,
-    status: progProgress.achieved
-      ? "ACHIEVED"
-      : (progProgress.totalOrders > 0 ? "IN_PROGRESS" : "NOT_STARTED")
-  });
+      //////////////////////////////////////////////////
+      // TASK PROGRAMS
+      //////////////////////////////////////////////////
+
+      let totalRewardEarned = 0;
+
+      let completedDays = 0;
+
+      const totalDays =
+        program.tasks.length;
+
+      const sortedTasks =
+        [...program.tasks].sort(
+          (a, b) =>
+            a.dayNumber - b.dayNumber
+        );
+
+      const tasks = await Promise.all(
+
+        sortedTasks.map(
+          async (task, index) => {
+
+            //////////////////////////////////////////////////
+            // FIND TASK PROGRESS
+            //////////////////////////////////////////////////
+
+            let progress =
+              taskProgresses.find(
+                (p) => p.taskId === task.id
+              );
+
+            //////////////////////////////////////////////////
+            // CREATE INITIAL ROW
+            //////////////////////////////////////////////////
+
+            if (!progress) {
+
+              progress =
+                await prisma.programTaskProgress.create({
+
+                  data: {
+
+                    riderId,
+
+                    programId: program.id,
+
+                    taskId: task.id,
+
+                    dayNumber: task.dayNumber,
+
+                    date: new Date(),
+
+                    progressValue: 0,
+
+                    isCompleted: false
+                  }
+                });
+            }
+
+            //////////////////////////////////////////////////
+            // VALUES
+            //////////////////////////////////////////////////
+
+            const progressValue =
+              progress.progressValue || 0;
+
+            const isCompleted =
+              progress.isCompleted || false;
+
+            const completedAt =
+              progress.updatedAt || null;
+
+            let rewardEarned = 0;
+
+            //////////////////////////////////////////////////
+            // TASK STATUS
+            //////////////////////////////////////////////////
+
+            let taskStatus = "PENDING";
+
+const currentDayNumber = (() => {
+
+  const jsDay = new Date().getDay();
+
+  if (jsDay === 0) return 7;
+
+  return jsDay;
+
+})();
+//////////////////////////////////////////////////
+// LOCK FUTURE DAYS ONLY
+//////////////////////////////////////////////////
+
+if (task.dayNumber > currentDayNumber) {
+  taskStatus = "LOCKED";
 }
+
+            if (taskStatus !== "LOCKED") {
+
+              taskStatus =
+                isCompleted
+                  ? "COMPLETED"
+                  : progressValue > 0
+                  ? "RUNNING"
+                  : "PENDING";
+            }
+
+            //////////////////////////////////////////////////
+            // TASK RESPONSE
+            //////////////////////////////////////////////////
+
+          const taskResponse = {
+
+  dayNumber:
+    task.dayNumber,
+
+dayName:
+  dayMap[task.dayNumber],
+  taskRuleType:
+    task.taskRuleType,
+
+  progress: {}
+};
+
+            //////////////////////////////////////////////////
+            // FIXED TARGET
+            //////////////////////////////////////////////////
+
+            if (
+              task.taskRuleType ===
+              "FIXED_TARGET"
+            ) {
+
+              rewardEarned =
+                isCompleted
+                  ? task.fixedReward || 0
+                  : 0;
+
+              taskResponse.progress = {
+
+                completedOrders:
+                  progressValue,
+
+                targetOrders:
+                  task.targetOrders,
+
+                remainingOrders:
+                  Math.max(
+                    (task.targetOrders || 0)
+                    - progressValue,
+                    0
+                  ),
+
+                earnedAmount:
+                  rewardEarned,
+
+                status:
+                  taskStatus,
+
+                isCompleted,
+
+                completedAt
+              };
+            }
+
+            //////////////////////////////////////////////////
+            // PER ORDER
+            //////////////////////////////////////////////////
+
+            else if (
+              task.taskRuleType ===
+              "PER_ORDER"
+            ) {
+
+              rewardEarned =
+                Math.min(
+                  progressValue,
+                  task.maxOrders || 0
+                ) *
+                (task.rewardPerOrder || 0);
+
+              taskResponse.progress = {
+
+                completedOrders:
+                  progressValue,
+
+                earnedAmount:
+                  rewardEarned,
+
+                remainingOrders:
+                  Math.max(
+                    (task.maxOrders || 0)
+                    - progressValue,
+                    0
+                  ),
+
+                remainingAmount:
+                  Math.max(
+                    (task.maxEarning || 0)
+                    - rewardEarned,
+                    0
+                  ),
+
+                status:
+                  taskStatus,
+
+                isCompleted,
+
+                progressPercentage:
+                  task.maxOrders
+                    ? Math.min(
+                        Math.round(
+                          (
+                            progressValue
+                            / task.maxOrders
+                          ) * 100
+                        ),
+                        100
+                      )
+                    : 0
+              };
+            }
+
+            //////////////////////////////////////////////////
+            // HYBRID
+            //////////////////////////////////////////////////
+
+            else if (
+              task.taskRuleType ===
+              "HYBRID"
+            ) {
+
+              rewardEarned =
+                isCompleted
+                  ? task.rewardAmount || 0
+                  : 0;
+
+              const currentAcceptanceRate =
+                progress.acceptanceRate || 0;
+
+              const currentEarnings =
+                progress.earnings || 0;
+
+              const missingConditions = [];
+
+              if (
+                progressValue <
+                (task.minOrders || 0)
+              ) {
+                missingConditions.push(
+                  `Orders below ${task.minOrders}`
+                );
+              }
+
+              if (
+                currentAcceptanceRate <
+                (task.minAcceptanceRate || 0)
+              ) {
+                missingConditions.push(
+                  `Acceptance rate below ${task.minAcceptanceRate}%`
+                );
+              }
+
+              if (
+                currentEarnings <
+                (task.minEarnings || 0)
+              ) {
+                missingConditions.push(
+                  `Earnings below ${task.minEarnings}`
+                );
+              }
+
+              taskResponse.progress = {
+
+  completedOrders:
+    progressValue,
+
+  currentAcceptanceRate,
+
+  currentEarnings,
+
+  status:
+    taskStatus,
+
+  isCompleted
+};            }
+
+            //////////////////////////////////////////////////
+            // SLAB
+            //////////////////////////////////////////////////
+
+            else if (
+              task.taskRuleType ===
+              "SLAB"
+            ) {
+
+              const slabs =
+                program.slabs
+                  .sort(
+                    (a, b) =>
+                      a.minValue - b.minValue
+                  )
+                  .map((s) => ({
+                    minOrders:
+                      s.minValue,
+
+                    maxOrders:
+                      s.maxValue,
+
+                    rewardAmount:
+                      s.rewardAmount
+                  }));
+
+              const matchedSlab =
+                program.slabs.find(
+                  (s) =>
+                    progressValue >= s.minValue &&
+                    progressValue <= s.maxValue
+                );
+
+              rewardEarned =
+                matchedSlab?.rewardAmount || 0;
+
+              taskResponse.progress = {
+
+                completedOrders:
+                  progressValue,
+
+                currentSlabReward:
+                  rewardEarned,
+
+                status:
+                  taskStatus,
+
+                isCompleted,
+
+                completedAt
+              };
+
+              taskResponse.slabs = slabs;
+            }
+
+            //////////////////////////////////////////////////
+            // TOTALS
+            //////////////////////////////////////////////////
+
+            totalRewardEarned += rewardEarned;
+
+            if (isCompleted) {
+              completedDays++;
+            }
+
+            return taskResponse;
+          }
+        )
+      );
+
+      //////////////////////////////////////////////////
+      // OVERALL STATUS
+      //////////////////////////////////////////////////
+
+      const overallStatus =
+
+        completedDays === totalDays
+          ? "COMPLETED"
+
+          : completedDays > 0
+          ? "RUNNING"
+
+          : "NOT_STARTED";
+
+      //////////////////////////////////////////////////
+      // MAX REWARD
+      //////////////////////////////////////////////////
+
+const maxReward =
+  program.maxPayoutPerWeek ||
+
+  sortedTasks.reduce((sum, task) => {
+
+    //////////////////////////////////////////////////
+    // FIXED_TARGET
+    //////////////////////////////////////////////////
+
+    if (
+      task.taskRuleType ===
+      "FIXED_TARGET"
+    ) {
+      return sum + (task.fixedReward || 0);
+    }
+
+    //////////////////////////////////////////////////
+    // HYBRID
+    //////////////////////////////////////////////////
+
+    if (
+      task.taskRuleType ===
+      "HYBRID"
+    ) {
+      return sum + (task.rewardAmount || 0);
+    }
+
+    //////////////////////////////////////////////////
+    // PER_ORDER
+    //////////////////////////////////////////////////
+
+    if (
+      task.taskRuleType ===
+      "PER_ORDER"
+    ) {
+      return sum + (task.maxEarning || 0);
+    }
+
+    //////////////////////////////////////////////////
+    // SLAB
+    //////////////////////////////////////////////////
+
+    if (
+      task.taskRuleType ===
+      "SLAB"
+    ) {
+
+      const highest =
+        program.slabs?.length
+          ? Math.max(
+              ...program.slabs.map(
+                (s) => s.rewardAmount
+              )
+            )
+          : 0;
+
+      return sum + highest;
+    }
+
+    return sum;
+
+  }, 0);
+
+      //////////////////////////////////////////////////
+      // FINAL PUSH
+      //////////////////////////////////////////////////
+
+      response.push({
+
+        programId:
+          program.id,
+
+        name:
+          program.name,
+
+        type:
+          "WEEKLY",
+
+        ruleType:
+          "TASK",
+
+        status:
+          overallStatus,
+
+        validFrom:
+          program.validFrom,
+
+        validTill:
+          program.validTill,
+
+        weekStartDay:
+          program.weekStartDay,
+
+        maxReward,
+
+        overallProgress: {
+
+          completedDays,
+
+          totalDays,
+
+          earnedAmount:
+            totalRewardEarned,
+
+          remainingAmount:
+            Math.max(
+              maxReward
+              - totalRewardEarned,
+              0
+            )
+        },
+
+        tasks
+      });
+    }
+
+    //////////////////////////////////////////////////
+    // FINAL RESPONSE
+    //////////////////////////////////////////////////
 
     return res.json({
       success: true,
@@ -96,10 +658,16 @@ for (const prog of programs) {
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
+
+    console.error(
+      "Weekly progress error:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
-      message: "Failed to fetch weekly incentives"
+      message:
+        "Failed to fetch weekly progress"
     });
   }
 };

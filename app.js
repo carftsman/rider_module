@@ -15,7 +15,6 @@ const staticRouter = require("./routes/staticMobileOtpRoute");
 const profileRoutes = require("./routes/profileRoutes");
 const webIncentiveRoutes = require("./routes/order.routes");
 const kitRoutes = require("./routes/kitSelectionRoutes");
-const internalIncentiveRoutes = require("./routes/internalIncentive.routes");
 const adminPayoutConfigRoutes = require("./routes/adminPayoutConfig.routes");
  
 const riderEarningsRoutes = require("./routes/riderEarningsRoutes");
@@ -93,8 +92,6 @@ app.use("/api/admin/programs", adminWeeklyIncentiveRoutes);
 app.use("/admin",adminZoneRoutes);
 
 app.use("/api/slots", slotRouter);
-app.use("/api", internalIncentiveRoutes);
-
  
 app.use("/api/profile", profileRoutes);
  

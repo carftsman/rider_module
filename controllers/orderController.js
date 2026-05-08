@@ -4,6 +4,11 @@ const axios = require("axios");
 const { getLatLng } = require("../services/geocodeService");
 const prisma=require('../config/prisma');
 const getWeather=require('../utils/weather');
+const {
+  processOrderIncentive
+} = require(
+  "../services/incentiveService"
+);
 //  Dummy transaction generator
 function generateTxn() {
   return "TXN_" + crypto.randomBytes(6).toString("hex");
@@ -319,7 +324,7 @@ async function confirmOrder(req, res) {
  
         isOnline: true,
  
-        slotBookings: {
+       slotBookings: {
 
           some: {
 
@@ -334,7 +339,7 @@ async function confirmOrder(req, res) {
           }
 
         },
- 
+         
         location: {
 
           is: {
@@ -1498,7 +1503,10 @@ async function deliverOrder(req, res) {
       },
       { timeout: 10000 }
     );
-
+await processOrderIncentive({
+  riderId,
+  orderId
+});
     return res.status(200).json({
       success: true,
       message: "Order delivered successfully",

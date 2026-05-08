@@ -751,7 +751,7 @@ const initWebSocket = (server) => {
   });
 
 };
- 
+
 /* =========================================================
 
    NOTIFY RIDER
@@ -833,12 +833,43 @@ const notifyRider = async (riderId, payload) => {
   }
 
 };
- 
+
+const notifyRiderIncentive =async (
+  riderId,
+  payload
+) => {
+
+  try {
+
+    const ws =
+      riderSockets.get(riderId);
+
+    if (
+      ws &&
+      ws.readyState ===
+      WebSocket.OPEN
+    ) {
+
+      ws.send(
+        JSON.stringify(payload)
+      );
+    }
+
+  } catch (err) {
+
+    console.log(
+      "notify incentive error",
+      err.message
+    );
+  }
+};
 module.exports = {
 
   initWebSocket,
 
   notifyRider,
+
+  notifyRiderIncentive
 
 };
  
