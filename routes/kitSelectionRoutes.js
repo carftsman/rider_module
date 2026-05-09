@@ -986,7 +986,7 @@ router.post("/issues/:issueId/verify",  verifyIssue);
  *                     serverError:
  *                       value: Something went wrong
  */
-router.post(
+router.patch(
   "/payments/complete/:requestIds",
   riderAuthMiddleWare,
   completePaymentAndReadyForDispatch
