@@ -845,7 +845,147 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  */
 router.post('/admin/dispatch/:assetRequestIds', dispatchAsset)
 router.post("/issues/:issueId/verify",  verifyIssue);
-
+/**
+ * @swagger
+ * /api/kit/payments/complete/{requestIds}:
+ *   patch:
+ *     summary: Complete payment and move asset requests to ready for dispatch
+ *     description: >
+ *       Marks pending payment records as SUCCESS for one or multiple asset requests
+ *       and updates those asset requests to READY_FOR_DISPATCH.
+ *       The request IDs should belong to the logged-in rider.
+ *       Multiple request IDs can be passed as comma-separated values.
+ *     tags:
+ *       - Rider Assets
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: requestIds
+ *         required: true
+ *         schema:
+ *           type: string
+ *           example: "7f9a4c2e-89a2-4c41-a785-b0d4f654a111,4cb1a42e-d4b2-4045-a2cb-cc427c9e2222"
+ *         description: Single or comma-separated asset request IDs.
+ *     responses:
+ *       200:
+ *         description: Payment completed and requests moved to ready for dispatch
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Payment completed successfully. Requests moved to ready for dispatch
+ *                 totalRequests:
+ *                   type: integer
+ *                   example: 2
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: "7f9a4c2e-89a2-4c41-a785-b0d4f654a111"
+ *                       riderId:
+ *                         type: string
+ *                         example: "0d2504e9-9c37-4428-a480-97237814a7d4"
+ *                       status:
+ *                         type: string
+ *                         example: "READY_FOR_DISPATCH"
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-05-09T08:30:00.000Z"
+ *                       updatedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-05-09T09:00:00.000Z"
+ *                       Payment:
+ *                         oneOf:
+ *                           - type: object
+ *                             properties:
+ *                               id:
+ *                                 type: string
+ *                                 example: "pay_12345"
+ *                               assetRequestId:
+ *                                 type: string
+ *                                 example: "7f9a4c2e-89a2-4c41-a785-b0d4f654a111"
+ *                               status:
+ *                                 type: string
+ *                                 example: "SUCCESS"
+ *                               paidAt:
+ *                                 type: string
+ *                                 format: date-time
+ *                                 example: "2026-05-09T09:00:00.000Z"
+ *                           - type: array
+ *                             items:
+ *                               type: object
+ *                               properties:
+ *                                 id:
+ *                                   type: string
+ *                                   example: "pay_12345"
+ *                                 assetRequestId:
+ *                                   type: string
+ *                                   example: "7f9a4c2e-89a2-4c41-a785-b0d4f654a111"
+ *                                 status:
+ *                                   type: string
+ *                                   example: "SUCCESS"
+ *                                 paidAt:
+ *                                   type: string
+ *                                   format: date-time
+ *                                   example: "2026-05-09T09:00:00.000Z"
+ *       400:
+ *         description: requestIds missing
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: requestIds are required
+ *       401:
+ *         description: Unauthorized rider
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Unauthorized rider
+ *       500:
+ *         description: Internal server error or validation failure inside transaction
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   examples:
+ *                     invalidRequests:
+ *                       value: Some asset requests are invalid or do not belong to this rider
+ *                     paymentNotFound:
+ *                       value: Payment record not found for some requests
+ *                     serverError:
+ *                       value: Something went wrong
+ */
 router.post(
   "/payments/complete/:requestIds",
   riderAuthMiddleWare,
