@@ -190,6 +190,7 @@ exports.new_getWeeklyChart = async (req, res) => {
 
     if (riderType === "COMPANY_EMPLOYEE") {
       return res.json({
+        riderType,
         week: week.map(day => ({
           day: day.day,
           orders: day.orders
@@ -197,7 +198,10 @@ exports.new_getWeeklyChart = async (req, res) => {
       });
     }
 
-    res.json({ week });
+   res.json({
+  riderType,
+  week
+});
 
     // res.json({ week });
 
@@ -362,23 +366,9 @@ function toISTDate(date) {
 
 exports.new_getWeeklyEarnings = async (req, res) => {
   try {
-    // const riderId = req.rider.id || req.rider._id;
-    const riderId = req.rider.id;
-    // const riderType = req.rider.riderType;
-
-    const rider = await prisma.rider.findUnique({
-      where: {
-        id: riderId
-      },
-      select: {
-        riderType: true
-      }
-    });
-
-    const riderType = rider?.riderType;
+    const riderId = req.rider.id || req.rider._id;
+  
     let { week, year } = req.query;
-
-    console.log("Rider Type:", riderType);
 
     if (!week || !year) {
       const current = getCurrentISOWeek();
@@ -452,25 +442,26 @@ exports.new_getWeeklyEarnings = async (req, res) => {
       });
     }
 
-    if (riderType === "COMPANY_EMPLOYEE") {
-      return res.json({
-        week: Number(week),
-        year: Number(year),
-        weekRange: `${toISTDate(start).toDateString()} - ${toISTDate(end).toDateString()}`,
+    // if (riderType === "COMPANY_EMPLOYEE") {
+    //   return res.json({
+    //     riderType,
+    //     week: Number(week),
+    //     year: Number(year),
+    //     weekRange: `${toISTDate(start).toDateString()} - ${toISTDate(end).toDateString()}`,
 
-        totalOrders: days.reduce((sum, d) => sum + d.orders, 0),
+    //     totalOrders: days.reduce((sum, d) => sum + d.orders, 0),
 
-        days: days.map(day => ({
-          day: day.day,
-          date: day.date,
-          orders: day.orders,
-          deliveries: day.deliveries.map(d => ({
-            orderId: d.orderId,
-            time: d.time
-          }))
-        }))
-      });
-    }
+    //     days: days.map(day => ({
+    //       day: day.day,
+    //       date: day.date,
+    //       orders: day.orders,
+    //       deliveries: day.deliveries.map(d => ({
+    //         orderId: d.orderId,
+    //         time: d.time
+    //       }))
+    //     }))
+    //   });
+    // }
 
     const total = days.reduce((sum, d) => sum + d.amount, 0);
 
