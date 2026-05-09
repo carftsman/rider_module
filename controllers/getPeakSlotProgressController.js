@@ -29,13 +29,23 @@ const getPeakSlotProgress = async (req, res) => {
 const todayDate = new Date();
     // GET ACTIVE PROGRAMS
 
-    const programs = await prisma.program.findMany({
-      where: {
-        isActive: true,
+    const now = new Date();
 
-        programType: "PEAK_SLOT",
+const programs = await prisma.program.findMany({
+  where: {
+    isActive: true,
 
-        trackingType: "DAILY",
+    validFrom: {
+      lte: now
+    },
+
+    validTill: {
+      gte: now
+    },
+
+    programType: "PEAK_SLOT",
+
+    trackingType: "DAILY",
 
         pincodeIds: {
           has: riderPincode,
@@ -362,7 +372,6 @@ const flatIncentives =
 // CURRENT TIME
 //////////////////////////////////////////////////
 
-const now = new Date();
 
 const currentMinutes =
   now.getHours() * 60 +
