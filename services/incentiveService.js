@@ -944,25 +944,26 @@ isCompleted =
               });
         }
 
-        ////////////////////////////////////////////////
-        // UPDATE SLOT PROGRESS
-        ////////////////////////////////////////////////
+await prisma.programProgress
+  .update({
 
-        await prisma.programProgress
-          .update({
+    where: {
+      id:
+        slotProgress.id
+    },
 
-            where: {
-              id:
-                slotProgress.id
-            },
+    data: {
 
-            data: {
+      totalOrders: {
+        increment: 1
+      },
 
-              totalOrders: {
-                increment: 1
-              }
-            }
-          });
+      totalEarnings: {
+        increment:
+          orderAmount
+      }
+    }
+  });
 
         slotProgress =
 

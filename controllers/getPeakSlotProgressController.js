@@ -26,8 +26,7 @@ const getPeakSlotProgress = async (req, res) => {
 
     const riderPincode = riderLocation.pincode;
 
-    const today = new Date();
-
+const todayDate = new Date();
     // GET ACTIVE PROGRAMS
 
     const programs = await prisma.program.findMany({
@@ -72,94 +71,156 @@ const getPeakSlotProgress = async (req, res) => {
       });
     }
 
-    // CREATE / FETCH PROGRESS
-
-    const progressMap = {};
-
-    for (const p of programs) {
-      let progProgress = await prisma.programProgress.findFirst({
-        where: {
-          riderId,
-          programId: p.id,
-        },
-      });
-
-      // CREATE EMPTY PROGRESS
-
-      if (!progProgress) {
-        progProgress = await prisma.programProgress.create({
-          data: {
-            riderId,
-
-            programId: p.id,
-
-            totalOrders: 0,
-
-            totalEarnings: 0,
-
-            rewardAmount: 0,
-
-            achieved: false,
-          },
-        });
-      }
-
-      progressMap[p.id] = progProgress;
-    }
 
     // BUILD RESPONSE
 
-    const incentives = programs.flatMap((p) => {
+    const incentives = await Promise.all(
+  programs.flatMap(async (p) => {
 
-      const progProgress = progressMap[p.id];
+const now = new Date();
 
-      const orders =
-        progProgress?.totalOrders || 0;
+const currentMinutes =
+  now.getHours() * 60 +
+  now.getMinutes();
 
-      const earnings =
-        progProgress?.totalEarnings || 0;
+const validSlots =
+  p.slots.filter(slot =>
 
-      // PER_ORDER + SLAB
+    slot.endMinutes >
+    currentMinutes
+  );
 
-      if (
+if (!validSlots.length) {
+  return [];
+}
+
+const activeSlot =
+  validSlots.find(slot =>
+
+    currentMinutes >=
+      slot.startMinutes &&
+
+    currentMinutes <=
+      slot.endMinutes
+  );
+
+const finalSlots =
+  activeSlot
+    ? [activeSlot]
+    : [
+
+        validSlots.sort(
+          (a, b) =>
+            a.startMinutes -
+            b.startMinutes
+        )[0]
+      ];
+if (
   p.ruleType === "PER_ORDER" ||
   p.ruleType === "SLAB"
 ) {
 
-  return p.slots.map((slot) => ({
+  return await Promise.all(
 
-    ruleType: p.ruleType,
+    finalSlots.map(async (slot) => {
 
-    slotId: slot.id,
+      const slotProgress =
+        await prisma.programProgress.findFirst({
 
-    pincode: riderPincode,
+          where: {
 
-    slotTiming:
-      `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
+            riderId,
 
-    
+            programId: p.id,
 
-    ordersCompleted: orders,
+            slotId: slot.id,
 
-    rewardAmount:
-      orders > 0
-        ? orders *
-          (slot.rewardPerOrder || 0)
-        : 0,
+            date: {
+              gte: new Date(
+                todayDate.getFullYear(),
+                todayDate.getMonth(),
+                todayDate.getDate()
+              ),
 
-    status:
-      progProgress?.achieved
-        ? "ACHIEVED"
-        : orders > 0
-        ? "IN_PROGRESS"
-        : "NOT_STARTED"
-  }));
+              lt: new Date(
+                todayDate.getFullYear(),
+                todayDate.getMonth(),
+                todayDate.getDate() + 1
+              )
+            }
+          }
+        });
+
+      const orders =
+        slotProgress?.totalOrders || 0;
+
+      return {
+
+        ruleType: p.ruleType,
+
+        slotId: slot.id,
+
+        pincode: riderPincode,
+
+        slotTiming:
+          `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
+
+        ordersCompleted: orders,
+
+        rewardAmount:
+          orders > 0
+            ? orders *
+              (slot.rewardPerOrder || 0)
+            : 0,
+
+        status:
+          slotProgress?.achieved
+            ? "ACHIEVED"
+            : orders > 0
+            ? "IN_PROGRESS"
+            : "NOT_STARTED"
+      };
+    })
+  );
 }
 
       // FIXED TARGET
 
       if (p.ruleType === "FIXED_TARGET") {
+const slot = finalSlots[0];
 
+const slotProgress =
+  await prisma.programProgress.findFirst({
+
+    where: {
+
+      riderId,
+
+      programId: p.id,
+
+      slotId: slot?.id,
+
+      date: {
+        gte: new Date(
+          todayDate.getFullYear(),
+          todayDate.getMonth(),
+          todayDate.getDate()
+        ),
+
+        lt: new Date(
+          todayDate.getFullYear(),
+          todayDate.getMonth(),
+          todayDate.getDate() + 1
+        )
+      }
+    }
+  });
+
+const orders =
+  slotProgress?.totalOrders || 0;
+
+const earnings =
+  slotProgress?.totalEarnings || 0;
   const target = p.targets?.[0];
 
   const targetOrders =
@@ -176,8 +237,6 @@ const getPeakSlotProgress = async (req, res) => {
       : 0;
 
   // SLOT
-
-  const slot = p.slots?.[0];
 
   return [{
     ruleType: "FIXED_TARGET",
@@ -210,7 +269,39 @@ const getPeakSlotProgress = async (req, res) => {
 
       // HYBRID
 if (p.ruleType === "HYBRID") {
+const slot = finalSlots[0];
+const slotProgress =
+  await prisma.programProgress.findFirst({
 
+    where: {
+
+      riderId,
+
+      programId: p.id,
+
+      slotId: slot?.id,
+
+      date: {
+        gte: new Date(
+          todayDate.getFullYear(),
+          todayDate.getMonth(),
+          todayDate.getDate()
+        ),
+
+        lt: new Date(
+          todayDate.getFullYear(),
+          todayDate.getMonth(),
+          todayDate.getDate() + 1
+        )
+      }
+    }
+  });
+
+const orders =
+  slotProgress?.totalOrders || 0;
+
+const earnings =
+  slotProgress?.totalEarnings || 0;
   const target = p.targets?.[0];
 
   const targetOrders =
@@ -219,17 +310,11 @@ if (p.ruleType === "HYBRID") {
   const targetEarnings =
     target?.targetEarnings || 0;
 
-  // SLOT
+const acceptanceRate =
+  slotProgress?.acceptanceRate || 0;
 
-  const slot = p.slots?.[0];
-
-  // CURRENT RIDER VALUES
-
-  const acceptanceRate =
-    progProgress?.acceptanceRate || 0;
-
-  const completionRate =
-    progProgress?.completionRate || 0;
+const completionRate =
+  slotProgress?.completionRate || 0;
 
   // ALL CONDITIONS CHECK
 
@@ -269,12 +354,122 @@ if (p.ruleType === "HYBRID") {
   }];
 }
       return [];
-    });
+    }));
+const flatIncentives =
+  incentives.flat();
 
-    return res.status(200).json({
-      success: true,
-      data: incentives,
-    });
+//////////////////////////////////////////////////
+// CURRENT TIME
+//////////////////////////////////////////////////
+
+const now = new Date();
+
+const currentMinutes =
+  now.getHours() * 60 +
+  now.getMinutes();
+
+//////////////////////////////////////////////////
+// ACTIVE SLOT
+//////////////////////////////////////////////////
+
+const activeSlots =
+  flatIncentives.filter(item => {
+
+    const [
+      start,
+      end
+    ] =
+      item.slotTiming
+        .split(" - ");
+
+    const startMinutes =
+      parseInt(start.split(":")[0]) * 60 +
+      parseInt(start.split(":")[1]);
+
+    const endMinutes =
+      parseInt(end.split(":")[0]) * 60 +
+      parseInt(end.split(":")[1]);
+
+    return (
+      currentMinutes >=
+        startMinutes &&
+
+      currentMinutes <=
+        endMinutes
+    );
+  });
+
+//////////////////////////////////////////////////
+// IF ACTIVE EXISTS
+//////////////////////////////////////////////////
+
+if (activeSlots.length > 0) {
+
+  return res.status(200).json({
+
+    success: true,
+
+    data: [activeSlots[0]]
+  });
+}
+
+//////////////////////////////////////////////////
+// UPCOMING SLOTS
+//////////////////////////////////////////////////
+
+const upcomingSlots =
+  flatIncentives
+    .map(item => {
+
+      const start =
+        item.slotTiming
+          .split(" - ")[0];
+
+      const startMinutes =
+        parseInt(start.split(":")[0]) * 60 +
+        parseInt(start.split(":")[1]);
+
+      return {
+        ...item,
+        startMinutes
+      };
+    })
+
+    .filter(
+      item =>
+        item.startMinutes >
+        currentMinutes
+    )
+
+    .sort(
+      (a, b) =>
+        a.startMinutes -
+        b.startMinutes
+    );
+//////////////////////////////////////////////////
+// NEAREST UPCOMING
+//////////////////////////////////////////////////
+
+if (upcomingSlots.length > 0) {
+
+  return res.status(200).json({
+
+    success: true,
+
+    data: [upcomingSlots[0]]
+  });
+}
+
+//////////////////////////////////////////////////
+// EMPTY
+//////////////////////////////////////////////////
+
+return res.status(200).json({
+
+  success: true,
+
+  data: []
+});
 
   } catch (error) {
     console.error("Peak slot progress error:", error);
@@ -285,15 +480,6 @@ if (p.ruleType === "HYBRID") {
     });
   }
 };
-
-
-
-// helper
-function minutesToTime(mins) {
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-}
 
 const getRiderPeakSlotPrograms = async (req, res) => {
   try {
@@ -322,11 +508,12 @@ const getRiderPeakSlotPrograms = async (req, res) => {
 
     const now = new Date();
 
-    const today = now
-      .toLocaleDateString("en-US", {
-        weekday: "short"
-      })
-      .toUpperCase();
+   const today = now
+  .toLocaleDateString("en-US", {
+    weekday: "short"
+  })
+  .slice(0, 3)
+  .toUpperCase();
 
     const currentMinutes =
       now.getHours() * 60 +
@@ -560,14 +747,13 @@ const getRiderPeakSlotPrograms = async (req, res) => {
                 );
               })
 
-              // REMOVE EXPIRED
-              .filter(slot => {
+           .filter(slot => {
 
-                return (
-                  currentMinutes <=
-                  slot.endMinutes
-                );
-              })
+  return (
+    slot.endMinutes >
+    currentMinutes
+  );
+})
 
               // FORMAT SLOT
               .map(slot => {
