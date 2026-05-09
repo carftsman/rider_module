@@ -1,119 +1,726 @@
 const prisma = require("../config/prisma");
 
+const {
+  calculatePercentage,
+  removeEmptyValues,
+  getReferralCurrentDayNumber,
+  getDayRangeFromRefereeJoinedDate,
+  getTaskStatus,
+  getOrderStats
+} = require("../utils/referralProgressHelper");
 
-const getReferralRewardByRule = (program, ordersCompleted) => {
-  let targetOrders = 0;
-  let rewardAmount = 0;
-  let targetReached = false;
+const buildReferredRiderProgressByRule = async ({
+   prisma,
+  program,
+  referee,
+  overallStats
+}) => {
+  const ruleType = program.ruleType;
 
-  if (program.ruleType === "FIXED_TARGET") {
+  // =====================================================
+  // FIXED_TARGET
+  // =====================================================
+  if (ruleType === "FIXED_TARGET") {
     const target = program.targets?.[0];
-    const referrerTask = program.tasks?.find((t) => t.role === "REFERRER");
 
-    targetOrders = Number(target?.targetOrders || 0);
-    targetReached = targetOrders > 0 && ordersCompleted >= targetOrders;
+    const referrerTask = program.tasks?.find(
+      (task) => task.role === "REFERRER"
+    );
 
-    rewardAmount = targetReached
-      ? Number(referrerTask?.rewardAmount || target?.rewardAmount || 0)
-      : 0;
+    const targetOrders = Number(target?.targetOrders || 0);
+    const refereeRewardAmount = Number(target?.rewardAmount || 0);
+    const referrerRewardAmount = Number(referrerTask?.rewardAmount || 0);
+
+    const isCompleted =
+      targetOrders > 0 &&
+      overallStats.completedOrders >= targetOrders;
+
+    return removeEmptyValues({
+      ruleType: "FIXED_TARGET",
+
+      target: {
+        orders: targetOrders
+      },
+
+      progress: {
+        completedOrders: overallStats.completedOrders,
+        targetOrders,
+        remainingOrders: Math.max(
+          targetOrders - overallStats.completedOrders,
+          0
+        ),
+        status: isCompleted ? "COMPLETED" : "RUNNING",
+        isCompleted,
+        progressPercentage: calculatePercentage(
+          overallStats.completedOrders,
+          targetOrders
+        )
+      },
+
+      refereeReward: {
+        configuredAmount: refereeRewardAmount,
+        earnedAmount: isCompleted ? refereeRewardAmount : 0,
+        eligible: isCompleted
+      },
+
+      referrerReward: {
+        configuredAmount: referrerRewardAmount,
+        earnedAmount: isCompleted ? referrerRewardAmount : 0,
+        eligible: isCompleted
+      },
+
+      targetStatus: isCompleted ? "TARGET_REACHED" : "TARGET_PENDING"
+    });
   }
 
-  if (program.ruleType === "SLAB") {
+  // =====================================================
+  // SLAB
+  // =====================================================
+  if (ruleType === "SLAB") {
     const refereeSlabs =
-      program.slabs?.filter((s) => s.role === "REFEREE") || [];
+      program.slabs
+        ?.filter((slab) => slab.role === "REFEREE")
+        .map((slab) => ({
+          minOrders: Number(slab.minValue || 0),
+          maxOrders: Number(slab.maxValue || 0),
+          rewardAmount: Number(slab.rewardAmount || 0)
+        }))
+        .sort((a, b) => a.minOrders - b.minOrders) || [];
 
-    const referrerSlab = program.slabs?.find(
-      (s) =>
-        s.role === "REFERRER" &&
-        ordersCompleted >= Number(s.minValue || 0) &&
-        ordersCompleted <= Number(s.maxValue || 0)
+    const referrerSlabs =
+      program.slabs
+        ?.filter((slab) => slab.role === "REFERRER")
+        .map((slab) => ({
+          minOrders: Number(slab.minValue || 0),
+          maxOrders: Number(slab.maxValue || 0),
+          rewardAmount: Number(slab.rewardAmount || 0)
+        }))
+        .sort((a, b) => a.minOrders - b.minOrders) || [];
+
+    const completedOrders = overallStats.completedOrders;
+
+    const currentRefereeSlab = refereeSlabs.find(
+      (slab) =>
+        completedOrders >= slab.minOrders &&
+        completedOrders <= slab.maxOrders
     );
 
-    targetOrders =
+    const currentReferrerSlab = referrerSlabs.find(
+      (slab) =>
+        completedOrders >= slab.minOrders &&
+        completedOrders <= slab.maxOrders
+    );
+
+    const nextSlab = refereeSlabs.find(
+      (slab) => completedOrders < slab.minOrders
+    );
+
+    const maxTargetOrders =
       refereeSlabs.length > 0
-        ? Math.min(...refereeSlabs.map((s) => Number(s.minValue || 0)))
+        ? Math.max(...refereeSlabs.map((slab) => slab.maxOrders))
         : 0;
 
-    targetReached = targetOrders > 0 && ordersCompleted >= targetOrders;
+    const isCompleted = Boolean(currentRefereeSlab);
 
-    rewardAmount = targetReached
-      ? Number(referrerSlab?.rewardAmount || 0)
-      : 0;
+    return removeEmptyValues({
+      ruleType: "SLAB",
+
+      slabs: refereeSlabs,
+
+      progress: {
+        completedOrders,
+        currentSlabReward: Number(currentRefereeSlab?.rewardAmount || 0),
+        nextTargetOrders: nextSlab?.minOrders,
+        remainingOrders: nextSlab
+          ? Math.max(nextSlab.minOrders - completedOrders, 0)
+          : 0,
+        status: isCompleted ? "COMPLETED" : "RUNNING",
+        isCompleted,
+        progressPercentage: calculatePercentage(
+          completedOrders,
+          maxTargetOrders
+        )
+      },
+
+      refereeReward: {
+        configuredAmount: Number(currentRefereeSlab?.rewardAmount || 0),
+        earnedAmount: isCompleted
+          ? Number(currentRefereeSlab?.rewardAmount || 0)
+          : 0,
+        eligible: isCompleted
+      },
+
+      referrerReward: {
+        configuredAmount: Number(currentReferrerSlab?.rewardAmount || 0),
+        earnedAmount: isCompleted
+          ? Number(currentReferrerSlab?.rewardAmount || 0)
+          : 0,
+        eligible: isCompleted
+      },
+
+      targetStatus: isCompleted ? "TARGET_REACHED" : "TARGET_PENDING"
+    });
   }
 
-  if (program.ruleType === "PER_ORDER") {
-    const referrerTask = program.tasks?.find((t) => t.role === "REFERRER");
-
-    const rewardPerOrder = Number(referrerTask?.rewardPerOrder || 0);
-    const maxOrders = Number(referrerTask?.maxOrders || ordersCompleted);
-    const maxEarning = Number(referrerTask?.maxEarning || 0);
-
-    targetOrders = maxOrders;
-    targetReached = ordersCompleted > 0;
-
-    const calculatedReward =
-      Math.min(ordersCompleted, maxOrders) * rewardPerOrder;
-
-    rewardAmount = maxEarning
-      ? Math.min(calculatedReward, maxEarning)
-      : calculatedReward;
-  }
-
-  if (program.ruleType === "HYBRID") {
-    const refereeTask = program.tasks?.find((t) => t.role === "REFEREE");
-    const referrerTask = program.tasks?.find((t) => t.role === "REFERRER");
-
-    targetOrders = Number(
-      refereeTask?.minOrders ||
-        refereeTask?.targetOrders ||
-        0
+  // =====================================================
+  // PER_ORDER
+  // =====================================================
+  if (ruleType === "PER_ORDER") {
+    const refereeTask = program.tasks?.find(
+      (task) => task.role === "REFEREE"
     );
 
-    targetReached = targetOrders > 0 && ordersCompleted >= targetOrders;
+    const referrerTask = program.tasks?.find(
+      (task) => task.role === "REFERRER"
+    );
 
-    rewardAmount = targetReached
-      ? Number(referrerTask?.rewardAmount || 0)
-      : 0;
+    const completedOrders = overallStats.completedOrders;
+
+    const refereeRewardPerOrder = Number(refereeTask?.rewardPerOrder || 0);
+    const refereeMaxOrders = Number(refereeTask?.maxOrders || completedOrders);
+    const refereeMaxEarning = Number(refereeTask?.maxEarning || 0);
+
+    const referrerRewardPerOrder = Number(referrerTask?.rewardPerOrder || 0);
+    const referrerMaxOrders = Number(referrerTask?.maxOrders || completedOrders);
+    const referrerMaxEarning = Number(referrerTask?.maxEarning || 0);
+
+    const refereeEligibleOrders = Math.min(completedOrders, refereeMaxOrders);
+    const referrerEligibleOrders = Math.min(completedOrders, referrerMaxOrders);
+
+    const refereeCalculatedReward =
+      refereeEligibleOrders * refereeRewardPerOrder;
+
+    const referrerCalculatedReward =
+      referrerEligibleOrders * referrerRewardPerOrder;
+
+    const refereeEarnedAmount = refereeMaxEarning
+      ? Math.min(refereeCalculatedReward, refereeMaxEarning)
+      : refereeCalculatedReward;
+
+    const referrerEarnedAmount = referrerMaxEarning
+      ? Math.min(referrerCalculatedReward, referrerMaxEarning)
+      : referrerCalculatedReward;
+
+    const isCompleted = completedOrders > 0;
+
+    return removeEmptyValues({
+      ruleType: "PER_ORDER",
+
+      progress: {
+        completedOrders,
+        eligibleOrders: refereeEligibleOrders,
+        status: isCompleted ? "RUNNING" : "PENDING",
+        isCompleted,
+        progressPercentage: calculatePercentage(
+          completedOrders,
+          refereeMaxOrders
+        )
+      },
+
+      refereeReward: {
+        rewardPerOrder: refereeRewardPerOrder,
+        configuredAmount: refereeMaxEarning || refereeCalculatedReward,
+        earnedAmount: refereeEarnedAmount,
+        eligible: refereeEarnedAmount > 0
+      },
+
+      referrerReward: {
+        rewardPerOrder: referrerRewardPerOrder,
+        configuredAmount: referrerMaxEarning || referrerCalculatedReward,
+        earnedAmount: referrerEarnedAmount,
+        eligible: referrerEarnedAmount > 0
+      },
+
+      targetStatus: isCompleted ? "TARGET_REACHED" : "TARGET_PENDING"
+    });
   }
 
-  if (program.ruleType === "TASK") {
+  // =====================================================
+  // HYBRID
+  // =====================================================
+  if (ruleType === "HYBRID") {
+    const refereeTask = program.tasks?.find(
+      (task) => task.role === "REFEREE"
+    );
+
+    const referrerTask = program.tasks?.find(
+      (task) => task.role === "REFERRER"
+    );
+
+    const minOrders = Number(refereeTask?.minOrders || 0);
+    const minEarnings = Number(refereeTask?.minEarnings || 0);
+    const minAcceptanceRate = Number(refereeTask?.minAcceptanceRate || 0);
+    const minCompletionRate = Number(refereeTask?.minCompletionRate || 0);
+
+    const refereeRewardAmount = Number(refereeTask?.rewardAmount || 0);
+    const referrerRewardAmount = Number(referrerTask?.rewardAmount || 0);
+
+    const missingConditions = [];
+
+    if (minOrders > 0 && overallStats.completedOrders < minOrders) {
+      missingConditions.push(`Orders below ${minOrders}`);
+    }
+
+    if (minEarnings > 0 && overallStats.totalEarnings < minEarnings) {
+      missingConditions.push(`Earnings below ${minEarnings}`);
+    }
+
+    if (
+      minAcceptanceRate > 0 &&
+      overallStats.acceptanceRate < minAcceptanceRate
+    ) {
+      missingConditions.push(`Acceptance rate below ${minAcceptanceRate}%`);
+    }
+
+    if (
+      minCompletionRate > 0 &&
+      overallStats.completionRate < minCompletionRate
+    ) {
+      missingConditions.push(`Completion rate below ${minCompletionRate}%`);
+    }
+
+    const isCompleted = missingConditions.length === 0;
+
+    const progressPercentage = Math.round(
+      (
+        (
+          (minOrders > 0
+            ? Math.min(overallStats.completedOrders / minOrders, 1)
+            : 1) +
+          (minEarnings > 0
+            ? Math.min(overallStats.totalEarnings / minEarnings, 1)
+            : 1) +
+          (minAcceptanceRate > 0
+            ? Math.min(overallStats.acceptanceRate / minAcceptanceRate, 1)
+            : 1) +
+          (minCompletionRate > 0
+            ? Math.min(overallStats.completionRate / minCompletionRate, 1)
+            : 1)
+        ) / 4
+      ) * 100
+    );
+
+    return removeEmptyValues({
+      ruleType: "HYBRID",
+
+      conditions: {
+        minOrders,
+        minEarnings,
+        minAcceptanceRate,
+        minCompletionRate
+      },
+
+      progress: {
+        completedOrders: overallStats.completedOrders,
+        requiredOrders: minOrders,
+
+        currentEarnings: overallStats.totalEarnings,
+        requiredEarnings: minEarnings,
+
+        currentAcceptanceRate: overallStats.acceptanceRate,
+        requiredAcceptanceRate: minAcceptanceRate,
+
+        currentCompletionRate: overallStats.completionRate,
+        requiredCompletionRate: minCompletionRate,
+
+        eligible: isCompleted,
+        missingConditions,
+        status: isCompleted ? "COMPLETED" : "RUNNING",
+        isCompleted,
+        progressPercentage
+      },
+
+      refereeReward: {
+        configuredAmount: refereeRewardAmount,
+        earnedAmount: isCompleted ? refereeRewardAmount : 0,
+        eligible: isCompleted
+      },
+
+      referrerReward: {
+        configuredAmount: referrerRewardAmount,
+        earnedAmount: isCompleted ? referrerRewardAmount : 0,
+        eligible: isCompleted
+      },
+
+      targetStatus: isCompleted ? "TARGET_REACHED" : "TARGET_PENDING"
+    });
+  }
+
+  // =====================================================
+  // TASK - DAY WISE
+  // =====================================================
+  if (ruleType === "TASK") {
     const refereeTasks =
-      program.tasks?.filter((t) => t.role === "REFEREE") || [];
+      program.tasks?.filter((task) => task.role === "REFEREE") || [];
 
-    targetOrders =
-      refereeTasks.length > 0
-        ? Math.min(
-            ...refereeTasks.map((t) =>
-              Number(t.minOrders || t.targetOrders || 0)
-            )
-          )
-        : 0;
-
-    const matchedTasks = refereeTasks.filter(
-      (t) =>
-        ordersCompleted >= Number(t.minOrders || 0) &&
-        ordersCompleted <= Number(t.maxOrders || 999999)
+    const referrerTask = program.tasks?.find(
+      (task) => task.role === "REFERRER"
     );
 
-    rewardAmount = matchedTasks.reduce(
-      (sum, task) => sum + Number(task.rewardAmount || 0),
-      0
-    );
+    const referrerRewardAmount = Number(referrerTask?.rewardAmount || 0);
 
-    targetReached = rewardAmount > 0;
+    const currentDayNumber = getReferralCurrentDayNumber(referee);
+
+    const groupedTasks = {};
+
+    for (const task of refereeTasks) {
+      const dayNumber = Number(task.dayNumber || 0);
+
+      if (!groupedTasks[dayNumber]) {
+        groupedTasks[dayNumber] = {
+          dayNumber,
+          taskRuleType: task.taskRuleType,
+          rawTasks: []
+        };
+      }
+
+      groupedTasks[dayNumber].rawTasks.push(task);
+    }
+
+    const tasks = [];
+
+    for (const dayTask of Object.values(groupedTasks).sort(
+      (a, b) => a.dayNumber - b.dayNumber
+    )) {
+      const { start, end } = getDayRangeFromRefereeJoinedDate(
+        referee,
+        dayTask.dayNumber
+      );
+
+      const dayStats = await getOrderStats({
+        prisma,
+        riderId: referee.id,
+        start,
+        end
+      });
+
+      if (dayTask.taskRuleType === "SLAB") {
+        const slabs = dayTask.rawTasks
+          .map((task) => ({
+            minOrders: Number(task.minOrders || 0),
+            maxOrders: Number(task.maxOrders || 0),
+            rewardAmount: Number(task.rewardAmount || 0)
+          }))
+          .sort((a, b) => a.minOrders - b.minOrders);
+
+        const currentSlab = slabs.find(
+          (slab) =>
+            dayStats.completedOrders >= slab.minOrders &&
+            dayStats.completedOrders <= slab.maxOrders
+        );
+
+        const nextSlab = slabs.find(
+          (slab) => dayStats.completedOrders < slab.minOrders
+        );
+
+        const maxOrdersForDay =
+          slabs.length > 0
+            ? Math.max(...slabs.map((slab) => slab.maxOrders))
+            : 0;
+
+        const currentSlabReward = Number(currentSlab?.rewardAmount || 0);
+        const isCompleted = Boolean(currentSlab);
+
+        const statusValue = getTaskStatus({
+          isCompleted,
+          dayNumber: dayTask.dayNumber,
+          currentDayNumber
+        });
+
+        tasks.push(
+          removeEmptyValues({
+            dayNumber: dayTask.dayNumber,
+            taskRuleType: dayTask.taskRuleType,
+            slabs,
+
+            progress: {
+              completedOrders: dayStats.completedOrders,
+              currentSlabReward,
+              earnedAmount: currentSlabReward,
+              nextTargetOrders: nextSlab?.minOrders,
+              remainingOrders: nextSlab
+                ? Math.max(nextSlab.minOrders - dayStats.completedOrders, 0)
+                : 0,
+              status: statusValue,
+              isCompleted,
+              progressPercentage: calculatePercentage(
+                dayStats.completedOrders,
+                maxOrdersForDay
+              )
+            }
+          })
+        );
+      }
+
+      if (dayTask.taskRuleType === "PER_ORDER") {
+        const task = dayTask.rawTasks[0];
+
+        const rewardPerOrder = Number(task.rewardPerOrder || 0);
+        const maxOrders = Number(task.maxOrders || dayStats.completedOrders);
+        const maxEarning = Number(task.maxEarning || 0);
+
+        const eligibleOrders = Math.min(dayStats.completedOrders, maxOrders);
+
+        const calculatedReward = eligibleOrders * rewardPerOrder;
+
+        const earnedAmount = maxEarning
+          ? Math.min(calculatedReward, maxEarning)
+          : calculatedReward;
+
+        const isCompleted =
+          maxOrders > 0 &&
+          dayStats.completedOrders >= maxOrders;
+
+        const statusValue = getTaskStatus({
+          isCompleted,
+          dayNumber: dayTask.dayNumber,
+          currentDayNumber
+        });
+
+        tasks.push(
+          removeEmptyValues({
+            dayNumber: dayTask.dayNumber,
+            taskRuleType: dayTask.taskRuleType,
+            rewardPerOrder,
+            maxOrders,
+            maxEarning,
+
+            progress: {
+              completedOrders: dayStats.completedOrders,
+              earnedAmount,
+              remainingOrders: Math.max(
+                maxOrders - dayStats.completedOrders,
+                0
+              ),
+              remainingAmount: maxEarning
+                ? Math.max(maxEarning - earnedAmount, 0)
+                : 0,
+              status: statusValue,
+              isCompleted,
+              progressPercentage: calculatePercentage(
+                dayStats.completedOrders,
+                maxOrders
+              )
+            }
+          })
+        );
+      }
+
+      if (dayTask.taskRuleType === "FIXED_TARGET") {
+        const task = dayTask.rawTasks[0];
+
+        const targetOrders = Number(task.targetOrders || task.minOrders || 0);
+        const rewardAmount = Number(task.rewardAmount || task.fixedReward || 0);
+
+        const isCompleted =
+          targetOrders > 0 &&
+          dayStats.completedOrders >= targetOrders;
+
+        const statusValue = getTaskStatus({
+          isCompleted,
+          dayNumber: dayTask.dayNumber,
+          currentDayNumber
+        });
+
+        tasks.push(
+          removeEmptyValues({
+            dayNumber: dayTask.dayNumber,
+            taskRuleType: dayTask.taskRuleType,
+
+            target: {
+              orders: targetOrders
+            },
+
+            reward: {
+              amount: rewardAmount
+            },
+
+            progress: {
+              completedOrders: dayStats.completedOrders,
+              targetOrders,
+              remainingOrders: Math.max(
+                targetOrders - dayStats.completedOrders,
+                0
+              ),
+              earnedAmount: isCompleted ? rewardAmount : 0,
+              status: statusValue,
+              isCompleted,
+              progressPercentage: calculatePercentage(
+                dayStats.completedOrders,
+                targetOrders
+              )
+            }
+          })
+        );
+      }
+
+      if (dayTask.taskRuleType === "HYBRID") {
+        const task = dayTask.rawTasks[0];
+
+        const minOrders = Number(task.minOrders || 0);
+        const minEarnings = Number(task.minEarnings || 0);
+        const minAcceptanceRate = Number(task.minAcceptanceRate || 0);
+        const minCompletionRate = Number(task.minCompletionRate || 0);
+        const rewardAmount = Number(task.rewardAmount || 0);
+
+        const missingConditions = [];
+
+        if (minOrders > 0 && dayStats.completedOrders < minOrders) {
+          missingConditions.push(`Orders below ${minOrders}`);
+        }
+
+        if (minEarnings > 0 && dayStats.totalEarnings < minEarnings) {
+          missingConditions.push(`Earnings below ${minEarnings}`);
+        }
+
+        if (
+          minAcceptanceRate > 0 &&
+          dayStats.acceptanceRate < minAcceptanceRate
+        ) {
+          missingConditions.push(`Acceptance rate below ${minAcceptanceRate}%`);
+        }
+
+        if (
+          minCompletionRate > 0 &&
+          dayStats.completionRate < minCompletionRate
+        ) {
+          missingConditions.push(`Completion rate below ${minCompletionRate}%`);
+        }
+
+        const isCompleted = missingConditions.length === 0;
+
+        const statusValue = getTaskStatus({
+          isCompleted,
+          dayNumber: dayTask.dayNumber,
+          currentDayNumber
+        });
+
+        tasks.push(
+          removeEmptyValues({
+            dayNumber: dayTask.dayNumber,
+            taskRuleType: dayTask.taskRuleType,
+
+            conditions: {
+              minOrders,
+              minEarnings,
+              minAcceptanceRate,
+              minCompletionRate
+            },
+
+            reward: {
+              amount: rewardAmount
+            },
+
+            progress: {
+              completedOrders: dayStats.completedOrders,
+              requiredOrders: minOrders,
+
+              currentEarnings: dayStats.totalEarnings,
+              requiredEarnings: minEarnings,
+
+              currentAcceptanceRate: dayStats.acceptanceRate,
+              requiredAcceptanceRate: minAcceptanceRate,
+
+              currentCompletionRate: dayStats.completionRate,
+              requiredCompletionRate: minCompletionRate,
+
+              eligible: isCompleted,
+              missingConditions,
+              earnedAmount: isCompleted ? rewardAmount : 0,
+              status: statusValue,
+              isCompleted,
+              progressPercentage: calculatePercentage(
+                dayStats.completedOrders,
+                minOrders
+              )
+            }
+          })
+        );
+      }
+    }
+
+    const completedDays = tasks.filter(
+      (task) => task.progress?.isCompleted
+    ).length;
+
+    const refereeEarnedAmount = tasks.reduce((sum, task) => {
+      return sum + Number(task.progress?.earnedAmount || 0);
+    }, 0);
+
+    const maxReward = tasks.reduce((sum, task) => {
+      if (task.taskRuleType === "SLAB") {
+        const maxDayReward =
+          task.slabs?.length > 0
+            ? Math.max(...task.slabs.map((slab) => slab.rewardAmount))
+            : 0;
+
+        return sum + maxDayReward;
+      }
+
+      if (task.reward?.amount) {
+        return sum + Number(task.reward.amount || 0);
+      }
+
+      if (task.maxEarning) {
+        return sum + Number(task.maxEarning || 0);
+      }
+
+      return sum;
+    }, 0);
+
+    const isAllTasksCompleted =
+      completedDays === tasks.length &&
+      tasks.length > 0;
+
+    return removeEmptyValues({
+      ruleType: "TASK",
+
+      overallProgress: {
+        completedDays,
+        totalDays: tasks.length,
+        earnedAmount: refereeEarnedAmount,
+        remainingAmount: Math.max(maxReward - refereeEarnedAmount, 0),
+        progressPercentage: calculatePercentage(completedDays, tasks.length)
+      },
+
+      tasks,
+
+      refereeReward: {
+        configuredAmount: maxReward,
+        earnedAmount: refereeEarnedAmount,
+        eligible: refereeEarnedAmount > 0
+      },
+
+      referrerReward: {
+        configuredAmount: referrerRewardAmount,
+        earnedAmount: isAllTasksCompleted ? referrerRewardAmount : 0,
+        eligible: isAllTasksCompleted
+      },
+
+      targetStatus: isAllTasksCompleted
+        ? "TARGET_REACHED"
+        : "TARGET_PENDING"
+    });
   }
 
   return {
-    targetOrders,
-    rewardAmount,
-    targetReached
+    ruleType,
+    targetStatus: "TARGET_PENDING"
   };
 };
 
+
+// GET REFERRAL PROGRESS FOR ALL REFERRED RIDERS
 exports.getReferralProgress = async (req, res) => {
   try {
     const riderId = req.rider?.id;
-    const { status = "all", fromDate, toDate } = req.query;
+
+    const {
+      status = "all",
+      fromDate,
+      toDate,
+      programId
+    } = req.query;
 
     if (!riderId) {
       return res.status(401).json({
@@ -143,20 +750,29 @@ exports.getReferralProgress = async (req, res) => {
 
     const now = new Date();
 
+    const programWhere = {
+      programType: "REFERRAL",
+      isActive: true,
+      validFrom: { lte: now },
+      validTill: { gte: now }
+    };
+
+    if (programId) {
+      programWhere.id = programId;
+    }
+
     const program = await prisma.program.findFirst({
-      where: {
-        programType: "REFERRAL",
-        isActive: true,
-        validFrom: { lte: now },
-        validTill: { gte: now }
-      },
+      where: programWhere,
       include: {
         targets: true,
         tasks: true,
         slabs: true,
         referralConfig: true
       },
-      orderBy: { createdAt: "desc" }
+      orderBy: [
+        { priority: "desc" },
+        { createdAt: "desc" }
+      ]
     });
 
     if (!program) {
@@ -192,21 +808,19 @@ exports.getReferralProgress = async (req, res) => {
 
     let referrals = await Promise.all(
       referredRiders.map(async (referee) => {
-        const ordersCompleted = await prisma.order.count({
-          where: {
-            riderId: referee.id,
-            orderStatus: "DELIVERED"
-          }
+        const overallStats = await getOrderStats({
+          prisma,
+          riderId: referee.id,
+          start: program.validFrom,
+          end: program.validTill
         });
 
-        const ruleResult = getReferralRewardByRule(
-          program,
-          ordersCompleted
-        );
-
-        const targetOrders = ruleResult.targetOrders;
-        const rewardAmount = ruleResult.rewardAmount;
-        const targetReached = ruleResult.targetReached;
+        const ruleBasedData = await buildReferredRiderProgressByRule({
+            prisma,
+            program,
+          referee,
+          overallStats
+        });
 
         const existingReferral = await prisma.referral.findUnique({
           where: {
@@ -216,6 +830,9 @@ exports.getReferralProgress = async (req, res) => {
             }
           }
         });
+
+        const isTargetReached =
+          ruleBasedData.targetStatus === "TARGET_REACHED";
 
         const referral = await prisma.referral.upsert({
           where: {
@@ -227,21 +844,22 @@ exports.getReferralProgress = async (req, res) => {
           update: {
             programId: program.id,
             referralCode: rider.partnerId,
-
-            totalOrders: ordersCompleted,
-            targetOrders,
-
-            isCompleted: targetReached,
+            totalOrders: overallStats.completedOrders,
+            targetOrders:
+              ruleBasedData?.progress?.targetOrders ||
+              ruleBasedData?.target?.orders ||
+              0,
+            isCompleted: isTargetReached,
 
             completedAt:
-              targetReached && !existingReferral?.completedAt
+              isTargetReached && !existingReferral?.completedAt
                 ? new Date()
                 : existingReferral?.completedAt || null,
 
-            rewardGiven: targetReached,
+            rewardGiven: isTargetReached,
 
             rewardGivenAt:
-              targetReached && !existingReferral?.rewardGivenAt
+              isTargetReached && !existingReferral?.rewardGivenAt
                 ? new Date()
                 : existingReferral?.rewardGivenAt || null
           },
@@ -249,27 +867,26 @@ exports.getReferralProgress = async (req, res) => {
             referrerId: rider.id,
             refereeId: referee.id,
             programId: program.id,
-
             referralCode: rider.partnerId,
-
-            totalOrders: ordersCompleted,
-            targetOrders,
-
-            isCompleted: targetReached,
-            completedAt: targetReached ? new Date() : null,
-
-            rewardGiven: targetReached,
-            rewardGivenAt: targetReached ? new Date() : null
+            totalOrders: overallStats.completedOrders,
+            targetOrders:
+              ruleBasedData?.progress?.targetOrders ||
+              ruleBasedData?.target?.orders ||
+              0,
+            isCompleted: isTargetReached,
+            completedAt: isTargetReached ? new Date() : null,
+            rewardGiven: isTargetReached,
+            rewardGivenAt: isTargetReached ? new Date() : null
           }
         });
 
-        return {
+        return removeEmptyValues({
           referralId: referral.id,
 
           newRiderId: referee.id,
-          newRiderName: referee.profile?.fullName || null,
-          newRiderPartnerId: referee.partnerId || null,
-          usedReferralCode: referee.referredByPartnerId,
+          newRiderName: referee.profile?.fullName || "",
+          newRiderPartnerId: referee.partnerId || "",
+          usedReferralCode: referee.referredByPartnerId || "",
 
           referredAt: referee.createdAt,
           referredDate: referee.createdAt.toISOString().split("T")[0],
@@ -277,21 +894,10 @@ exports.getReferralProgress = async (req, res) => {
             timeZone: "Asia/Kolkata"
           }),
 
-          ordersCompleted,
-          targetOrders,
-
-          targetStatus: targetReached ? "TARGET_REACHED" : "TARGET_PENDING",
-
-          remainingOrders:
-            targetReached || !targetOrders
-              ? 0
-              : Math.max(targetOrders - ordersCompleted, 0),
-
-          rewardAmount,
-          rewardEarned: targetReached ? rewardAmount : 0,
+          ...ruleBasedData,
 
           referralUpdated: true
-        };
+        });
       })
     );
 
@@ -311,40 +917,42 @@ exports.getReferralProgress = async (req, res) => {
       (item) => item.targetStatus === "TARGET_REACHED"
     ).length;
 
-    const totalEarnings = referrals.reduce(
-      (sum, item) => sum + item.rewardEarned,
-      0
-    );
+    const totalReferralEarnings = referrals.reduce((sum, item) => {
+      return sum + Number(item.referrerReward?.earnedAmount || 0);
+    }, 0);
 
     return res.status(200).json({
       success: true,
       message: "Referral progress fetched successfully",
 
-      filters: {
+      filters: removeEmptyValues({
         status,
-        fromDate: fromDate || null,
-        toDate: toDate || null
-      },
+        fromDate,
+        toDate,
+        programId
+      }),
 
-      program: {
+      program: removeEmptyValues({
         programId: program.id,
         programName: program.name,
+        trackingType: program.trackingType,
         ruleType: program.ruleType,
         validFrom: program.validFrom,
-        validTill: program.validTill
-      },
+        validTill: program.validTill,
+        weekStartDay: program.weekStartDay
+      }),
 
-      referrer: {
+      referrer: removeEmptyValues({
         riderId: rider.id,
         partnerId: rider.partnerId,
-        name: rider.profile?.fullName || null
-      },
+        name: rider.profile?.fullName || ""
+      }),
 
       summary: {
         totalRidersOnboarded: referrals.length,
         targetReachedRiders: targetReachedCount,
         targetPendingRiders: referrals.length - targetReachedCount,
-        totalEarnings
+        totalEarnings: totalReferralEarnings
       },
 
       referredRiders: referrals
@@ -923,6 +1531,673 @@ exports.getReferralProgressByNewRider = async (req, res) => {
     });
   }
 };
+
+
+
+
+
+
+
+
+
+
+// RULE BASED RESPONSE BUILDER
+
+const buildIndividualRefereeResponse = async ({
+   prisma,
+  program,
+  referee,
+  riderId,
+  overallStats
+}) => {
+  const ruleType = program.ruleType;
+
+  // =====================================================
+  // FIXED_TARGET
+  // =====================================================
+  if (ruleType === "FIXED_TARGET") {
+    const target = program.targets?.[0];
+
+    const referrerTask = program.tasks?.find(
+      (task) => task.role === "REFERRER"
+    );
+
+    const targetOrders = Number(target?.targetOrders || 0);
+    const refereeRewardAmount = Number(target?.rewardAmount || 0);
+    const referrerRewardAmount = Number(referrerTask?.rewardAmount || 0);
+
+    const completedOrders = overallStats.completedOrders;
+
+    const isCompleted =
+      targetOrders > 0 && completedOrders >= targetOrders;
+
+    return removeEmptyValues({
+      ruleType: "FIXED_TARGET",
+
+      target: {
+        orders: targetOrders
+      },
+
+      reward: {
+        amount: refereeRewardAmount
+      },
+
+      progress: {
+        completedOrders,
+        targetOrders,
+        remainingOrders: Math.max(targetOrders - completedOrders, 0),
+        earnedAmount: isCompleted ? refereeRewardAmount : 0,
+        status: isCompleted ? "COMPLETED" : "RUNNING",
+        isCompleted,
+        progressPercentage: calculatePercentage(completedOrders, targetOrders)
+      },
+
+      refereeReward: {
+        eligible: isCompleted,
+        amount: isCompleted ? refereeRewardAmount : 0
+      },
+
+      referrerReward: {
+        amount: referrerRewardAmount
+      },
+
+      targetStatus: isCompleted ? "TARGET_REACHED" : "TARGET_PENDING"
+    });
+  }
+
+  // =====================================================
+  // SLAB
+  // =====================================================
+  if (ruleType === "SLAB") {
+    const refereeSlabs =
+      program.slabs
+        ?.filter((slab) => slab.role === "REFEREE")
+        .map((slab) => ({
+          minOrders: Number(slab.minValue || 0),
+          maxOrders: Number(slab.maxValue || 0),
+          rewardAmount: Number(slab.rewardAmount || 0)
+        }))
+        .sort((a, b) => a.minOrders - b.minOrders) || [];
+
+    const completedOrders = overallStats.completedOrders;
+
+    const currentSlab = refereeSlabs.find(
+      (slab) =>
+        completedOrders >= slab.minOrders &&
+        completedOrders <= slab.maxOrders
+    );
+
+    const nextSlab = refereeSlabs.find(
+      (slab) => completedOrders < slab.minOrders
+    );
+
+    const maxTargetOrders =
+      refereeSlabs.length > 0
+        ? Math.max(...refereeSlabs.map((slab) => slab.maxOrders))
+        : 0;
+
+    const currentSlabReward = Number(currentSlab?.rewardAmount || 0);
+    const isCompleted = Boolean(currentSlab);
+
+    return removeEmptyValues({
+      ruleType: "SLAB",
+
+      slabs: refereeSlabs,
+
+      progress: {
+        completedOrders,
+        currentSlabReward,
+        nextTargetOrders: nextSlab?.minOrders,
+        remainingOrders: nextSlab
+          ? Math.max(nextSlab.minOrders - completedOrders, 0)
+          : 0,
+        earnedAmount: currentSlabReward,
+        status: isCompleted ? "COMPLETED" : "RUNNING",
+        isCompleted,
+        progressPercentage: calculatePercentage(
+          completedOrders,
+          maxTargetOrders
+        )
+      },
+
+      refereeReward: {
+        eligible: isCompleted,
+        amount: currentSlabReward
+      },
+
+      targetStatus: isCompleted ? "TARGET_REACHED" : "TARGET_PENDING"
+    });
+  }
+
+  // =====================================================
+  // PER_ORDER
+  // =====================================================
+  if (ruleType === "PER_ORDER") {
+    const refereeTask = program.tasks?.find(
+      (task) => task.role === "REFEREE"
+    );
+
+    const rewardPerOrder = Number(refereeTask?.rewardPerOrder || 0);
+    const maxOrders = Number(refereeTask?.maxOrders || overallStats.completedOrders);
+    const maxEarning = Number(refereeTask?.maxEarning || 0);
+
+    const completedOrders = overallStats.completedOrders;
+    const eligibleOrders = Math.min(completedOrders, maxOrders);
+
+    const calculatedReward = eligibleOrders * rewardPerOrder;
+
+    const earnedAmount = maxEarning
+      ? Math.min(calculatedReward, maxEarning)
+      : calculatedReward;
+
+    const isCompleted =
+      maxOrders > 0 && completedOrders >= maxOrders;
+
+    return removeEmptyValues({
+      ruleType: "PER_ORDER",
+
+      rewardPerOrder,
+      maxOrders,
+      maxEarning,
+
+      progress: {
+        completedOrders,
+        eligibleOrders,
+        earnedAmount,
+        remainingOrders: Math.max(maxOrders - completedOrders, 0),
+        remainingAmount: maxEarning
+          ? Math.max(maxEarning - earnedAmount, 0)
+          : 0,
+        status: isCompleted ? "COMPLETED" : "RUNNING",
+        isCompleted,
+        progressPercentage: calculatePercentage(completedOrders, maxOrders)
+      },
+
+      refereeReward: {
+        eligible: earnedAmount > 0,
+        amount: earnedAmount
+      },
+
+      targetStatus: isCompleted ? "TARGET_REACHED" : "TARGET_PENDING"
+    });
+  }
+
+  // =====================================================
+  // HYBRID
+  // =====================================================
+  if (ruleType === "HYBRID") {
+    const refereeTask = program.tasks?.find(
+      (task) => task.role === "REFEREE"
+    );
+
+    const minOrders = Number(refereeTask?.minOrders || 0);
+    const minEarnings = Number(refereeTask?.minEarnings || 0);
+    const minAcceptanceRate = Number(refereeTask?.minAcceptanceRate || 0);
+    const minCompletionRate = Number(refereeTask?.minCompletionRate || 0);
+    const rewardAmount = Number(refereeTask?.rewardAmount || 0);
+
+    const missingConditions = [];
+
+    if (minOrders > 0 && overallStats.completedOrders < minOrders) {
+      missingConditions.push(`Orders below ${minOrders}`);
+    }
+
+    if (minEarnings > 0 && overallStats.totalEarnings < minEarnings) {
+      missingConditions.push(`Earnings below ${minEarnings}`);
+    }
+
+    if (
+      minAcceptanceRate > 0 &&
+      overallStats.acceptanceRate < minAcceptanceRate
+    ) {
+      missingConditions.push(`Acceptance rate below ${minAcceptanceRate}%`);
+    }
+
+    if (
+      minCompletionRate > 0 &&
+      overallStats.completionRate < minCompletionRate
+    ) {
+      missingConditions.push(`Completion rate below ${minCompletionRate}%`);
+    }
+
+    const isCompleted = missingConditions.length === 0;
+
+    const progressPercentage = Math.round(
+      (
+        (
+          (minOrders > 0
+            ? Math.min(overallStats.completedOrders / minOrders, 1)
+            : 1) +
+          (minEarnings > 0
+            ? Math.min(overallStats.totalEarnings / minEarnings, 1)
+            : 1) +
+          (minAcceptanceRate > 0
+            ? Math.min(overallStats.acceptanceRate / minAcceptanceRate, 1)
+            : 1) +
+          (minCompletionRate > 0
+            ? Math.min(overallStats.completionRate / minCompletionRate, 1)
+            : 1)
+        ) / 4
+      ) * 100
+    );
+
+    return removeEmptyValues({
+      ruleType: "HYBRID",
+
+      conditions: {
+        minOrders,
+        minEarnings,
+        minAcceptanceRate,
+        minCompletionRate
+      },
+
+      reward: {
+        amount: rewardAmount
+      },
+
+      progress: {
+        completedOrders: overallStats.completedOrders,
+        requiredOrders: minOrders,
+
+        currentEarnings: overallStats.totalEarnings,
+        requiredEarnings: minEarnings,
+
+        currentAcceptanceRate: overallStats.acceptanceRate,
+        requiredAcceptanceRate: minAcceptanceRate,
+
+        currentCompletionRate: overallStats.completionRate,
+        requiredCompletionRate: minCompletionRate,
+
+        eligible: isCompleted,
+        missingConditions,
+        earnedAmount: isCompleted ? rewardAmount : 0,
+        status: isCompleted ? "COMPLETED" : "RUNNING",
+        isCompleted,
+        progressPercentage
+      },
+
+      refereeReward: {
+        eligible: isCompleted,
+        amount: isCompleted ? rewardAmount : 0
+      },
+
+      targetStatus: isCompleted ? "TARGET_REACHED" : "TARGET_PENDING"
+    });
+  }
+
+  // =====================================================
+  // TASK - DAY WISE PROGRESS
+  // =====================================================
+  if (ruleType === "TASK") {
+    const refereeTasks =
+      program.tasks?.filter((task) => task.role === "REFEREE") || [];
+
+    const currentDayNumber = getReferralCurrentDayNumber(referee);
+
+    const groupedTasks = {};
+
+    for (const task of refereeTasks) {
+      const dayNumber = Number(task.dayNumber || 0);
+
+      if (!groupedTasks[dayNumber]) {
+        groupedTasks[dayNumber] = {
+          dayNumber,
+          taskRuleType: task.taskRuleType,
+          rawTasks: []
+        };
+      }
+
+      groupedTasks[dayNumber].rawTasks.push(task);
+    }
+
+    const tasks = [];
+
+    for (const dayTask of Object.values(groupedTasks).sort(
+      (a, b) => a.dayNumber - b.dayNumber
+    )) {
+      const { start, end } = getDayRangeFromRefereeJoinedDate(
+        referee,
+        dayTask.dayNumber
+      );
+
+      const dayStats = await getOrderStats({
+          prisma,
+
+        riderId,
+        start,
+        end
+      });
+
+      const taskRuleType = dayTask.taskRuleType;
+
+      // -----------------------------------------------
+      // TASK + SLAB
+      // -----------------------------------------------
+      if (taskRuleType === "SLAB") {
+        const slabs = dayTask.rawTasks
+          .map((task) => ({
+            minOrders: Number(task.minOrders || 0),
+            maxOrders: Number(task.maxOrders || 0),
+            rewardAmount: Number(task.rewardAmount || 0)
+          }))
+          .sort((a, b) => a.minOrders - b.minOrders);
+
+        const currentSlab = slabs.find(
+          (slab) =>
+            dayStats.completedOrders >= slab.minOrders &&
+            dayStats.completedOrders <= slab.maxOrders
+        );
+
+        const nextSlab = slabs.find(
+          (slab) => dayStats.completedOrders < slab.minOrders
+        );
+
+        const maxOrdersForDay =
+          slabs.length > 0
+            ? Math.max(...slabs.map((slab) => slab.maxOrders))
+            : 0;
+
+        const currentSlabReward = Number(currentSlab?.rewardAmount || 0);
+        const isCompleted = Boolean(currentSlab);
+
+        const status = getTaskStatus({
+          isCompleted,
+          dayNumber: dayTask.dayNumber,
+          currentDayNumber
+        });
+
+        tasks.push(
+          removeEmptyValues({
+            dayNumber: dayTask.dayNumber,
+            taskRuleType,
+            slabs,
+
+            progress: {
+              completedOrders: dayStats.completedOrders,
+              currentSlabReward,
+              earnedAmount: currentSlabReward,
+
+              nextTargetOrders: nextSlab?.minOrders,
+              remainingOrders: nextSlab
+                ? Math.max(nextSlab.minOrders - dayStats.completedOrders, 0)
+                : 0,
+
+              status,
+              isCompleted,
+              progressPercentage: calculatePercentage(
+                dayStats.completedOrders,
+                maxOrdersForDay
+              )
+            }
+          })
+        );
+      }
+
+      // -----------------------------------------------
+      // TASK + PER_ORDER
+      // -----------------------------------------------
+      if (taskRuleType === "PER_ORDER") {
+        const task = dayTask.rawTasks[0];
+
+        const rewardPerOrder = Number(task.rewardPerOrder || 0);
+        const maxOrders = Number(task.maxOrders || dayStats.completedOrders);
+        const maxEarning = Number(task.maxEarning || 0);
+
+        const eligibleOrders = Math.min(dayStats.completedOrders, maxOrders);
+        const calculatedReward = eligibleOrders * rewardPerOrder;
+
+        const earnedAmount = maxEarning
+          ? Math.min(calculatedReward, maxEarning)
+          : calculatedReward;
+
+        const isCompleted =
+          maxOrders > 0 && dayStats.completedOrders >= maxOrders;
+
+        const status = getTaskStatus({
+          isCompleted,
+          dayNumber: dayTask.dayNumber,
+          currentDayNumber
+        });
+
+        tasks.push(
+          removeEmptyValues({
+            dayNumber: dayTask.dayNumber,
+            taskRuleType,
+            rewardPerOrder,
+            maxOrders,
+            maxEarning,
+
+            progress: {
+              completedOrders: dayStats.completedOrders,
+              eligibleOrders,
+              earnedAmount,
+              remainingOrders: Math.max(
+                maxOrders - dayStats.completedOrders,
+                0
+              ),
+              remainingAmount: maxEarning
+                ? Math.max(maxEarning - earnedAmount, 0)
+                : 0,
+              status,
+              isCompleted,
+              progressPercentage: calculatePercentage(
+                dayStats.completedOrders,
+                maxOrders
+              )
+            }
+          })
+        );
+      }
+
+      // -----------------------------------------------
+      // TASK + FIXED_TARGET
+      // -----------------------------------------------
+      if (taskRuleType === "FIXED_TARGET") {
+        const task = dayTask.rawTasks[0];
+
+        const targetOrders = Number(task.targetOrders || task.minOrders || 0);
+        const rewardAmount = Number(task.rewardAmount || task.fixedReward || 0);
+
+        const isCompleted =
+          targetOrders > 0 && dayStats.completedOrders >= targetOrders;
+
+        const status = getTaskStatus({
+          isCompleted,
+          dayNumber: dayTask.dayNumber,
+          currentDayNumber
+        });
+
+        tasks.push(
+          removeEmptyValues({
+            dayNumber: dayTask.dayNumber,
+            taskRuleType,
+
+            target: {
+              orders: targetOrders
+            },
+
+            reward: {
+              amount: rewardAmount
+            },
+
+            progress: {
+              completedOrders: dayStats.completedOrders,
+              targetOrders,
+              remainingOrders: Math.max(
+                targetOrders - dayStats.completedOrders,
+                0
+              ),
+              earnedAmount: isCompleted ? rewardAmount : 0,
+              status,
+              isCompleted,
+              progressPercentage: calculatePercentage(
+                dayStats.completedOrders,
+                targetOrders
+              )
+            }
+          })
+        );
+      }
+
+      // -----------------------------------------------
+      // TASK + HYBRID
+      // -----------------------------------------------
+      if (taskRuleType === "HYBRID") {
+        const task = dayTask.rawTasks[0];
+
+        const minOrders = Number(task.minOrders || 0);
+        const minEarnings = Number(task.minEarnings || 0);
+        const minAcceptanceRate = Number(task.minAcceptanceRate || 0);
+        const minCompletionRate = Number(task.minCompletionRate || 0);
+        const rewardAmount = Number(task.rewardAmount || 0);
+
+        const missingConditions = [];
+
+        if (minOrders > 0 && dayStats.completedOrders < minOrders) {
+          missingConditions.push(`Orders below ${minOrders}`);
+        }
+
+        if (minEarnings > 0 && dayStats.totalEarnings < minEarnings) {
+          missingConditions.push(`Earnings below ${minEarnings}`);
+        }
+
+        if (
+          minAcceptanceRate > 0 &&
+          dayStats.acceptanceRate < minAcceptanceRate
+        ) {
+          missingConditions.push(`Acceptance rate below ${minAcceptanceRate}%`);
+        }
+
+        if (
+          minCompletionRate > 0 &&
+          dayStats.completionRate < minCompletionRate
+        ) {
+          missingConditions.push(`Completion rate below ${minCompletionRate}%`);
+        }
+
+        const isCompleted = missingConditions.length === 0;
+
+        const status = getTaskStatus({
+          isCompleted,
+          dayNumber: dayTask.dayNumber,
+          currentDayNumber
+        });
+
+        tasks.push(
+          removeEmptyValues({
+            dayNumber: dayTask.dayNumber,
+            taskRuleType,
+
+            conditions: {
+              minOrders,
+              minEarnings,
+              minAcceptanceRate,
+              minCompletionRate
+            },
+
+            reward: {
+              amount: rewardAmount
+            },
+
+            progress: {
+              completedOrders: dayStats.completedOrders,
+              requiredOrders: minOrders,
+
+              currentEarnings: dayStats.totalEarnings,
+              requiredEarnings: minEarnings,
+
+              currentAcceptanceRate: dayStats.acceptanceRate,
+              requiredAcceptanceRate: minAcceptanceRate,
+
+              currentCompletionRate: dayStats.completionRate,
+              requiredCompletionRate: minCompletionRate,
+
+              eligible: isCompleted,
+              missingConditions,
+              earnedAmount: isCompleted ? rewardAmount : 0,
+              status,
+              isCompleted,
+              progressPercentage: calculatePercentage(
+                dayStats.completedOrders,
+                minOrders
+              )
+            }
+          })
+        );
+      }
+    }
+
+    const completedDays = tasks.filter(
+      (task) => task.progress?.isCompleted
+    ).length;
+
+    const earnedAmount = tasks.reduce((sum, task) => {
+      return sum + Number(task.progress?.earnedAmount || 0);
+    }, 0);
+
+    const maxReward = tasks.reduce((sum, task) => {
+      if (task.taskRuleType === "SLAB") {
+        const maxDayReward =
+          task.slabs?.length > 0
+            ? Math.max(...task.slabs.map((slab) => slab.rewardAmount))
+            : 0;
+
+        return sum + maxDayReward;
+      }
+
+      if (task.reward?.amount) {
+        return sum + Number(task.reward.amount || 0);
+      }
+
+      if (task.maxEarning) {
+        return sum + Number(task.maxEarning || 0);
+      }
+
+      return sum;
+    }, 0);
+
+    return removeEmptyValues({
+      ruleType: "TASK",
+
+      overallProgress: {
+        completedDays,
+        totalDays: tasks.length,
+        earnedAmount,
+        remainingAmount: Math.max(maxReward - earnedAmount, 0),
+        progressPercentage: calculatePercentage(completedDays, tasks.length)
+      },
+
+      tasks,
+
+      refereeReward: {
+        eligible: earnedAmount > 0,
+        amount: earnedAmount
+      },
+
+      targetStatus:
+        completedDays === tasks.length && tasks.length > 0
+          ? "TARGET_REACHED"
+          : "TARGET_PENDING"
+    });
+  }
+
+  return removeEmptyValues({
+    ruleType,
+
+    progress: {
+      completedOrders: overallStats.completedOrders,
+      earnedAmount: 0,
+      status: "RUNNING",
+      isCompleted: false
+    },
+
+    targetStatus: "TARGET_PENDING"
+  });
+};
+
+
+// GET INDIVIDUAL REFEREE PROGRESS 
+
 exports.getRefereeProgress = async (req, res) => {
   try {
     const riderId = req.rider?.id;
@@ -930,7 +2205,30 @@ exports.getRefereeProgress = async (req, res) => {
     if (!riderId) {
       return res.status(401).json({
         success: false,
-        message: "Unauthorized rider",
+        message: "Unauthorized rider"
+      });
+    }
+
+    const referee = await prisma.rider.findUnique({
+      where: {
+        id: riderId
+      },
+      include: {
+        profile: true
+      }
+    });
+
+    if (!referee) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found"
+      });
+    }
+
+    if (!referee.referredByPartnerId) {
+      return res.status(400).json({
+        success: false,
+        message: "This rider was not referred by anyone"
       });
     }
 
@@ -940,91 +2238,91 @@ exports.getRefereeProgress = async (req, res) => {
       where: {
         programType: "REFERRAL",
         isActive: true,
-        validFrom: { lte: now },
-        validTill: { gte: now },
+        validFrom: {
+          lte: now
+        },
+        validTill: {
+          gte: now
+        }
       },
       include: {
         referralConfig: true,
+        targets: true,
         tasks: true,
+        slabs: true
       },
-      orderBy: {
-        priority: "desc",
-      },
+      orderBy: [
+        {
+          priority: "desc"
+        },
+        {
+          createdAt: "desc"
+        }
+      ]
     });
 
     if (!program) {
       return res.status(404).json({
         success: false,
-        message: "No active referral program found",
+        message: "No active referral program found"
       });
     }
 
-    const refereeTask = program.tasks.find((task) => task.role === "REFEREE");
+    const overallStats = await getOrderStats({
+        prisma,
 
-    if (!refereeTask) {
-      return res.status(404).json({
-        success: false,
-        message: "No referee rule found",
-      });
-    }
-
-    const completedOrders = await prisma.order.count({
-      where: {
-        riderId,
-        orderStatus: "DELIVERED",
-        createdAt: {
-          gte: program.validFrom,
-          lte: program.validTill,
-        },
-      },
+      riderId,
+      start: program.validFrom,
+      end: program.validTill
     });
 
-    const targetOrders =
-      refereeTask.targetOrders ||
-      refereeTask.maxOrders ||
-      refereeTask.minOrders ||
-      0;
+    const ruleBasedData = await buildIndividualRefereeResponse({
+        prisma,
 
-    const remainingOrders = Math.max(targetOrders - completedOrders, 0);
+      program,
+      referee,
+      riderId,
+      overallStats
+    });
 
-    const isTargetCompleted =
-      targetOrders > 0 && completedOrders >= targetOrders;
+    const responseData = removeEmptyValues({
+      riderId: referee.id,
+      riderName: referee.profile?.fullName || "",
+      riderPartnerId: referee.partnerId || "",
+      usedReferralCode: referee.referredByPartnerId,
 
-    const rewardAmount = isTargetCompleted
-      ? refereeTask.rewardAmount || refereeTask.fixedReward || 0
-      : 0;
+      referredAt: referee.createdAt,
+      referredDate: referee.createdAt.toISOString().split("T")[0],
+      referredAtIST: referee.createdAt.toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata"
+      }),
+
+      ...ruleBasedData
+    });
 
     return res.status(200).json({
       success: true,
-      message: "Referee progress fetched successfully",
-      data: {
+      message: "Individual referee progress fetched successfully",
+
+      program: removeEmptyValues({
         programId: program.id,
         programName: program.name,
-        ruleType: program.ruleType,
         trackingType: program.trackingType,
-
-        targetOrders,
-        completedOrders,
-        remainingOrders,
-
-        isTargetCompleted,
-
-        reward: {
-          eligible: isTargetCompleted,
-          amount: rewardAmount,
-        },
-
+        ruleType: program.ruleType,
         validFrom: program.validFrom,
         validTill: program.validTill,
-      },
+        weekStartDay: program.weekStartDay
+      }),
+
+      data: responseData
     });
   } catch (error) {
-    console.error("Get referee progress error:", error);
+    console.error("Get individual referee progress error:", error);
 
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message,
+      error: error.message
     });
   }
 };

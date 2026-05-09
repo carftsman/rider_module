@@ -1,5 +1,249 @@
 const prisma = require("../config/prisma");
+const removeEmptyValues = (obj) => {
+  if (!obj || typeof obj !== "object") return obj;
 
+  if (Array.isArray(obj)) {
+    return obj
+      .map((item) => removeEmptyValues(item))
+      .filter((item) => {
+        if (item === null || item === undefined || item === "") return false;
+        if (Array.isArray(item) && item.length === 0) return false;
+        if (
+          typeof item === "object" &&
+          !(item instanceof Date) &&
+          Object.keys(item).length === 0
+        ) {
+          return false;
+        }
+        return true;
+      });
+  }
+
+  const cleaned = {};
+
+  Object.entries(obj).forEach(([key, value]) => {
+    if (
+      value === null ||
+      value === undefined ||
+      value === "" ||
+      (Array.isArray(value) && value.length === 0)
+    ) {
+      return;
+    }
+
+    if (
+      typeof value === "object" &&
+      !(value instanceof Date)
+    ) {
+      const nested = removeEmptyValues(value);
+
+      if (
+        nested &&
+        !(
+          typeof nested === "object" &&
+          !Array.isArray(nested) &&
+          Object.keys(nested).length === 0
+        )
+      ) {
+        cleaned[key] = nested;
+      }
+
+      return;
+    }
+
+    cleaned[key] = value;
+  });
+
+  return cleaned;
+};
+const buildReferralProgramResponse = (program) => {
+  const baseResponse = {
+    id: program.id,
+    name: program.name,
+    description: program.description,
+    programType: program.programType,
+    cityId: program.cityId,
+    pincodeIds: program.pincodeIds,
+    applicableWhen: program.applicableWhen,
+    trackingType: program.trackingType,
+    ruleType: program.ruleType,
+    validFrom: program.validFrom,
+    validTill: program.validTill,
+    daysOfWeek: program.daysOfWeek,
+    weekStartDay: program.weekStartDay,
+    isActive: program.isActive,
+    priority: program.priority,
+    createdAt: program.createdAt,
+    updatedAt: program.updatedAt,
+
+    referralConfig: {
+      rewardFlow: program.referralConfig?.rewardFlow,
+      maxReferralsPerUser: program.referralConfig?.maxReferralsPerUser,
+      maxEarningPerUser: program.referralConfig?.maxEarningPerUser,
+    },
+  };
+
+  if (program.ruleType === "FIXED_TARGET") {
+    const target = program.targets?.[0];
+    const referrerTask = program.tasks?.find(
+      (task) => task.role === "REFERRER"
+    );
+
+    return removeEmptyValues({
+      ...baseResponse,
+
+      refereeRules: {
+        target: {
+          orders: target?.targetOrders,
+        },
+        reward: {
+          amount: target?.rewardAmount,
+        },
+      },
+
+      referrerReward: {
+        amount: referrerTask?.rewardAmount,
+      },
+    });
+  }
+
+  if (program.ruleType === "SLAB") {
+    const refereeSlabs =
+      program.slabs
+        ?.filter((slab) => slab.role === "REFEREE")
+        .map((slab) => ({
+          minOrders: slab.minValue,
+          maxOrders: slab.maxValue,
+          rewardAmount: slab.rewardAmount,
+        })) || [];
+
+    const referrerSlabs =
+      program.slabs
+        ?.filter((slab) => slab.role === "REFERRER")
+        .map((slab) => ({
+          minOrders: slab.minValue,
+          maxOrders: slab.maxValue,
+          rewardAmount: slab.rewardAmount,
+        })) || [];
+
+    return removeEmptyValues({
+      ...baseResponse,
+
+      refereeRules: {
+        slabs: refereeSlabs,
+      },
+
+      referrerReward: {
+        slabs: referrerSlabs,
+      },
+    });
+  }
+
+  if (program.ruleType === "PER_ORDER") {
+    const refereeTask = program.tasks?.find(
+      (task) => task.role === "REFEREE"
+    );
+
+    const referrerTask = program.tasks?.find(
+      (task) => task.role === "REFERRER"
+    );
+
+    return removeEmptyValues({
+      ...baseResponse,
+
+      refereeRules: {
+        rewardPerOrder: refereeTask?.rewardPerOrder,
+        maxOrders: refereeTask?.maxOrders,
+        maxEarning: refereeTask?.maxEarning,
+      },
+
+      referrerReward: {
+        rewardPerOrder: referrerTask?.rewardPerOrder,
+        maxOrders: referrerTask?.maxOrders,
+        maxEarning: referrerTask?.maxEarning,
+      },
+    });
+  }
+
+  if (program.ruleType === "HYBRID") {
+    const refereeTask = program.tasks?.find(
+      (task) => task.role === "REFEREE"
+    );
+
+    const referrerTask = program.tasks?.find(
+      (task) => task.role === "REFERRER"
+    );
+
+    return removeEmptyValues({
+      ...baseResponse,
+
+      refereeRules: {
+        conditions: {
+          minOrders: refereeTask?.minOrders,
+          minEarnings: refereeTask?.minEarnings,
+          minAcceptanceRate: refereeTask?.minAcceptanceRate,
+          minCompletionRate: refereeTask?.minCompletionRate,
+        },
+        reward: {
+          amount: refereeTask?.rewardAmount,
+        },
+      },
+
+      referrerReward: {
+        amount: referrerTask?.rewardAmount,
+      },
+    });
+  }
+
+  if (program.ruleType === "TASK") {
+    const refereeTasks = program.tasks?.filter(
+      (task) => task.role === "REFEREE"
+    );
+
+    const referrerTask = program.tasks?.find(
+      (task) => task.role === "REFERRER"
+    );
+
+    const groupedTasks = [];
+
+    refereeTasks.forEach((task) => {
+      let existingDay = groupedTasks.find(
+        (item) => item.dayNumber === task.dayNumber
+      );
+
+      if (!existingDay) {
+        existingDay = {
+          dayNumber: task.dayNumber,
+          slabs: [],
+        };
+
+        groupedTasks.push(existingDay);
+      }
+
+      existingDay.slabs.push({
+        minOrders: task.minOrders,
+        maxOrders: task.maxOrders,
+        rewardAmount: task.rewardAmount,
+      });
+    });
+
+    return removeEmptyValues({
+      ...baseResponse,
+
+      taskRuleType: refereeTasks?.[0]?.taskRuleType,
+
+      refereeRules: {
+        tasks: groupedTasks,
+      },
+
+      referrerReward: {
+        amount: referrerTask?.rewardAmount,
+      },
+    });
+  }
+
+  return removeEmptyValues(baseResponse);
+};
 exports.createReferralConfig = async (req, res) => {
   try {
     const {
@@ -227,11 +471,12 @@ exports.createReferralConfig = async (req, res) => {
         tasks: true,
       },
     });
+   const formattedProgram = buildReferralProgramResponse(program);
 
     return res.status(201).json({
       success: true,
       message: "Referral program created successfully",
-      data: program,
+      data: formattedProgram,
     });
   } catch (error) {
     console.error("Create referral program error:", error);
