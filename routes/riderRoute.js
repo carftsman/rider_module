@@ -20,7 +20,8 @@ const {
   deviceToken,
   initializeApp,
   toggleRiderStatus,
-  updateGPS
+  updateGPS,
+  updateCompanyEmployeeLocation
 } = require("../controllers/riderRegisterController");
 
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
@@ -322,6 +323,146 @@ riderRouter.post("/rider/personal-info", riderAuthMiddleWare, savePersonalInfo);
  */
 
 riderRouter.post("/rider/location", riderAuthMiddleWare, updateLocation);
+
+/**
+ * @swagger
+ * /api/admin/company-rider/location:
+ *   post:
+ *     tags:
+ *       - Company Employee Location
+ *     summary: Update company employee rider location
+ *     description: >
+ *       Updates the city and pincode location for a company employee rider.
+ *       
+ *       Features:
+ *       - Validates rider existence
+ *       - Allows only COMPANY_EMPLOYEE riders
+ *       - Validates city and pincode mapping
+ *       - Creates or updates rider location
+ *       - Marks onboarding citySelected as true
+ *
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - riderId
+ *               - city
+ *               - pincode
+ *             properties:
+ *
+ *               riderId:
+ *                 type: string
+ *                 example: RIDER12345
+ *
+ *               city:
+ *                 type: string
+ *                 example: Hyderabad
+ *
+ *               pincode:
+ *                 type: string
+ *                 example: "500081"
+ *
+ *     responses:
+ *
+ *       200:
+ *         description: Company employee location updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Company employee location updated successfully
+ *
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *
+ *                     riderId:
+ *                       type: string
+ *                       example: RIDER12345
+ *
+ *                     city:
+ *                       type: string
+ *                       example: Hyderabad
+ *
+ *                     pincode:
+ *                       type: string
+ *                       example: "500081"
+ *
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   examples:
+ *                     missingRiderId:
+ *                       value: riderId is required
+ *
+ *                     missingCityPincode:
+ *                       value: city and pincode are required
+ *
+ *                     invalidRiderType:
+ *                       value: Location can only be updated for company employee riders
+ *
+ *       404:
+ *         description: Rider or pincode not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   examples:
+ *                     riderNotFound:
+ *                       value: Rider not found
+ *
+ *                     invalidLocation:
+ *                       value: Invalid city or pincode
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
+ */
+
+
+riderRouter.post("/admin/company-rider/location", updateCompanyEmployeeLocation );
 
 // ============================================================
 //   VEHICLE

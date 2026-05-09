@@ -223,6 +223,123 @@ exports.checkStatus = async (req, res) => {
   res.send("Check rider status logic here");
 };
 
+exports.updateCompanyEmployeeLocation = async (req, res) => {
+  try {
+    const { riderId, city, pincode } = req.body;
+
+
+    if (!riderId) {
+      return res.status(400).json({
+        success: false,
+        message: "riderId is required"
+      });
+    }
+
+    if (!city || !pincode) {
+      return res.status(400).json({
+        success: false,
+        message: "city and pincode are required"
+      });
+    }
+
+
+    const rider = await prisma.rider.findUnique({
+      where: {
+        id: riderId
+      }
+    });
+
+
+    if (!rider) {
+      return res.status(404).json({
+        success: false,
+        message: "Rider not found"
+      });
+    }
+
+
+    if (rider.riderType != "COMPANY_EMPLOYEE") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Location can only be updated for company employee riders"
+      });
+    }
+
+
+    const foundPincode =
+      await prisma.pincode.findFirst({
+        where: {
+          code: String(pincode),
+          city: {
+            name: city,
+            isActive: true
+          },
+          isActive: true
+        },
+        include: {
+          city: true
+        }
+      });
+
+    if (!foundPincode) {
+      return res.status(404).json({
+        success: false,
+        message: "Invalid city or pincode"
+      });
+    }
+
+
+    const location =
+      await prisma.riderLocation.upsert({
+        where: {
+          riderId
+        },
+        update: {
+          city: foundPincode.city.name,
+          pincode: foundPincode.code
+        },
+        create: {
+          riderId,
+          city: foundPincode.city.name,
+          pincode: foundPincode.code
+        }
+      });
+
+
+    await prisma.riderOnboarding.update({
+      where: {
+        riderId
+      },
+      data: {
+        citySelected: true
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Company employee location updated successfully",
+      data: {
+        riderId,
+        city: location.city,
+        pincode: location.pincode
+      }
+    });
+
+  } catch (error) {
+    console.error(
+      "Update Company Employee Location Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
+
 // ------------------ PERSONAL INFO -------------------
 exports.savePersonalInfo = async (req, res) => {
   try {
@@ -1208,3 +1325,6 @@ exports.updateGPS = async (req, res) => {
       message: "Server error"
     });
   }}
+
+
+
