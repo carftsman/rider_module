@@ -579,122 +579,187 @@ exports.markAsDelivered = async (req, res) => {
     if (!requestIds) {
       return res.status(400).json({
         success: false,
-        message: "requestIds are required"
+        message: "requestIds are required",
       });
     }
 
-    const ids = requestIds.split(",").map(id => id.trim());
+    const ids = requestIds
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
 
-    const shipments = await prisma.shipment.findMany({
-      where: {
-        assetRequestId: { in: ids }
-      },
-      include: {
-        AssetRequest: true
-      }
-    });
-
-    if (shipments.length !== ids.length) {
-      return res.status(404).json({
+    if (ids.length === 0) {
+      return res.status(400).json({
         success: false,
-        message: "Some shipments not found",
-        foundShipmentRequestIds: shipments.map(s => s.assetRequestId),
-        missingRequestIds: ids.filter(
-          id => !shipments.some(s => s.assetRequestId === id)
-        )
+        message: "Valid requestIds are required",
       });
     }
 
-    const result = await prisma.$transaction(async (tx) => {
-      const delivered = [];
+    const result = await prisma.$transaction(
+      async (tx) => {
+        const shipments = await tx.shipment.findMany({
+          where: {
+            assetRequestId: {
+              in: ids,
+            },
+          },
+          include: {
+            AssetRequest: true,
+          },
+        });
 
-      for (const shipment of shipments) {
-        if (shipment.deliveryStatus === "DELIVERED") {
-          continue;
+        if (shipments.length !== ids.length) {
+          return {
+            success: false,
+            statusCode: 404,
+            message: "Some shipments not found",
+            foundShipmentRequestIds: shipments.map((s) => s.assetRequestId),
+            missingRequestIds: ids.filter(
+              (id) => !shipments.some((s) => s.assetRequestId === id)
+            ),
+          };
         }
 
-        const assetRequest = shipment.AssetRequest;
+        const delivered = [];
+        const alreadyDelivered = [];
 
-        const updatedShipment = await tx.shipment.update({
-          where: {
-            id: shipment.id
-          },
-          data: {
-            deliveryStatus: "DELIVERED",
-            deliveredDate: new Date()
+        for (const shipment of shipments) {
+          const assetRequest = shipment.AssetRequest;
+
+          if (!assetRequest) {
+            throw new Error(
+              `AssetRequest not found for shipment ${shipment.id}`
+            );
           }
-        });
 
-        await tx.assetRequest.update({
-          where: {
-            id: assetRequest.id
-          },
-          data: {
-            status: "COMPLETED"
+          if (shipment.deliveryStatus === "DELIVERED") {
+            alreadyDelivered.push({
+              shipmentId: shipment.id,
+              assetRequestId: shipment.assetRequestId,
+              deliveryStatus: shipment.deliveryStatus,
+            });
+            continue;
           }
-        });
 
-        let riderAsset = await tx.rider_assets.findFirst({
-          where: {
-            riderId: assetRequest.riderId
-          }
-        });
-
-        if (!riderAsset) {
-          riderAsset = await tx.rider_assets.create({
-            data: {
-              riderId: assetRequest.riderId,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            }
-          });
-        } else {
-          await tx.rider_assets.update({
+          const updatedShipment = await tx.shipment.update({
             where: {
-              id: riderAsset.id
+              id: shipment.id,
             },
             data: {
-              updatedAt: new Date()
-            }
+              deliveryStatus: "DELIVERED",
+              deliveredDate: new Date(),
+            },
+          });
+
+          const updatedAssetRequest = await tx.assetRequest.update({
+            where: {
+              id: assetRequest.id,
+            },
+            data: {
+              status: "COMPLETED",
+            },
+          });
+
+          let riderAsset = await tx.rider_assets.findFirst({
+            where: {
+              riderId: assetRequest.riderId,
+            },
+          });
+
+          if (!riderAsset) {
+            riderAsset = await tx.rider_assets.create({
+              data: {
+                riderId: assetRequest.riderId,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            });
+          } else {
+            riderAsset = await tx.rider_assets.update({
+              where: {
+                id: riderAsset.id,
+              },
+              data: {
+                updatedAt: new Date(),
+              },
+            });
+          }
+
+          const riderAssetItem = await tx.rider_asset_items.create({
+            data: {
+              riderAssetsId: riderAsset.id,
+              assetType: assetRequest.assetType,
+              assetName: assetRequest.assetType,
+              quantity: assetRequest.quantity,
+              status: "ISSUED",
+              condition: "GOOD",
+              issuedDate: new Date(),
+            },
+          });
+
+          delivered.push({
+            shipmentId: updatedShipment.id,
+            assetRequestId: updatedShipment.assetRequestId,
+            riderId: assetRequest.riderId,
+            assetType: assetRequest.assetType,
+            quantity: assetRequest.quantity,
+            deliveryStatus: updatedShipment.deliveryStatus,
+            requestStatus: updatedAssetRequest.status,
+            riderAssetId: riderAsset.id,
+            riderAssetItemId: riderAssetItem.id,
+            completedStatus: "COMPLETED",
+            isCompleted: true,
           });
         }
 
-        await tx.rider_asset_items.create({
-          data: {
-            riderAssetsId: riderAsset.id,
-            assetType: assetRequest.assetType,
-            assetName: assetRequest.assetType,
-            quantity: assetRequest.quantity,
-            status: "ISSUED",
-            condition: "GOOD",
-            issuedDate: new Date()
-          }
-        });
-
-        delivered.push(updatedShipment);
+        return {
+          success: true,
+          statusCode: 200,
+          delivered,
+          alreadyDelivered,
+        };
+      },
+      {
+        maxWait: 10000,
+        timeout: 30000,
       }
+    );
 
-      return delivered;
-    });
+    if (!result.success) {
+      return res.status(result.statusCode).json({
+        success: false,
+        message: result.message,
+        foundShipmentRequestIds: result.foundShipmentRequestIds,
+        missingRequestIds: result.missingRequestIds,
+      });
+    }
 
     return res.status(200).json({
       success: true,
       message: "Assets delivered and rider assets created successfully",
-      totalDelivered: result.length,
-      data: result
+      totalDelivered: result.delivered.length,
+      totalAlreadyDelivered: result.alreadyDelivered.length,
+      completedStatus:
+        result.delivered.length > 0 || result.alreadyDelivered.length > 0
+          ? "COMPLETED"
+          : "PENDING",
+      isCompleted:
+        result.delivered.length > 0 || result.alreadyDelivered.length > 0,
+      data: {
+        delivered: result.delivered,
+        alreadyDelivered: result.alreadyDelivered,
+      },
     });
-
   } catch (error) {
     console.error("Mark Delivered Error:", error);
 
     return res.status(500).json({
       success: false,
       message: "Something went wrong",
-      error: error.message
+      error: error.message,
     });
   }
 };
-
 exports.requestJoiningKit = async (req, res) => {
   try {
     if (!req.rider?.id) {

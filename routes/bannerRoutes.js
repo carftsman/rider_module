@@ -8,22 +8,16 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  * @swagger
  * /api/banner/home-banners:
  *   get:
- *     summary: Get rider home banners status
+ *     summary: Get rider home banner status
  *     description: >
- *       Fetches rider home banner statuses for bank details, welcome kit,
- *       joining bonus, refer and earn, and daily incentives.
- *
- *       Boolean values mean completion or availability:
- *       - bank true means bank details are verified.
- *       - kit true means joining kit is delivered.
- *       - joiningBonus true means joining bonus program is available.
- *       - referAndEarn true means referral program is available.
- *       - dailyIncentive true means daily incentive program is available.
+ *       Fetches rider home banner/card statuses including Add Bank Details,
+ *       Joining Kit, Joining Bonus, Refer and Earn, and Daily Incentives.
+ *       The API checks rider bank verification, kit delivery status, active joining bonus,
+ *       referral program, and daily incentive progress.
  *     tags:
- *       - Home Banners
+ *       - Rider Home
  *     security:
  *       - bearerAuth: []
- *
  *     responses:
  *       200:
  *         description: Home banners fetched successfully
@@ -42,169 +36,187 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                   type: object
  *                   properties:
  *                     bank:
- *                       type: boolean
- *                       example: true
- *                       description: true if bank details are verified
- *                     bankStatus:
- *                       type: string
- *                       enum:
- *                         - PENDING
- *                         - UNDER_REVIEW
- *                         - COMPLETED
- *                       example: COMPLETED
- *                     bankMessage:
- *                       type: string
- *                       example: Bank details verified successfully.
+ *                       type: object
+ *                       properties:
+ *                         labelName:
+ *                           type: string
+ *                           example: Add Bank Details
+ *                         isAvailable:
+ *                           type: boolean
+ *                           example: true
+ *                         isCompleted:
+ *                           type: boolean
+ *                           example: false
+ *                         status:
+ *                           type: string
+ *                           enum:
+ *                             - PENDING
+ *                             - UNDER_REVIEW
+ *                             - COMPLETED
+ *                           example: PENDING
+ *                         message:
+ *                           type: string
+ *                           example: Please add your bank details to receive payouts.
  *
  *                     kit:
- *                       type: boolean
- *                       example: true
- *                       description: true if joining kit is delivered
- *                     kitStatus:
- *                       type: string
- *                       enum:
- *                         - NOT_REQUESTED
- *                         - REQUESTED
- *                         - APPROVED
- *                         - READY_FOR_DISPATCH
- *                         - DISPATCHED
- *                         - SHIPPED
- *                         - DELIVERED
- *                       example: DELIVERED
- *                     kitMessage:
- *                       type: string
- *                       example: Your joining kit has been delivered.
+ *                       type: object
+ *                       properties:
+ *                         labelName:
+ *                           type: string
+ *                           example: Joining Kit
+ *                         isAvailable:
+ *                           type: boolean
+ *                           example: true
+ *                         isCompleted:
+ *                           type: boolean
+ *                           example: true
+ *                         status:
+ *                           type: string
+ *                           enum:
+ *                             - NOT_REQUESTED
+ *                             - REQUESTED
+ *                             - APPROVED
+ *                             - SHIPPED
+ *                             - DELIVERED
+ *                           example: DELIVERED
+ *                         message:
+ *                           type: string
+ *                           example: Your joining kit has been delivered.
  *
  *                     joiningBonus:
- *                       type: boolean
- *                       example: true
- *                       description: true if joining bonus program is available
- *                     joiningBonusStatus:
- *                       type: string
- *                       enum:
- *                         - NOT_AVAILABLE
- *                         - ACTIVE
- *                         - TARGET_COMPLETED
- *                         - COMPLETED
- *                       example: ACTIVE
- *                     joiningBonusMessage:
- *                       type: string
- *                       example: Complete 7 more orders to earn ₹500 joining bonus.
- *                     joiningBonusOrdersCompleted:
- *                       type: integer
- *                       example: 3
- *                     joiningBonusTargetOrders:
- *                       type: integer
- *                       example: 10
- *                     joiningBonusRemainingOrders:
- *                       type: integer
- *                       example: 7
- *                     joiningBonusRewardAmount:
- *                       type: number
- *                       example: 500
+ *                       type: object
+ *                       properties:
+ *                         labelName:
+ *                           type: string
+ *                           example: Joining Bonus
+ *                         isAvailable:
+ *                           type: boolean
+ *                           example: true
+ *                         isCompleted:
+ *                           type: boolean
+ *                           example: false
+ *                         status:
+ *                           type: string
+ *                           enum:
+ *                             - NOT_AVAILABLE
+ *                             - ACTIVE
+ *                             - TARGET_COMPLETED
+ *                             - COMPLETED
+ *                           example: ACTIVE
+ *                         message:
+ *                           type: string
+ *                           example: Complete 3 more orders to earn ₹500 joining bonus.
+ *                         ordersCompleted:
+ *                           type: integer
+ *                           example: 2
+ *                         targetOrders:
+ *                           type: integer
+ *                           example: 5
+ *                         remainingOrders:
+ *                           type: integer
+ *                           example: 3
+ *                         rewardAmount:
+ *                           type: number
+ *                           example: 500
  *
  *                     referAndEarn:
- *                       type: boolean
- *                       example: true
- *                       description: true if referral program is available for rider
- *                     referAndEarnStatus:
- *                       type: string
- *                       enum:
- *                         - NOT_AVAILABLE
- *                         - ACTIVE
- *                       example: ACTIVE
- *                     referAndEarnMessage:
- *                       type: string
- *                       example: Refer riders and earn rewards.
+ *                       type: object
+ *                       properties:
+ *                         labelName:
+ *                           type: string
+ *                           example: Refer and Earn
+ *                         isAvailable:
+ *                           type: boolean
+ *                           example: true
+ *                         isCompleted:
+ *                           type: boolean
+ *                           example: false
+ *                         status:
+ *                           type: string
+ *                           enum:
+ *                             - ACTIVE
+ *                             - NOT_AVAILABLE
+ *                           example: ACTIVE
+ *                         message:
+ *                           type: string
+ *                           example: Refer riders and earn rewards.
  *
  *                     dailyIncentive:
- *                       type: boolean
- *                       example: true
- *                       description: true if daily incentive program is available
- *                     dailyIncentiveStatus:
- *                       type: string
- *                       enum:
- *                         - NOT_AVAILABLE
- *                         - ACTIVE
- *                         - TARGET_COMPLETED
- *                         - PAID
- *                       example: ACTIVE
- *                     dailyIncentiveMessage:
- *                       type: string
- *                       example: Complete 6 more orders to earn ₹1000 reward.
- *                     dailyIncentiveOrdersCompleted:
- *                       type: integer
- *                       example: 4
- *                     dailyIncentiveTargetOrders:
- *                       type: integer
- *                       example: 10
- *                     dailyIncentiveRemainingOrders:
- *                       type: integer
- *                       example: 6
- *                     dailyIncentiveRewardAmount:
- *                       type: number
- *                       example: 1000
- *
- *             examples:
- *               completedBankAndKit:
- *                 summary: Bank and kit completed, incentives active
- *                 value:
- *                   success: true
- *                   message: Home banners fetched successfully
- *                   data:
- *                     bank: true
- *                     bankStatus: COMPLETED
- *                     bankMessage: Bank details verified successfully.
- *                     kit: true
- *                     kitStatus: DELIVERED
- *                     kitMessage: Your joining kit has been delivered.
- *                     joiningBonus: true
- *                     joiningBonusStatus: ACTIVE
- *                     joiningBonusMessage: Complete 7 more orders to earn ₹500 joining bonus.
- *                     joiningBonusOrdersCompleted: 3
- *                     joiningBonusTargetOrders: 10
- *                     joiningBonusRemainingOrders: 7
- *                     joiningBonusRewardAmount: 500
- *                     referAndEarn: true
- *                     referAndEarnStatus: ACTIVE
- *                     referAndEarnMessage: Refer riders and earn rewards.
- *                     dailyIncentive: true
- *                     dailyIncentiveStatus: ACTIVE
- *                     dailyIncentiveMessage: Complete 6 more orders to earn ₹1000 reward.
- *                     dailyIncentiveOrdersCompleted: 4
- *                     dailyIncentiveTargetOrders: 10
- *                     dailyIncentiveRemainingOrders: 6
- *                     dailyIncentiveRewardAmount: 1000
- *
- *               noProgramsAvailable:
- *                 summary: No active incentive/referral/joining bonus programs
- *                 value:
- *                   success: true
- *                   message: Home banners fetched successfully
- *                   data:
- *                     bank: false
- *                     bankStatus: PENDING
- *                     bankMessage: Please add your bank details to receive payouts.
- *                     kit: false
- *                     kitStatus: NOT_REQUESTED
- *                     kitMessage: Please select your joining kit.
- *                     joiningBonus: false
- *                     joiningBonusStatus: NOT_AVAILABLE
- *                     joiningBonusMessage: No joining bonus available.
- *                     joiningBonusOrdersCompleted: 0
- *                     joiningBonusTargetOrders: 0
- *                     joiningBonusRemainingOrders: 0
- *                     joiningBonusRewardAmount: 0
- *                     referAndEarn: false
- *                     referAndEarnStatus: NOT_AVAILABLE
- *                     referAndEarnMessage: Refer and earn is not available for your location.
- *                     dailyIncentive: false
- *                     dailyIncentiveStatus: NOT_AVAILABLE
- *                     dailyIncentiveMessage: No daily incentive available today.
- *                     dailyIncentiveOrdersCompleted: 0
- *                     dailyIncentiveTargetOrders: 0
- *                     dailyIncentiveRemainingOrders: 0
- *                     dailyIncentiveRewardAmount: 0
+ *                       type: object
+ *                       properties:
+ *                         labelName:
+ *                           type: string
+ *                           example: Daily Incentives
+ *                         isAvailable:
+ *                           type: boolean
+ *                           example: true
+ *                         isCompleted:
+ *                           type: boolean
+ *                           example: false
+ *                         status:
+ *                           type: string
+ *                           enum:
+ *                             - NOT_AVAILABLE
+ *                             - ACTIVE
+ *                             - TARGET_COMPLETED
+ *                           example: ACTIVE
+ *                         message:
+ *                           type: string
+ *                           example: Complete 4 more orders to earn ₹200 reward.
+ *                         ordersCompleted:
+ *                           type: integer
+ *                           example: 1
+ *                         targetOrders:
+ *                           type: integer
+ *                           example: 5
+ *                         remainingOrders:
+ *                           type: integer
+ *                           example: 4
+ *                         rewardAmount:
+ *                           type: number
+ *                           example: 200
+ *             example:
+ *               success: true
+ *               message: Home banners fetched successfully
+ *               data:
+ *                 bank:
+ *                   labelName: Add Bank Details
+ *                   isAvailable: true
+ *                   isCompleted: false
+ *                   status: PENDING
+ *                   message: Please add your bank details to receive payouts.
+ *                 kit:
+ *                   labelName: Joining Kit
+ *                   isAvailable: true
+ *                   isCompleted: true
+ *                   status: DELIVERED
+ *                   message: Your joining kit has been delivered.
+ *                 joiningBonus:
+ *                   labelName: Joining Bonus
+ *                   isAvailable: true
+ *                   isCompleted: false
+ *                   status: ACTIVE
+ *                   message: Complete 3 more orders to earn ₹500 joining bonus.
+ *                   ordersCompleted: 2
+ *                   targetOrders: 5
+ *                   remainingOrders: 3
+ *                   rewardAmount: 500
+ *                 referAndEarn:
+ *                   labelName: Refer and Earn
+ *                   isAvailable: true
+ *                   isCompleted: false
+ *                   status: ACTIVE
+ *                   message: Refer riders and earn rewards.
+ *                 dailyIncentive:
+ *                   labelName: Daily Incentives
+ *                   isAvailable: true
+ *                   isCompleted: false
+ *                   status: ACTIVE
+ *                   message: Complete 4 more orders to earn ₹200 reward.
+ *                   ordersCompleted: 1
+ *                   targetOrders: 5
+ *                   remainingOrders: 4
+ *                   rewardAmount: 200
  *
  *       401:
  *         description: Unauthorized rider

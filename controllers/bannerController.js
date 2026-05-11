@@ -432,33 +432,59 @@ const getRiderHomeBanners = async (req, res) => {
       }
     }
 
-    return res.status(200).json({
-      success: true,
-      message: "Home banners fetched successfully",
-      data: {
-        bank,
-        bankStatus,
-        bankMessage,
+return res.status(200).json({
+  success: true,
+  message: "Home banners fetched successfully",
+  data: {
+    bank: {
+      labelName: "Add Bank Details",
+      isAvailable: true,
+      isCompleted: bank,
+      status: bankStatus,
+      message: bankMessage
+    },
 
-        kit,
-        kitStatus,
-        kitMessage,
+    kit: {
+      labelName: "Joining Kit",
+      isAvailable: true,
+      isCompleted: kit,
+      status: kitStatus,
+      message: kitMessage
+    },
 
-        joiningBonus,
-        joiningBonusStatus,
-        joiningBonusMessage,
-        joiningBonusOrdersCompleted,
-        joiningBonusTargetOrders,
-        joiningBonusRemainingOrders,
-        joiningBonusRewardAmount,
+    joiningBonus: {
+      labelName: "Joining Bonus",
+      isAvailable: joiningBonus,
+      isCompleted: joiningBonusStatus === "COMPLETED",
+      status: joiningBonusStatus,
+      message: joiningBonusMessage,
+      ordersCompleted: joiningBonusOrdersCompleted,
+      targetOrders: joiningBonusTargetOrders,
+      remainingOrders: joiningBonusRemainingOrders,
+      rewardAmount: joiningBonusRewardAmount
+    },
 
-        referAndEarn,
-        referAndEarnStatus,
-        referAndEarnMessage,
+    referAndEarn: {
+      labelName: "Refer and Earn",
+      isAvailable: referAndEarn,
+      isCompleted: false,
+      status: referAndEarnStatus,
+      message: referAndEarnMessage
+    },
 
-        
-      }
-    });
+    dailyIncentive: {
+      labelName: "Daily Incentives",
+      isAvailable: dailyIncentive,
+      isCompleted: dailyIncentiveStatus === "TARGET_COMPLETED",
+      status: dailyIncentiveStatus,
+      message: dailyIncentiveMessage,
+      ordersCompleted: dailyIncentiveOrdersCompleted,
+      targetOrders: dailyIncentiveTargetOrders,
+      remainingOrders: dailyIncentiveRemainingOrders,
+      rewardAmount: dailyIncentiveRewardAmount
+    }
+  }
+});
   } catch (error) {
     console.error("Get Rider Home Banners Error:", error);
 
