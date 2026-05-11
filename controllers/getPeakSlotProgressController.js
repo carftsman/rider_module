@@ -439,11 +439,11 @@ const upcomingSlots =
         parseInt(start.split(":")[1]);
 
       return {
-        ...item,
-        startMinutes
-      };
+  item,
+  startMinutes
+};
     })
-
+    
     .filter(
       item =>
         item.startMinutes >
@@ -465,8 +465,8 @@ if (upcomingSlots.length > 0) {
 
     success: true,
 
-    data: [upcomingSlots[0]]
-  });
+    data: [upcomingSlots[0].item] 
+ });
 }
 
 //////////////////////////////////////////////////

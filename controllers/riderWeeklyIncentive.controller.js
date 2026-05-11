@@ -182,61 +182,6 @@ exports.getWeeklyIncentives = async (req, res) => {
             //////////////////////////////////////////////////
             // FIND TASK PROGRESS
             //////////////////////////////////////////////////
-
-            let progress =
-              taskProgresses.find(
-                (p) => p.taskId === task.id
-              );
-
-            //////////////////////////////////////////////////
-            // CREATE INITIAL ROW
-            //////////////////////////////////////////////////
-
-            if (!progress) {
-
-              progress =
-                await prisma.programTaskProgress.create({
-
-                  data: {
-
-                    riderId,
-
-                    programId: program.id,
-
-                    taskId: task.id,
-
-                    dayNumber: task.dayNumber,
-
-                    date: new Date(),
-
-                    progressValue: 0,
-
-                    isCompleted: false
-                  }
-                });
-            }
-
-            //////////////////////////////////////////////////
-            // VALUES
-            //////////////////////////////////////////////////
-
-            const progressValue =
-              progress.progressValue || 0;
-
-            const isCompleted =
-              progress.isCompleted || false;
-
-            const completedAt =
-              progress.updatedAt || null;
-
-            let rewardEarned = 0;
-
-            //////////////////////////////////////////////////
-            // TASK STATUS
-            //////////////////////////////////////////////////
-
-            let taskStatus = "PENDING";
-
 const currentDayNumber = (() => {
 
   const jsDay = new Date().getDay();
@@ -246,23 +191,88 @@ const currentDayNumber = (() => {
   return jsDay;
 
 })();
+            let progress =
+              taskProgresses.find(
+                (p) => p.taskId === task.id
+              );
+
+            //////////////////////////////////////////////////
+            // CREATE INITIAL ROW
+            //////////////////////////////////////////////////
+if (
+  !progress &&
+  task.dayNumber <= currentDayNumber
+) {
+
+  progress =
+    await prisma.programTaskProgress.create({
+
+      data: {
+
+        riderId,
+
+        programId: program.id,
+
+        taskId: task.id,
+
+        dayNumber: task.dayNumber,
+
+        date: new Date(),
+
+        progressValue: 0,
+
+        isCompleted: false
+      }
+    });
+}
+
+            //////////////////////////////////////////////////
+            // VALUES
+            //////////////////////////////////////////////////
+
+const progressValue =
+  progress?.progressValue || 0;
+
+const isCompleted =
+  progress?.isCompleted || false;
+
+          const completedAt =
+  progress?.updatedAt || null;
+
+            let rewardEarned = 0;
+
+            //////////////////////////////////////////////////
+            // TASK STATUS
+            //////////////////////////////////////////////////
+
+            let taskStatus = "PENDING";
+
+
 //////////////////////////////////////////////////
 // LOCK FUTURE DAYS ONLY
 //////////////////////////////////////////////////
-
 if (task.dayNumber > currentDayNumber) {
   taskStatus = "LOCKED";
 }
 
-            if (taskStatus !== "LOCKED") {
+const isLocked =
+  taskStatus === "LOCKED";
 
-              taskStatus =
-                isCompleted
-                  ? "COMPLETED"
-                  : progressValue > 0
-                  ? "RUNNING"
-                  : "PENDING";
-            }
+const safeProgressValue =
+  isLocked ? 0 : progressValue;
+
+const safeCompleted =
+  isLocked ? false : isCompleted;
+
+if (!isLocked) {
+
+  taskStatus =
+    safeCompleted
+      ? "COMPLETED"
+      : safeProgressValue > 0
+      ? "RUNNING"
+      : "PENDING";
+}
 
             //////////////////////////////////////////////////
             // TASK RESPONSE
@@ -291,14 +301,14 @@ dayName:
             ) {
 
               rewardEarned =
-                isCompleted
+  safeCompleted
                   ? task.fixedReward || 0
                   : 0;
 
               taskResponse.progress = {
 
                 completedOrders:
-                  progressValue,
+  safeProgressValue,
 
                 targetOrders:
                   task.targetOrders,
@@ -306,7 +316,7 @@ dayName:
                 remainingOrders:
                   Math.max(
                     (task.targetOrders || 0)
-                    - progressValue,
+                    - safeProgressValue,
                     0
                   ),
 
@@ -316,8 +326,8 @@ dayName:
                 status:
                   taskStatus,
 
-                isCompleted,
-
+isCompleted:
+  safeCompleted,
                 completedAt
               };
             }
@@ -332,16 +342,16 @@ dayName:
             ) {
 
               rewardEarned =
-                Math.min(
-                  progressValue,
-                  task.maxOrders || 0
-                ) *
+  Math.min(
+    safeProgressValue,
+    task.maxOrders || 0
+  ) *
                 (task.rewardPerOrder || 0);
 
               taskResponse.progress = {
 
-                completedOrders:
-                  progressValue,
+              completedOrders:
+  safeProgressValue,
 
                 earnedAmount:
                   rewardEarned,
@@ -349,7 +359,7 @@ dayName:
                 remainingOrders:
                   Math.max(
                     (task.maxOrders || 0)
-                    - progressValue,
+                    - safeProgressValue,
                     0
                   ),
 
@@ -363,14 +373,14 @@ dayName:
                 status:
                   taskStatus,
 
-                isCompleted,
-
+isCompleted:
+  safeCompleted,
                 progressPercentage:
                   task.maxOrders
                     ? Math.min(
                         Math.round(
                           (
-                            progressValue
+                            safeProgressValue
                             / task.maxOrders
                           ) * 100
                         ),
@@ -390,59 +400,57 @@ dayName:
             ) {
 
               rewardEarned =
-                isCompleted
+  safeCompleted
                   ? task.rewardAmount || 0
                   : 0;
 
               const currentAcceptanceRate =
-                progress.acceptanceRate || 0;
+  progress?.acceptanceRate || 0;
 
-              const currentEarnings =
-                progress.earnings || 0;
-
-              const missingConditions = [];
-
-              if (
-                progressValue <
-                (task.minOrders || 0)
-              ) {
-                missingConditions.push(
-                  `Orders below ${task.minOrders}`
-                );
-              }
-
-              if (
-                currentAcceptanceRate <
-                (task.minAcceptanceRate || 0)
-              ) {
-                missingConditions.push(
-                  `Acceptance rate below ${task.minAcceptanceRate}%`
-                );
-              }
-
-              if (
-                currentEarnings <
-                (task.minEarnings || 0)
-              ) {
-                missingConditions.push(
-                  `Earnings below ${task.minEarnings}`
-                );
-              }
-
-              taskResponse.progress = {
+             const currentEarnings =
+  progress?.earnings || 0;
+taskResponse.progress = {
 
   completedOrders:
-    progressValue,
+    safeProgressValue,
 
   currentAcceptanceRate,
 
   currentEarnings,
 
+  remainingOrders:
+    Math.max(
+      (task.minOrders || 0)
+      - safeProgressValue,
+      0
+    ),
+
+  remainingEarnings:
+    Math.max(
+      (task.minEarnings || 0)
+      - currentEarnings,
+      0
+    ),
+
+  progressPercentage:
+    task.minOrders
+      ? Math.min(
+          Math.round(
+            (
+              safeProgressValue /
+              task.minOrders
+            ) * 100
+          ),
+          100
+        )
+      : 0,
+
   status:
     taskStatus,
 
-  isCompleted
-};            }
+  isCompleted:
+    safeCompleted
+};      }
 
             //////////////////////////////////////////////////
             // SLAB
@@ -473,30 +481,59 @@ dayName:
               const matchedSlab =
                 program.slabs.find(
                   (s) =>
-                    progressValue >= s.minValue &&
-                    progressValue <= s.maxValue
+                    safeProgressValue >= s.minValue &&
+safeProgressValue <= s.maxValue
                 );
 
               rewardEarned =
                 matchedSlab?.rewardAmount || 0;
 
-              taskResponse.progress = {
+             taskResponse.progress = {
 
-                completedOrders:
-                  progressValue,
+  completedOrders:
+    safeProgressValue,
 
-                currentSlabReward:
-                  rewardEarned,
+  currentSlabReward:
+    rewardEarned,
 
-                status:
-                  taskStatus,
+  remainingOrders:
+    Math.max(
+      (
+        Math.max(
+          ...program.slabs.map(
+            s => s.maxValue
+          )
+        )
+      ) - safeProgressValue,
+      0
+    ),
 
-                isCompleted,
+  progressPercentage:
+    program.slabs?.length
+      ? Math.min(
+          Math.round(
+            (
+              safeProgressValue /
+              Math.max(
+                ...program.slabs.map(
+                  s => s.maxValue
+                )
+              )
+            ) * 100
+          ),
+          100
+        )
+      : 0,
 
-                completedAt
-              };
+  status:
+    taskStatus,
 
-              taskResponse.slabs = slabs;
+  isCompleted:
+    safeCompleted,
+
+  completedAt
+};
+
             }
 
             //////////////////////////////////////////////////
@@ -505,8 +542,8 @@ dayName:
 
             totalRewardEarned += rewardEarned;
 
-            if (isCompleted) {
-              completedDays++;
+if (safeCompleted) {
+                completedDays++;
             }
 
             return taskResponse;
