@@ -5,7 +5,36 @@ function minutesToTime(mins) {
   const m = mins % 60;
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
+function getISTDayRange() {
 
+  const now = new Date();
+
+  const istNow = new Date(
+    now.getTime() + (5.5 * 60 * 60 * 1000)
+  );
+
+  const start = new Date(Date.UTC(
+    istNow.getUTCFullYear(),
+    istNow.getUTCMonth(),
+    istNow.getUTCDate(),
+    -5,
+    -30,
+    0,
+    0
+  ));
+
+  const end = new Date(Date.UTC(
+    istNow.getUTCFullYear(),
+    istNow.getUTCMonth(),
+    istNow.getUTCDate() + 1,
+    -5,
+    -30,
+    0,
+    0
+  ));
+
+  return { start, end };
+}
 const getPeakSlotProgress = async (req, res) => {
   try {
     const riderId = req.rider.id;
@@ -26,9 +55,9 @@ const getPeakSlotProgress = async (req, res) => {
 
     const riderPincode = riderLocation.pincode;
 
-const todayDate = new Date();
-    // GET ACTIVE PROGRAMS
+const { start, end } = getISTDayRange();
 
+// GET ACTIVE PROGRAMS
 const now = new Date(
   new Date().toLocaleString(
     "en-US",
@@ -153,19 +182,10 @@ if (
 
             slotId: slot.id,
 
-            date: {
-              gte: new Date(
-                todayDate.getFullYear(),
-                todayDate.getMonth(),
-                todayDate.getDate()
-              ),
-
-              lt: new Date(
-                todayDate.getFullYear(),
-                todayDate.getMonth(),
-                todayDate.getDate() + 1
-              )
-            }
+           date: {
+  gte: start,
+  lt: end
+}
           }
         });
 
@@ -221,18 +241,9 @@ const slotProgress =
       slotId: slot?.id,
 
       date: {
-        gte: new Date(
-          todayDate.getFullYear(),
-          todayDate.getMonth(),
-          todayDate.getDate()
-        ),
-
-        lt: new Date(
-          todayDate.getFullYear(),
-          todayDate.getMonth(),
-          todayDate.getDate() + 1
-        )
-      }
+  gte: start,
+  lt: end
+}
     }
   });
 
@@ -302,19 +313,10 @@ const slotProgress =
 
       slotId: slot?.id,
 
-      date: {
-        gte: new Date(
-          todayDate.getFullYear(),
-          todayDate.getMonth(),
-          todayDate.getDate()
-        ),
-
-        lt: new Date(
-          todayDate.getFullYear(),
-          todayDate.getMonth(),
-          todayDate.getDate() + 1
-        )
-      }
+     date: {
+  gte: start,
+  lt: end
+}
     }
   });
 

@@ -1,13 +1,31 @@
 const prisma = require("../config/prisma");
 
-function getWeekKey(date = new Date()) {
-  const year = date.getFullYear();
+function getWeekKey() {
 
-  const oneJan = new Date(year, 0, 1);
+  const now = new Date();
+
+  const istNow = new Date(
+    now.toLocaleString(
+      "en-US",
+      { timeZone: "Asia/Kolkata" }
+    )
+  );
+
+  const year =
+    istNow.getFullYear();
+
+  const oneJan =
+    new Date(year, 0, 1);
 
   const week = Math.ceil(
-    (((date - oneJan) / 86400000) +
-      oneJan.getDay() + 1) / 7
+    (
+      (
+        (istNow - oneJan) /
+        86400000
+      ) +
+      oneJan.getDay() +
+      1
+    ) / 7
   );
 
   return `${year}-W${week}`;
@@ -179,12 +197,16 @@ exports.getWeeklyIncentives = async (req, res) => {
         sortedTasks.map(
           async (task, index) => {
 
-            //////////////////////////////////////////////////
-            // FIND TASK PROGRESS
-            //////////////////////////////////////////////////
 const currentDayNumber = (() => {
 
-  const jsDay = new Date().getDay();
+  const istNow = new Date(
+    new Date().toLocaleString(
+      "en-US",
+      { timeZone: "Asia/Kolkata" }
+    )
+  );
+
+  const jsDay = istNow.getDay();
 
   if (jsDay === 0) return 7;
 

@@ -1,5 +1,34 @@
 const prisma = require("../config/prisma");
- 
+ function getISTDayRange() {
+
+  const now = new Date();
+
+  const istNow = new Date(
+    now.getTime() + (5.5 * 60 * 60 * 1000)
+  );
+
+  const start = new Date(Date.UTC(
+    istNow.getUTCFullYear(),
+    istNow.getUTCMonth(),
+    istNow.getUTCDate(),
+    -5,
+    -30,
+    0,
+    0
+  ));
+
+  const end = new Date(Date.UTC(
+    istNow.getUTCFullYear(),
+    istNow.getUTCMonth(),
+    istNow.getUTCDate() + 1,
+    -5,
+    -30,
+    0,
+    0
+  ));
+
+  return { start, end };
+}
 const getDailyIncentive = async (req, res) => {
   try {
 const riderId =
@@ -10,13 +39,7 @@ const riderId =
       });
     }
  
-    // Start & End of day (safe for DateTime)
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
- 
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
- 
+const { start, end } = getISTDayRange();
 // GET RIDER LOCATION
  
 const riderLocation =
@@ -101,10 +124,10 @@ if (!program && riderCityId) {
       where: {
         riderId,
         programId: program.id,
-        date: {
-          gte: startOfDay,
-          lte: endOfDay,
-        },
+date: {
+  gte: start,
+  lt: end,
+},
       },
     });
     let status = "NOT_STARTED";
