@@ -245,13 +245,18 @@ const isCompleted =
             // TASK STATUS
             //////////////////////////////////////////////////
 
-            let taskStatus = "PENDING";
+//////////////////////////////////////////////////
+// TASK STATUS
+//////////////////////////////////////////////////
 
+let taskStatus = "PENDING";
 
 //////////////////////////////////////////////////
-// LOCK FUTURE DAYS ONLY
+// LOCK FUTURE DAYS
 //////////////////////////////////////////////////
+
 if (task.dayNumber > currentDayNumber) {
+
   taskStatus = "LOCKED";
 }
 
@@ -264,14 +269,33 @@ const safeProgressValue =
 const safeCompleted =
   isLocked ? false : isCompleted;
 
-if (!isLocked) {
+//////////////////////////////////////////////////
+// FINAL STATUS LOGIC
+//////////////////////////////////////////////////
 
-  taskStatus =
-    safeCompleted
-      ? "COMPLETED"
-      : safeProgressValue > 0
-      ? "RUNNING"
-      : "PENDING";
+//////////////////////////////////////////////////
+// FINAL STATUS LOGIC
+//////////////////////////////////////////////////
+
+if (isLocked) {
+
+  taskStatus = "LOCKED";
+
+} else if (safeCompleted) {
+
+  taskStatus = "COMPLETED";
+
+} else if (
+  task.dayNumber === currentDayNumber
+) {
+
+  // Current active day
+  taskStatus = "RUNNING";
+
+} else {
+
+  // Previous incomplete days
+  taskStatus = "PENDING";
 }
 
             //////////////////////////////////////////////////
