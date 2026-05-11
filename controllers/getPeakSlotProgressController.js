@@ -29,8 +29,12 @@ const getPeakSlotProgress = async (req, res) => {
 const todayDate = new Date();
     // GET ACTIVE PROGRAMS
 
-    const now = new Date();
-
+const now = new Date(
+  new Date().toLocaleString(
+    "en-US",
+    { timeZone: "Asia/Kolkata" }
+  )
+);
 const programs = await prisma.program.findMany({
   where: {
     isActive: true,
@@ -87,8 +91,12 @@ const programs = await prisma.program.findMany({
     const incentives = await Promise.all(
   programs.flatMap(async (p) => {
 
-const now = new Date();
-
+const now = new Date(
+  new Date().toLocaleString(
+    "en-US",
+    { timeZone: "Asia/Kolkata" }
+  )
+);
 const currentMinutes =
   now.getHours() * 60 +
   now.getMinutes();
@@ -492,8 +500,12 @@ const getRiderPeakSlotPrograms = async (req, res) => {
     const riderCityId =
       riderLocation.cityId || null;
 
-    const now = new Date();
-
+const now = new Date(
+  new Date().toLocaleString(
+    "en-US",
+    { timeZone: "Asia/Kolkata" }
+  )
+);
    const today = now
   .toLocaleDateString("en-US", {
     weekday: "short"
