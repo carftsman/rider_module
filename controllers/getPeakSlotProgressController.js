@@ -110,7 +110,7 @@ const activeSlot =
     currentMinutes >=
       slot.startMinutes &&
 
-    currentMinutes <=
+    currentMinutes <
       slot.endMinutes
   );
 
@@ -164,17 +164,19 @@ if (
       const orders =
         slotProgress?.totalOrders || 0;
 
-      return {
+return {
+  ruleType: p.ruleType,
 
-        ruleType: p.ruleType,
+  slotId: slot.id,
 
-        slotId: slot.id,
+  pincode: riderPincode,
 
-        pincode: riderPincode,
+  startMinutes: slot.startMinutes,
 
-        slotTiming:
-          `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
+  endMinutes: slot.endMinutes,
 
+  slotTiming:
+    `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`,
         ordersCompleted: orders,
 
         rewardAmount:
@@ -254,7 +256,8 @@ const earnings =
     slotId: slot?.id || null,
 
     pincode: riderPincode,
-
+startMinutes: slot?.startMinutes,
+endMinutes: slot?.endMinutes,
     slotTiming:
       slot
         ? `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`
@@ -340,7 +343,8 @@ const completionRate =
     slotId: slot?.id || null,
 
     pincode: riderPincode,
-
+startMinutes: slot?.startMinutes,
+endMinutes: slot?.endMinutes,
     slotTiming:
       slot
         ? `${minutesToTime(slot.startMinutes)} - ${minutesToTime(slot.endMinutes)}`
@@ -383,29 +387,10 @@ const currentMinutes =
 
 const activeSlots =
   flatIncentives.filter(item => {
-
-    const [
-      start,
-      end
-    ] =
-      item.slotTiming
-        .split(" - ");
-
-    const startMinutes =
-      parseInt(start.split(":")[0]) * 60 +
-      parseInt(start.split(":")[1]);
-
-    const endMinutes =
-      parseInt(end.split(":")[0]) * 60 +
-      parseInt(end.split(":")[1]);
-
-    return (
-      currentMinutes >=
-        startMinutes &&
-
-      currentMinutes <=
-        endMinutes
-    );
+return (
+  currentMinutes >= item.startMinutes &&
+  currentMinutes < item.endMinutes
+);
   });
 
 //////////////////////////////////////////////////
@@ -430,17 +415,9 @@ const upcomingSlots =
   flatIncentives
     .map(item => {
 
-      const start =
-        item.slotTiming
-          .split(" - ")[0];
-
-      const startMinutes =
-        parseInt(start.split(":")[0]) * 60 +
-        parseInt(start.split(":")[1]);
-
-      return {
+return {
   item,
-  startMinutes
+  startMinutes: item.startMinutes
 };
     })
     
@@ -772,7 +749,7 @@ const getRiderPeakSlotPrograms = async (req, res) => {
                   currentMinutes >=
                     slot.startMinutes &&
 
-                  currentMinutes <=
+                  currentMinutes <
                     slot.endMinutes;
 
                 const isUpcoming =
@@ -780,7 +757,8 @@ const getRiderPeakSlotPrograms = async (req, res) => {
                   slot.startMinutes;
 
                 const commonSlot = {
-
+startMinutes: slot.startMinutes,
+endMinutes: slot.endMinutes,
                   startTime:
                     minutesToTime(
                       slot.startMinutes
@@ -1007,14 +985,8 @@ if (hasAnyActiveSlot) {
 
     for (const slot of program.slots) {
 
-      const slotStart =
-        parseInt(
-          slot.startTime.split(":")[0]
-        ) * 60 +
-
-        parseInt(
-          slot.startTime.split(":")[1]
-        );
+const slotStart =
+  slot.startMinutes;
 
       if (slotStart < nearestStart) {
 
