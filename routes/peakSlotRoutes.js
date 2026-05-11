@@ -3,94 +3,66 @@ const router = express.Router();
 const controller = require("../controllers/peakSlotController");
 const prisma = require("../config/prisma");
  
- 
 /**
  * @swagger
  * /admin/incentives/peak-slot:
  *   post:
- *     summary: Create Peak Slot Incentive (PER_ORDER)
+ *     summary: Create SLAB Peak Slot Incentive
  *     tags: [Peak Slot Incentives]
- *     description: Create peak slot incentive using PER_ORDER, SLAB or FIXED_TARGET.
+ *     description: Create slab-based peak slot incentive
  *
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - ruleType
- *               - name
- *               - cityName
- *               - dateRange
- *               - slots
- *             properties:
- *               ruleType:
- *                 type: string
- *                 example: PER_ORDER
+ *           example:
+ *             ruleType: SLAB
+ *             name: Peak Slab Bonus
+ *             cityName: Hyderabad
  *
- *               name:
- *                 type: string
- *                 example: Evening Bonus
+ *             pincodeIds:
+ *               - "500082"
  *
- *               cityName:
- *                 type: string
- *                 example: Hyderabad
+ *             dateRange:
+ *               startDate: "2026-05-01"
+ *               endDate: "2026-05-31"
  *
- *               pincodeIds:
- *                 type: array
- *                 items:
- *                   type: string
- *                 example: ["500082"]
+ *             slots:
+ *               - startTime: "18:00"
+ *                 endTime: "21:00"
  *
- *               dateRange:
- *                 type: object
- *                 properties:
- *                   startDate:
- *                     type: string
- *                     example: "2026-05-01"
- *                   endDate:
- *                     type: string
- *                     example: "2026-05-10"
+ *                 daysOfWeek:
+ *                   - MON
+ *                   - TUE
+ *                   - WED
+ *                   - THU
+ *                   - FRI
+ *                   - SAT
+ *                   - SUN
  *
- *               slots:
- *                 type: array
- *                 items:
- *                   type: object
- *                   properties:
- *                     startTime:
- *                       type: string
- *                       example: "18:00"
+ *                 slabs:
+ *                   - minOrders: 5
+ *                     maxOrders: 10
+ *                     rewardAmount: 100
  *
- *                     endTime:
- *                       type: string
- *                       example: "21:00"
+ *                   - minOrders: 11
+ *                     maxOrders: 20
+ *                     rewardAmount: 200
  *
- *                     daysOfWeek:
- *                       type: array
- *                       items:
- *                         type: string
- *                       example: ["MON", "TUE"]
- *
- *                     reward:
- *                       type: object
- *                       properties:
- *                         amount:
- *                           type: number
- *                           example: 20
- *
- *               isActive:
- *                 type: boolean
- *                 example: true
+ *             isActive: true
  *
  *     responses:
  *       201:
- *         description: Created successfully
+ *         description: SLAB peak slot incentive created successfully
+ *
  *       400:
  *         description: Validation error
+ *
  *       500:
  *         description: Server error
  */
+
+
 router.post("/peak-slot",controller.createPeakSlot)
  
  
