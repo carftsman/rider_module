@@ -119,7 +119,7 @@ exports.new_getEarningsSummary = async (req, res) => {
 
 
 
-// 2 Bar chart (Mon–Sun)
+// Bar chart (Mon–Sun)
 exports.new_getWeeklyChart = async (req, res) => {
   try {
     const riderId = req.rider.id; //Prisma id
@@ -135,11 +135,11 @@ exports.new_getWeeklyChart = async (req, res) => {
 
     const riderType = rider?.riderType;
 
-    // ---- CURRENT ISO WEEK ----
+    
     const current = getCurrentISOWeek();
     const { start, end } = getISOWeekRange(current.week, current.year);
 
-    // ---- FETCH DELIVERED ORDERS ----
+   
     const orders = await prisma.order.findMany({
       where: {
         riderId,
@@ -199,9 +199,9 @@ exports.new_getWeeklyChart = async (req, res) => {
     }
 
    res.json({
-  riderType,
-  week
-});
+    riderType,
+    week
+    });
 
     // res.json({ week });
 
@@ -215,13 +215,10 @@ exports.new_getDailyEarnings = async (req, res) => {
   try {
     console.log("Hitted new daily earnings controller");
 
-    const riderId = req.rider.id; // Prisma uses id (not _id)
+    const riderId = req.rider.id; 
 
     let year, month, day;
 
-    // -----------------------------
-    // SAFE DATE PARSING (LOCAL)
-    // -----------------------------
     if (req.query.date) {
       const parts = req.query.date.split("-").map(Number);
 
@@ -247,9 +244,6 @@ exports.new_getDailyEarnings = async (req, res) => {
     const endOfDay = new Date(baseDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // -----------------------------
-    // FETCH ORDERS (DELIVERED ONLY)
-    // -----------------------------
     const orders = await prisma.order.findMany({
       where: {
         riderId: riderId,
@@ -267,16 +261,29 @@ exports.new_getDailyEarnings = async (req, res) => {
       }
     });
 
+    console.log("orders : " ,orders.length)
+
     let totalEarnings = 0;
+    let baseEarnings = 0;
+    let incentives = 0;
     const items = [];
 
     orders.forEach(order => {
       const earning = order.OrderRiderEarning;
 
       const amount = earning?.totalEarning || 0;
-      const surgePay = earning?.surgePay || 0;
+
+      const baseAmount =
+        earning?.basePay || 0;
+
+      const incentiveAmount =
+        earning?.surgePay || 0;
 
       totalEarnings += amount;
+
+      baseEarnings += baseAmount;
+
+      incentives += incentiveAmount;
 
       // DELIVERY ENTRY
       items.push({
@@ -287,14 +294,14 @@ exports.new_getDailyEarnings = async (req, res) => {
       });
 
       // BONUS ENTRY
-      if (surgePay > 0) {
-        items.push({
-          type: "BONUS",
-          title: "Peak Hour Bonus",
-          amount: surgePay,
-          time: order.updatedAt
-        });
-      }
+      // if (surgePay > 0) {
+      //   items.push({
+      //     type: "BONUS",
+      //     title: "Peak Hour Bonus",
+      //     amount: surgePay,
+      //     time: order.updatedAt
+      //   });
+      // }
     });
 
     const responseDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -302,6 +309,8 @@ exports.new_getDailyEarnings = async (req, res) => {
     res.json({
       date: responseDate,
       totalEarnings,
+      baseEarnings,
+      incentives,
       items,
       count: items.length
     });
