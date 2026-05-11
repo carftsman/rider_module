@@ -894,7 +894,41 @@ if (!rider) {
       });
     }
 
-        
+
+
+    //////////////////////////////////////////////////////
+// SLOT VALIDATION
+//////////////////////////////////////////////////////
+
+    const now = new Date();
+
+    const activeSlotBooking =
+      await prisma.slotBooking.findFirst({
+
+        where: {
+
+          riderId,
+
+          status: "BOOKED",
+
+          slotStartAt: {
+            lte: now
+          },
+
+          slotEndAt: {
+            gte: now
+          }
+        }
+      });
+
+    if (!activeSlotBooking) {
+
+      return res.status(400).json({
+        success: false,
+        message: "No active slot booked"
+      });
+    }
+            
 
     await prisma.$transaction(async (tx) => {
 
