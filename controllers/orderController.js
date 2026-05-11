@@ -845,7 +845,56 @@ async function acceptOrder(req, res) {
     if (!order.OrderAllocation)
       return res.status(400).json({ success: false, message: "Order not allocated" });
 
-    
+
+    //////////////////////////////////////////////////////
+// FETCH RIDER
+//////////////////////////////////////////////////////
+
+const rider = await prisma.rider.findUnique({
+  where: {
+    id: riderId
+  },
+
+  select: {
+    isOnline: true,
+    orderState: true,
+    isFullyRegistered: true
+  }
+});
+
+if (!rider) {
+  return res.status(404).json({
+    success: false,
+    message: "Rider not found"
+  });
+}
+
+//////////////////////////////////////////////////////
+// VALIDATIONS
+//////////////////////////////////////////////////////
+
+    if (!rider.isFullyRegistered) {
+      return res.status(400).json({
+        success: false,
+        message: "Rider not registered"
+      });
+    }
+
+    if (!rider.isOnline) {
+      return res.status(400).json({
+        success: false,
+        message: "Rider is offline"
+      });
+    }
+
+    if (rider.orderState !== "READY") {
+      return res.status(400).json({
+        success: false,
+        message: "Rider is busy"
+      });
+    }
+
+        
 
     await prisma.$transaction(async (tx) => {
 
