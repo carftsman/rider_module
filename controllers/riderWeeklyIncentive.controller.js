@@ -767,8 +767,12 @@ exports.getRiderWeeklyPrograms = async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    const today = new Date();
-
+const today = new Date(
+  new Date().toLocaleString(
+    "en-US",
+    { timeZone: "Asia/Kolkata" }
+  )
+);
     //  Fetch programs WITH FULL DETAILS
     const programs = await prisma.program.findMany({
       where: {
