@@ -127,10 +127,10 @@ router.patch("/online", riderAuthMiddleWare, goOnline);
 /**
  * @swagger
  * /api/rider/status/offline:
- *   post:
+ *   patch:
  *     summary: Rider go offline
  *     tags:
- *       - Rider Online Offline
+ *       - Rider Status
  *     security:
  *       - bearerAuth: []
  *     requestBody:
