@@ -168,9 +168,9 @@ const getRiderHomeBanners = async (req, res) => {
       riderPincodeId
     });
 
-    // =====================================================
+    
     // BANK
-    // =====================================================
+    
     const bankAdded =
       !!rider.bankDetails?.accountNumber &&
       !!rider.bankDetails?.ifscCode;
@@ -194,9 +194,9 @@ const getRiderHomeBanners = async (req, res) => {
     // true means bank is completed/verified
     const bank = bankVerified;
 
-    // =====================================================
+    
     // KIT
-    // =====================================================
+
     const kitRequest = await prisma.assetRequest.findFirst({
       where: {
         riderId
@@ -242,9 +242,9 @@ const getRiderHomeBanners = async (req, res) => {
     // true means kit is delivered
     const kit = kitDelivered;
 
-    // =====================================================
+    
     // JOINING BONUS
-    // =====================================================
+    
     const joiningBonusProgram = await prisma.program.findFirst({
       where: {
         programType: "JOINING_BONUS",
@@ -329,9 +329,9 @@ const getRiderHomeBanners = async (req, res) => {
       }
     }
 
-    // =====================================================
+    
     // REFER AND EARN
-    // =====================================================
+
     const referralProgram = await prisma.program.findFirst({
       where: {
         programType: "REFERRAL",
@@ -359,9 +359,9 @@ const getRiderHomeBanners = async (req, res) => {
       ? "Refer riders and earn rewards."
       : "Refer and earn is not available for your location.";
 
-    // =====================================================
+    
     // DAILY INCENTIVE
-    // =====================================================
+    
     const dailyIncentiveProgram = await prisma.program.findFirst({
       where: {
         programType: "INCENTIVE",

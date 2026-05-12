@@ -17,9 +17,9 @@ const buildReferredRiderProgressByRule = async ({
 }) => {
   const ruleType = program.ruleType;
 
-  // =====================================================
+  
   // FIXED_TARGET
-  // =====================================================
+  
   if (ruleType === "FIXED_TARGET") {
     const target = program.targets?.[0];
 
@@ -73,9 +73,9 @@ const buildReferredRiderProgressByRule = async ({
     });
   }
 
-  // =====================================================
+  
   // SLAB
-  // =====================================================
+  
   if (ruleType === "SLAB") {
     const refereeSlabs =
       program.slabs
@@ -162,9 +162,9 @@ const buildReferredRiderProgressByRule = async ({
     });
   }
 
-  // =====================================================
+  
   // PER_ORDER
-  // =====================================================
+  
   if (ruleType === "PER_ORDER") {
     const refereeTask = program.tasks?.find(
       (task) => task.role === "REFEREE"
@@ -235,9 +235,9 @@ const buildReferredRiderProgressByRule = async ({
     });
   }
 
-  // =====================================================
+  
   // HYBRID
-  // =====================================================
+  
   if (ruleType === "HYBRID") {
     const refereeTask = program.tasks?.find(
       (task) => task.role === "REFEREE"
@@ -346,9 +346,9 @@ const buildReferredRiderProgressByRule = async ({
     });
   }
 
-  // =====================================================
+  
   // TASK - DAY WISE
-  // =====================================================
+  
   if (ruleType === "TASK") {
     const refereeTasks =
       program.tasks?.filter((task) => task.role === "REFEREE") || [];

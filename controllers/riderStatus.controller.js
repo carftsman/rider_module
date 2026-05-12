@@ -47,7 +47,7 @@ exports.goOnline = async (req, res) => {
           ? new Date(riderData.status.onlineMinutesDate)
           : null;
 
-        if (!savedDate || savedDate.toDateString() !== today.toDateString()) {
+        if (!savedDate || savedDate.getTime() !== today.getTime()) {
           totalOnlineMinutesToday = 0;
         }
 
@@ -198,7 +198,7 @@ exports.goOffline = async (req, res) => {
       ? new Date(riderData.status.onlineMinutesDate)
       : null;
 
-    if (!savedDate || savedDate.toDateString() !== today.toDateString()) {
+    if (!savedDate || savedDate.getTime() !== today.getTime()) {
       existingMinutes = 0;
     }
 
@@ -206,12 +206,40 @@ exports.goOffline = async (req, res) => {
 
     let sessionMinutes = 0;
 
-    if (loginTime) {
-      const diffMs = logoutTime - new Date(loginTime);
-      sessionMinutes = Math.max(Math.floor(diffMs / 60000), 0);
-    }
 
-    const updatedTotalMinutes = existingMinutes + sessionMinutes;
+let reminderMessage = null;
+
+
+if (loginTime) {
+
+  const login = new Date(loginTime);
+
+  const loginDay = new Date(login);
+  loginDay.setHours(0, 0, 0, 0);
+
+  // Rider forgot logout yesterday
+  if (loginDay.getTime() !== today.getTime()) {
+
+    existingMinutes = 0;
+
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+
+    const diffMs = logoutTime - midnight;
+
+    sessionMinutes = Math.floor(diffMs / 60000);
+
+    reminderMessage =
+      "Previous day session expired. Today's online timing calculated from 12:00 AM only.";
+
+  } else {
+
+    const diffMs = logoutTime - login;
+
+    sessionMinutes = Math.floor(diffMs / 60000);
+  }
+}
+   const updatedTotalMinutes = existingMinutes + sessionMinutes;
 
     const result = await prisma.$transaction(
       async (tx) => {
@@ -280,6 +308,7 @@ exports.goOffline = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Rider is now OFFLINE",
+      reminder: reminderMessage,
       rider: result.updatedRider,
       riderStatus: {
         isOnline: result.updatedStatus.isOnline,
