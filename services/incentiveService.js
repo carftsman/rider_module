@@ -859,29 +859,18 @@ isCompleted =
         // TIME FILTER
         ////////////////////////////////////////////////
 
-        const orderTime =
-          new Date(
-            order.updatedAt
-          );
+      const orderTime = new Date();
 
-        const orderMinutes =
+const orderMinutes =
+  orderTime.getHours() * 60 +
+  orderTime.getMinutes();
 
-          orderTime.getHours() *
-            60 +
-
-          orderTime.getMinutes();
-
-        if (
-
-          orderMinutes <
-            slot.startMinutes ||
-
-          orderMinutes >
-            slot.endMinutes
-        ) {
-
-          continue;
-        }
+if (
+  orderMinutes < slot.startMinutes ||
+  orderMinutes >= slot.endMinutes
+) {
+  continue;
+}
 
         ////////////////////////////////////////////////
         // FIND SLOT PROGRESS
