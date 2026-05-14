@@ -74,24 +74,109 @@ const getTargetDetails = (program, completedOrders = 0) => {
   }
 
   // TASK
-  if (program.ruleType === "TASK") {
-    const task = program.tasks?.[0];
+// TASK
+if (program.ruleType === "TASK") {
+  const groupedTasks = {};
+
+  for (const task of program.tasks || []) {
+    const dayNumber = Number(task.dayNumber || 0);
+
+    if (!groupedTasks[dayNumber]) {
+      groupedTasks[dayNumber] = [];
+    }
+
+    groupedTasks[dayNumber].push(task);
+  }
+
+  let totalOrders = 0;
+  let totalReward = 0;
+
+  for (const dayTasks of Object.values(groupedTasks)) {
+    const firstTask = dayTasks[0];
+
+    // SLAB
+    if (firstTask.taskRuleType === "SLAB") {
+      const slabs = [...dayTasks].sort(
+        (a, b) =>
+          Number(a.maxOrders || 0) -
+          Number(b.maxOrders || 0)
+      );
+
+      const lastSlab = slabs[slabs.length - 1];
+
+      totalOrders += Number(
+        lastSlab?.maxOrders || 0
+      );
+
+      totalReward += Number(
+        lastSlab?.rewardAmount || 0
+      );
+    }
+
+    // FIXED_TARGET
+    if (firstTask.taskRuleType === "FIXED_TARGET") {
+      totalOrders += Number(
+        firstTask?.targetOrders ||
+        firstTask?.minOrders ||
+        0
+      );
+
+      totalReward += Number(
+        firstTask?.rewardAmount ||
+        firstTask?.fixedReward ||
+        0
+      );
+    }
+
+    // PER_ORDER
+    if (program.ruleType === "PER_ORDER") {
+  const target = program.targets?.[0];
+
+  targetOrders = Number(
+    target?.targetOrders ||
+    target?.ordersCount ||
+    1
+  );
+
+  rewardAmount = Number(
+    target?.rewardAmount ||
+    target?.amount ||
+    target?.earningAmount ||
+    0
+  );
+}
+
+    // HYBRID
+    if (firstTask.taskRuleType === "HYBRID") {
+      totalOrders += Number(
+        firstTask?.minOrders || 0
+      );
+
+      totalReward += Number(
+        firstTask?.rewardAmount || 0
+      );
+    }
+  }
+
+  targetOrders = totalOrders;
+  rewardAmount = totalReward;
+}  // PER_ORDER
+
+if (program.ruleType === "PER_ORDER") {
+    const target = program.targets?.[0];
 
     targetOrders = Number(
-      task?.targetOrders ||
-      task?.maxOrders ||
-      task?.minOrders ||
+      target?.targetOrders ||
+      target?.maxOrders ||
       0
     );
 
     rewardAmount = Number(
-      task?.rewardAmount ||
-      task?.fixedReward ||
+      target?.rewardAmount ||
+      target?.maxEarning ||
       0
     );
-  }
-
-  // SLAB
+  } // SLAB
   if (program.ruleType === "SLAB") {
     const slabs = [...(program.slabs || [])].sort(
       (a, b) => Number(a.maxValue || 0) - Number(b.maxValue || 0)
@@ -247,7 +332,7 @@ const getRiderHomeBanners = async (req, res) => {
     
     const joiningBonusProgram = await prisma.program.findFirst({
       where: {
-        programType: "JOINING_BONUS",
+        programType: "REFERRAL",
         isActive: true,
         validFrom: {
           lte: now
@@ -305,29 +390,45 @@ const getRiderHomeBanners = async (req, res) => {
         }
       });
 
-      const joiningTarget = getTargetDetails(
-        joiningBonusProgram,
-        joiningBonusOrdersCompleted
-      );
+const joiningTarget = getTargetDetails(
+  joiningBonusProgram,
+  joiningBonusOrdersCompleted
+);
 
-      joiningBonusTargetOrders = joiningTarget.targetOrders;
-      joiningBonusRemainingOrders = joiningTarget.remainingOrders;
-      joiningBonusRewardAmount = joiningTarget.rewardAmount;
+joiningBonusTargetOrders = joiningTarget.targetOrders;
+joiningBonusRemainingOrders = joiningTarget.remainingOrders;
+joiningBonusRewardAmount = joiningTarget.rewardAmount;
 
-      // true means joining bonus program is available
-      joiningBonus = true;
+// true means joining bonus program is available
+joiningBonus = true;
 
-      if (joiningBonusCompleted) {
-        joiningBonusStatus = "COMPLETED";
-        joiningBonusMessage = "Joining bonus already completed.";
-      } else if (joiningTarget.targetCompleted) {
-        joiningBonusStatus = "TARGET_COMPLETED";
-        joiningBonusMessage = `Joining bonus target completed. You are eligible to earn ₹${joiningBonusRewardAmount}.`;
-      } else {
-        joiningBonusStatus = "ACTIVE";
-        joiningBonusMessage = `Complete ${joiningBonusRemainingOrders} more orders to earn ₹${joiningBonusRewardAmount} joining bonus.`;
-      }
-    }
+const trackingLabelMap = {
+  DAILY: "today",
+  WEEKLY: "this week",
+  MONTHLY: "this month"
+};
+
+const trackingLabel =
+  trackingLabelMap[joiningBonusProgram.trackingType] || "this period";
+
+if (joiningBonusCompleted) {
+  joiningBonusStatus = "COMPLETED";
+
+  joiningBonusMessage =
+    `You have successfully earned ₹${joiningBonusRewardAmount} joining bonus.`;
+
+} else if (joiningTarget.targetCompleted) {
+  joiningBonusStatus = "TARGET_COMPLETED";
+
+  joiningBonusMessage =
+    `Target completed. You are eligible to earn ₹${joiningBonusRewardAmount}.`;
+
+} else {
+  joiningBonusStatus = "ACTIVE";
+
+  joiningBonusMessage =
+    `Complete ${joiningBonusRemainingOrders} more orders ${trackingLabel} to get ₹${joiningBonusRewardAmount} joining bonus.`;
+}  }
 
     
     // REFER AND EARN
