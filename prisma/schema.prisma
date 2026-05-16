@@ -459,11 +459,14 @@ model Order {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   totalWeight          Float?
+  durationInMin        Float?
+  durationInMin        Float?
   riderRatingId        String?
   Rider                Rider?                @relation(fields: [riderId], references: [id])
   RiderRating          RiderRating?          @relation(fields: [riderRatingId], references: [id])
   OrderAllocation      OrderAllocation?
   OrderCancelIssue     OrderCancelIssue?
+  
   chats                OrderChat[]
   
   OrderDeliveryAddress OrderDeliveryAddress?
