@@ -8,63 +8,63 @@ datasource db {
 }
 
 model Rider {
-  id                       String                   @id @default(uuid())
-  countryCode              String                   @default("+91")
-  phoneNumber              String                   @unique
-  phoneIsVerified          Boolean                  @default(false)
-  otpCode                  String?
-  otpExpiresAt             DateTime?
-  lastOtpVerifiedAt        DateTime?
-  refreshToken             String?
-  deviceToken              String?
-  fcmToken                 String?
-  onboardingStage          OnboardingStage          @default(PHONE_VERIFICATION)
-  isFullyRegistered        Boolean                  @default(false)
-  isOnline                 Boolean                  @default(false)
-  orderState               OrderState               @default(READY)
-  currentOrderId           String?
-  partnerId                String?                  @unique
-  isPartnerActive          Boolean                  @default(false)
-  createdAt                DateTime                 @default(now())
-  updatedAt                DateTime                 @updatedAt
-  companyName              String?
-  dob                      DateTime?
-  email                    String?
-  empId                    String?                  @unique
-  riderType                RiderType                @default(INDIVIDUAL_EMPLOYEE)
-  isStackable              Boolean                  @default(false)
-  referredByPartnerId      String?
-  
-  Order                    Order[]
-  orderRiderEarnings       OrderRiderEarning[]
-  programEnrollments       ProgramEnrollment[]
-  programPayouts           ProgramPayout[]
-  programProgresses        ProgramProgress[]
-  programTaskProgresses    ProgramTaskProgress[]
-  referralReceived         Referral?                @relation("Referee")
-  referralsGiven           Referral[]               @relation("Referrer")
-  bankDetails              RiderBankDetails?
-  cashInHand               RiderCashInHand?
-  deliveryStatus           RiderDeliveryStatus?
-  gps                      RiderGps?
-  gpsHistory               RiderGpsHistory[]
+  id                  String          @id @default(uuid())
+  countryCode         String          @default("+91")
+  phoneNumber         String          @unique
+  phoneIsVerified     Boolean         @default(false)
+  otpCode             String?
+  otpExpiresAt        DateTime?
+  lastOtpVerifiedAt   DateTime?
+  refreshToken        String?
+  deviceToken         String?
+  fcmToken            String?
+  onboardingStage     OnboardingStage @default(PHONE_VERIFICATION)
+  isFullyRegistered   Boolean         @default(false)
+  isOnline            Boolean         @default(false)
+  orderState          OrderState      @default(READY)
+  currentOrderId      String?
+  partnerId           String?         @unique
+  isPartnerActive     Boolean         @default(false)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  companyName         String?
+  dob                 DateTime?
+  email               String?
+  empId               String?         @unique
+  riderType           RiderType       @default(INDIVIDUAL_EMPLOYEE)
+  isStackable         Boolean         @default(false)
+  referredByPartnerId String?
 
-  kitAddress               RiderKitAddress?
-  kyc                      RiderKyc?
-  location                 RiderLocation?
-  onboarding               RiderOnboarding?
-  performance              RiderPerformance[]
-  permissions              RiderPermissions?
-  profile                  RiderProfile?
-  ratings                  RiderRating[]
-  selfie                   RiderSelfie?
-  status                   RiderStatus?
-  vehicle                  RiderVehicle?
-  wallet                   RiderWallet?
-  walletTransactions       RiderWalletTransaction[]
-  slotBookings             SlotBooking[]
-  slotRiders               SlotRider[]
-  rider_assets             rider_assets[]
+  Order                 Order[]
+  orderRiderEarnings    OrderRiderEarning[]
+  programEnrollments    ProgramEnrollment[]
+  programPayouts        ProgramPayout[]
+  programProgresses     ProgramProgress[]
+  programTaskProgresses ProgramTaskProgress[]
+  referralReceived      Referral?             @relation("Referee")
+  referralsGiven        Referral[]            @relation("Referrer")
+  bankDetails           RiderBankDetails?
+  cashInHand            RiderCashInHand?
+  deliveryStatus        RiderDeliveryStatus?
+  gps                   RiderGps?
+  gpsHistory            RiderGpsHistory[]
+
+  kitAddress         RiderKitAddress?
+  kyc                RiderKyc?
+  location           RiderLocation?
+  onboarding         RiderOnboarding?
+  performance        RiderPerformance[]
+  permissions        RiderPermissions?
+  profile            RiderProfile?
+  ratings            RiderRating[]
+  selfie             RiderSelfie?
+  status             RiderStatus?
+  vehicle            RiderVehicle?
+  wallet             RiderWallet?
+  walletTransactions RiderWalletTransaction[]
+  slotBookings       SlotBooking[]
+  slotRiders         SlotRider[]
+  rider_assets       rider_assets[]
 
   @@index([phoneNumber])
   @@index([isOnline])
@@ -451,43 +451,42 @@ model SlotBooking {
 }
 
 model Order {
-  id                   String                @id @default(uuid())
-  orderId              String                @unique
-  riderId              String?
+  id      String  @id @default(uuid())
+  orderId String  @unique
+  riderId String?
 
-  orderStatus          OrderStatus           @default(CREATED)
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  totalWeight          Float?
-  durationInMin        Float?
-  durationInMin        Float?
-  riderRatingId        String?
-  Rider                Rider?                @relation(fields: [riderId], references: [id])
-  RiderRating          RiderRating?          @relation(fields: [riderRatingId], references: [id])
-  OrderAllocation      OrderAllocation?
-  OrderCancelIssue     OrderCancelIssue?
-  
-  chats                OrderChat[]
-  
+  orderStatus      OrderStatus       @default(CREATED)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  totalWeight      Float?
+  durationInKm     Float?
+  durationInMin    Float?
+  riderRatingId    String?
+  Rider            Rider?            @relation(fields: [riderId], references: [id])
+  RiderRating      RiderRating?      @relation(fields: [riderRatingId], references: [id])
+  OrderAllocation  OrderAllocation?
+  OrderCancelIssue OrderCancelIssue?
+
+  chats OrderChat[]
+
   OrderDeliveryAddress OrderDeliveryAddress?
-  
-  
-  OrderPickupAddress   OrderPickupAddress?
-  
-  OrderRiderEarning    OrderRiderEarning?
-  OrderSettlement      OrderSettlement?
-  OrderSlotInfo        OrderSlotInfo?
-  
+
+  OrderPickupAddress OrderPickupAddress?
+
+  OrderRiderEarning OrderRiderEarning?
+  OrderSettlement   OrderSettlement?
+  OrderSlotInfo     OrderSlotInfo?
 
   @@index([orderStatus])
   @@index([riderId])
   @@index([createdAt])
 }
+
 model OrderPickupAddress {
-  id            String  @id @default(uuid())
-  orderId       String  @unique
-  
-  merchantName   String?
+  id      String @id @default(uuid())
+  orderId String @unique
+
+  merchantName  String?
   addressLine   String?
   contactNumber String?
   latitude      Float?
@@ -552,17 +551,19 @@ model OrderSlotInfo {
 
   @@index([orderId])
 }
+
 model OrderAllocation {
-  id                   String                @id @default(uuid())
-  orderId              String                @unique
-  assignedAt           DateTime?
-  expiresAt            DateTime?
-  Order                Order                 @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
-  
+  id         String    @id @default(uuid())
+  orderId    String    @unique
+  assignedAt DateTime?
+  expiresAt  DateTime?
+  Order      Order     @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+
   OrderCandidateRiders OrderCandidateRider[]
 
   @@index([orderId])
 }
+
 model OrderCancelIssue {
   id          String       @id @default(uuid())
   orderId     String       @unique
@@ -585,6 +586,7 @@ model OrderSettlement {
 
   @@index([orderId])
 }
+
 model AssetInventory {
   id            String      @id @default(uuid())
   assetMasterId String
@@ -1420,55 +1422,51 @@ enum JoiningBonusType {
   PER_ORDER
   HYBRID
 }
+
 model OrderCandidateRider {
+  id String @id @default(uuid())
 
-  id                 String           @id @default(uuid())
+  allocationId String
 
-  allocationId       String
+  riderId String
 
-  riderId            String
+  status AllocationStatus @default(PENDING)
 
-  status             AllocationStatus @default(PENDING)
+  notifiedAt DateTime?
 
-  notifiedAt         DateTime?
+  availabilityScore Float @default(0)
 
-  availabilityScore  Float            @default(0)
+  calculatedAt DateTime @default(now())
 
-  calculatedAt       DateTime         @default(now())
+  directionScore Float @default(0)
 
-  directionScore     Float            @default(0)
+  distanceToCustomer Float @default(0)
 
-  distanceToCustomer Float            @default(0)
+  distanceToVendor Float @default(0)
 
-  distanceToVendor   Float            @default(0)
+  etaToCustomer Float @default(0)
 
-  etaToCustomer      Float            @default(0)
+  etaToVendor Float @default(0)
 
-  etaToVendor        Float            @default(0)
+  externalScore Float @default(0)
 
-  externalScore      Float            @default(0)
+  orderFitScore Float @default(0)
 
-  orderFitScore      Float            @default(0)
+  performanceScore Float @default(0)
 
-  performanceScore   Float            @default(0)
+  proximityScore Float @default(0)
 
-  proximityScore     Float            @default(0)
+  scoringVersion Int @default(1)
 
-  scoringVersion     Int              @default(1)
+  totalScore Float @default(0)
 
-  totalScore         Float            @default(0)
+  createdAt DateTime @default(now())
 
-  createdAt          DateTime         @default(now())
+  updatedAt DateTime @updatedAt
 
-  updatedAt          DateTime         @updatedAt
+  OrderAllocation OrderAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
 
-  OrderAllocation    OrderAllocation  @relation(fields: [allocationId], references: [id], onDelete: Cascade)
- 
   @@index([allocationId])
-
   @@index([riderId])
-
   @@index([totalScore])
-
 }
- 
