@@ -49,6 +49,8 @@ const getPeakSlotProgresses=require("./routes/getPeakSlotProgressRoutes")
  
 const adminZoneRoutes=require("./routes/adminZoneRoutes");
 
+const riderGpsRoutes = require("./routes/riderGps.routes");
+
 // app.use(cors())
 app.use(
   cors({
@@ -140,6 +142,8 @@ app.use("/admin/incentives",peakSlot)
 
 app.use("/rider",getPeakSlotProgresses)
 app.use("/api/banner",bannerRouter)
+
+app.use("/api/rider-gps",riderGpsRoutes);
 
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");
