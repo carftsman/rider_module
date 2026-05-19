@@ -961,7 +961,7 @@ model ProgramTaskProgress {
   rider         Rider       @relation(fields: [riderId], references: [id], onDelete: Cascade)
   task          ProgramTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  @@unique([riderId, taskId, date, programId, week])
+  @@unique([riderId, taskId,  programId, week])
 }
 
 model OrderChat {
@@ -1148,7 +1148,7 @@ model IncentiveSlab {
 }
 
 model OrderCod {
-  id              String    @id
+  id              String    @id @default(uuid())
   orderId         String    @unique
   amount          Float     @default(0)
   depositedAmount Float     @default(0)
@@ -1165,14 +1165,14 @@ model OrderCod {
 }
 
 model OrderItem {
-  id            String      @id
+  id            String      @id @default(uuid())
   orderId       String
   itemName      String
   quantity      Int
   price         Float
   total         Float
   createdAt     DateTime    @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime    @updatedAt
   weightPerUnit Float?
   weightUnit    WeightUnit?
   Order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -1181,14 +1181,14 @@ model OrderItem {
 }
 
 model OrderPayment {
-  id             String             @id
+  id             String             @id @default(uuid())
   orderId        String             @unique
   mode           OrderPaymentMode
   codPaymentType CodPaymentType     @default(CASH)
   status         OrderPaymentStatus @default(PENDING)
   transactionId  String?
   createdAt      DateTime           @default(now())
-  updatedAt      DateTime
+  updatedAt      DateTime           @updatedAt
   Order          Order              @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
 
   @@index([createdAt])
@@ -1198,7 +1198,7 @@ model OrderPayment {
 }
 
 model OrderPricing {
-  id                 String @id
+  id                 String @id @default(uuid())
   orderId            String @unique
   itemTotal          Float?
   deliveryFee        Float?
@@ -1211,19 +1211,19 @@ model OrderPricing {
 }
 
 model OrderTracking {
-  id            String   @id
+  id            String   @id @default(uuid())
   orderId       String   @unique
   distanceInKm  Float?
   durationInMin Float?
   createdAt     DateTime @default(now())
-  updatedAt     DateTime
+  updatedAt     DateTime @updatedAt
   Order         Order    @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
 
   @@index([orderId])
 }
 
 model RiderIncentiveProgress {
-  id                   String                  @id
+  id                   String                  @id @default(uuid())
   riderId              String
   incentiveId          String
   incentiveType        IncentiveProgressType

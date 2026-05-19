@@ -114,7 +114,7 @@ async function createOrder(req, res) {
         
         totalWeight: totalWeight,
 
-        OrderItems: {
+        OrderItem: {
           create: body.items.map(item => ({
             itemName: item.itemName,
             quantity: item.quantity,
@@ -1154,7 +1154,7 @@ async function getOrderDetails(req, res) {
     const order = await prisma.order.findFirst({
       where: { orderId },
       include: {
-        OrderItems: true,
+        OrderItem: true,
         OrderPickupAddress: true,
         OrderDeliveryAddress: true,
         OrderPricing: true,
@@ -1189,7 +1189,7 @@ async function getOrderDetails(req, res) {
       totalWeight: order.totalWeight,
       weightUnit: "kg",
 
-      items: order.OrderItems.map(item => ({
+      items: order.OrderItem.map(item => ({
         _id: item.id,
         itemName: item.itemName,
         quantity: item.quantity,
