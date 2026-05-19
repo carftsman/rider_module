@@ -8,63 +8,64 @@ datasource db {
 }
 
 model Rider {
-  id                  String          @id @default(uuid())
-  countryCode         String          @default("+91")
-  phoneNumber         String          @unique
-  phoneIsVerified     Boolean         @default(false)
-  otpCode             String?
-  otpExpiresAt        DateTime?
-  lastOtpVerifiedAt   DateTime?
-  refreshToken        String?
-  deviceToken         String?
-  fcmToken            String?
-  onboardingStage     OnboardingStage @default(PHONE_VERIFICATION)
-  isFullyRegistered   Boolean         @default(false)
-  isOnline            Boolean         @default(false)
-  orderState          OrderState      @default(READY)
-  currentOrderId      String?
-  partnerId           String?         @unique
-  isPartnerActive     Boolean         @default(false)
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  companyName         String?
-  dob                 DateTime?
-  email               String?
-  empId               String?         @unique
-  riderType           RiderType       @default(INDIVIDUAL_EMPLOYEE)
-  isStackable         Boolean         @default(false)
-  referredByPartnerId String?
-
-  Order                 Order[]
-  orderRiderEarnings    OrderRiderEarning[]
-  programEnrollments    ProgramEnrollment[]
-  programPayouts        ProgramPayout[]
-  programProgresses     ProgramProgress[]
-  programTaskProgresses ProgramTaskProgress[]
-  referralReceived      Referral?             @relation("Referee")
-  referralsGiven        Referral[]            @relation("Referrer")
-  bankDetails           RiderBankDetails?
-  cashInHand            RiderCashInHand?
-  deliveryStatus        RiderDeliveryStatus?
-  gps                   RiderGps?
-  gpsHistory            RiderGpsHistory[]
-
-  kitAddress         RiderKitAddress?
-  kyc                RiderKyc?
-  location           RiderLocation?
-  onboarding         RiderOnboarding?
-  performance        RiderPerformance[]
-  permissions        RiderPermissions?
-  profile            RiderProfile?
-  ratings            RiderRating[]
-  selfie             RiderSelfie?
-  status             RiderStatus?
-  vehicle            RiderVehicle?
-  wallet             RiderWallet?
-  walletTransactions RiderWalletTransaction[]
-  slotBookings       SlotBooking[]
-  slotRiders         SlotRider[]
-  rider_assets       rider_assets[]
+  id                     String                   @id @default(uuid())
+  countryCode            String                   @default("+91")
+  phoneNumber            String                   @unique
+  phoneIsVerified        Boolean                  @default(false)
+  otpCode                String?
+  otpExpiresAt           DateTime?
+  lastOtpVerifiedAt      DateTime?
+  refreshToken           String?
+  deviceToken            String?
+  fcmToken               String?
+  onboardingStage        OnboardingStage          @default(PHONE_VERIFICATION)
+  isFullyRegistered      Boolean                  @default(false)
+  isOnline               Boolean                  @default(false)
+  orderState             OrderState               @default(READY)
+  currentOrderId         String?
+  partnerId              String?                  @unique
+  isPartnerActive        Boolean                  @default(false)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+  companyName            String?
+  dob                    DateTime?
+  email                  String?
+  empId                  String?                  @unique
+  riderType              RiderType                @default(INDIVIDUAL_EMPLOYEE)
+  isStackable            Boolean                  @default(false)
+  referredByPartnerId    String?
+  IncentivePayout        IncentivePayout[]
+  Order                  Order[]
+  orderRiderEarnings     OrderRiderEarning[]
+  programEnrollments     ProgramEnrollment[]
+  programPayouts         ProgramPayout[]
+  programProgresses      ProgramProgress[]
+  programTaskProgresses  ProgramTaskProgress[]
+  referralReceived       Referral?                @relation("Referee")
+  referralsGiven         Referral[]               @relation("Referrer")
+  bankDetails            RiderBankDetails?
+  cashInHand             RiderCashInHand?
+  deliveryStatus         RiderDeliveryStatus?
+  gps                    RiderGps?
+  gpsHistory             RiderGpsHistory[]
+  RiderIncentiveProgress RiderIncentiveProgress[]
+  kitAddress             RiderKitAddress?
+  kyc                    RiderKyc?
+  location               RiderLocation?
+  onboarding             RiderOnboarding?
+  performance            RiderPerformance[]
+  permissions            RiderPermissions?
+  profile                RiderProfile?
+  ratings                RiderRating[]
+  selfie                 RiderSelfie?
+  status                 RiderStatus?
+  vehicle                RiderVehicle?
+  wallet                 RiderWallet?
+  walletTransactions     RiderWalletTransaction[]
+  slotBookings           SlotBooking[]
+  slotRiders             SlotRider[]
+  rider_assets           rider_assets[]
+  deliveryWebhookEvents  DeliveryWebhookEvent[]
 
   @@index([phoneNumber])
   @@index([isOnline])
@@ -451,31 +452,31 @@ model SlotBooking {
 }
 
 model Order {
-  id      String  @id @default(uuid())
-  orderId String  @unique
-  riderId String?
-
-  orderStatus      OrderStatus       @default(CREATED)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  totalWeight      Float?
-  durationInKm     Float?
-  durationInMin    Float?
-  riderRatingId    String?
-  Rider            Rider?            @relation(fields: [riderId], references: [id])
-  RiderRating      RiderRating?      @relation(fields: [riderRatingId], references: [id])
-  OrderAllocation  OrderAllocation?
-  OrderCancelIssue OrderCancelIssue?
-
-  chats OrderChat[]
-
-  OrderDeliveryAddress OrderDeliveryAddress?
-
-  OrderPickupAddress OrderPickupAddress?
-
-  OrderRiderEarning OrderRiderEarning?
-  OrderSettlement   OrderSettlement?
-  OrderSlotInfo     OrderSlotInfo?
+  id                    String                 @id @default(uuid())
+  orderId               String                 @unique
+  riderId               String?
+  vendorShopName        String
+  orderStatus           OrderStatus            @default(CREATED)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  totalWeight           Float?
+  riderRatingId         String?
+  Rider                 Rider?                 @relation(fields: [riderId], references: [id])
+  RiderRating           RiderRating?           @relation(fields: [riderRatingId], references: [id])
+  OrderAllocation       OrderAllocation?
+  OrderCancelIssue      OrderCancelIssue?
+  chats                 OrderChat[]
+  OrderCod              OrderCod?
+  OrderDeliveryAddress  OrderDeliveryAddress?
+  OrderItem             OrderItem[]
+  OrderPayment          OrderPayment?
+  OrderPickupAddress    OrderPickupAddress?
+  OrderPricing          OrderPricing?
+  OrderRiderEarning     OrderRiderEarning?
+  OrderSettlement       OrderSettlement?
+  OrderSlotInfo         OrderSlotInfo?
+  OrderTracking         OrderTracking?
+  deliveryWebhookEvents DeliveryWebhookEvent[]
 
   @@index([orderStatus])
   @@index([riderId])
@@ -483,10 +484,9 @@ model Order {
 }
 
 model OrderPickupAddress {
-  id      String @id @default(uuid())
-  orderId String @unique
-
-  merchantName  String?
+  id            String  @id @default(uuid())
+  orderId       String  @unique
+  name          String?
   addressLine   String?
   contactNumber String?
   latitude      Float?
@@ -553,12 +553,11 @@ model OrderSlotInfo {
 }
 
 model OrderAllocation {
-  id         String    @id @default(uuid())
-  orderId    String    @unique
-  assignedAt DateTime?
-  expiresAt  DateTime?
-  Order      Order     @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
-
+  id                   String                @id @default(uuid())
+  orderId              String                @unique
+  assignedAt           DateTime?
+  expiresAt            DateTime?
+  Order                Order                 @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
   OrderCandidateRiders OrderCandidateRider[]
 
   @@index([orderId])
@@ -950,16 +949,19 @@ model ProgramTaskProgress {
   riderId       String
   programId     String
   taskId        String
+  week          String?
   date          DateTime
   dayNumber     Int
   isCompleted   Boolean     @default(false)
   completedAt   DateTime?
   progressValue Float       @default(0)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt @default(now())
   program       Program     @relation(fields: [programId], references: [id], onDelete: Cascade)
   rider         Rider       @relation(fields: [riderId], references: [id], onDelete: Cascade)
   task          ProgramTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
 
-  @@unique([riderId, taskId, date])
+  @@unique([riderId, taskId, date, programId, week])
 }
 
 model OrderChat {
@@ -1045,6 +1047,215 @@ model ZonePincode {
   zone    Zone   @relation(fields: [zoneId], references: [id])
 
   @@unique([pincode, zoneId])
+}
+
+model OrderCandidateRider {
+  id                 String           @id @default(uuid())
+  allocationId       String
+  riderId            String
+  status             AllocationStatus @default(PENDING)
+  notifiedAt         DateTime?
+  availabilityScore  Float            @default(0)
+  calculatedAt       DateTime         @default(now())
+  directionScore     Float            @default(0)
+  distanceToCustomer Float            @default(0)
+  distanceToVendor   Float            @default(0)
+  etaToCustomer      Float            @default(0)
+  etaToVendor        Float            @default(0)
+  externalScore      Float            @default(0)
+  orderFitScore      Float            @default(0)
+  performanceScore   Float            @default(0)
+  proximityScore     Float            @default(0)
+  scoringVersion     Int              @default(1)
+  totalScore         Float            @default(0)
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  OrderAllocation    OrderAllocation  @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+
+  @@index([allocationId])
+  @@index([riderId])
+  @@index([totalScore])
+}
+
+model Incentive {
+  id                     String                   @id
+  title                  String
+  description            String?
+  incentiveType          IncentiveType
+  validFrom              DateTime?
+  validTill              DateTime?
+  applicableCities       String[]
+  applicableZones        String[]
+  minRating              Float?
+  vehicleType            String?
+  minCompletedOrders     Int?
+  peakSlotEnabled        Boolean                  @default(false)
+  normalSlotEnabled      Boolean                  @default(false)
+  minPeakSlots           Int?
+  minNormalSlots         Int?
+  payoutTiming           PayoutTiming             @default(POST_SLOT)
+  maxRewardPerDay        Float?
+  maxRewardPerWeek       Float?
+  maxUsagePerRider       Int?
+  priority               Int                      @default(1)
+  totalDaysInWeek        Int                      @default(7)
+  minOrdersPerDay        Int?
+  allowPartialDays       Boolean                  @default(true)
+  status                 IncentiveStatus          @default(ACTIVE)
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime
+  isLocked               Boolean                  @default(false)
+  lockedAt               DateTime?
+  IncentivePayout        IncentivePayout[]
+  IncentiveSlab          IncentiveSlab[]
+  RiderIncentiveProgress RiderIncentiveProgress[]
+
+  @@index([incentiveType])
+  @@index([status])
+}
+
+model IncentivePayout {
+  id                     String                  @id
+  incentiveId            String
+  riderId                String
+  progressId             String?
+  earnedAmount           Float
+  payoutStatus           PayoutStatus            @default(PENDING)
+  payoutReferenceId      String?
+  walletTransactionId    String?
+  payoutDate             DateTime?
+  creditedAt             DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime
+  Incentive              Incentive               @relation(fields: [incentiveId], references: [id])
+  RiderIncentiveProgress RiderIncentiveProgress? @relation(fields: [progressId], references: [id])
+  Rider                  Rider                   @relation(fields: [riderId], references: [id])
+
+  @@index([payoutStatus])
+  @@index([riderId])
+}
+
+model IncentiveSlab {
+  id           String    @id
+  incentiveId  String
+  slotType     SlotType
+  minOrders    Int
+  maxOrders    Int
+  rewardAmount Float
+  Incentive    Incentive @relation(fields: [incentiveId], references: [id])
+
+  @@index([incentiveId])
+}
+
+model OrderCod {
+  id              String    @id
+  orderId         String    @unique
+  amount          Float     @default(0)
+  depositedAmount Float     @default(0)
+  pendingAmount   Float     @default(0)
+  status          CodStatus @default(PENDING)
+  collectedAt     DateTime?
+  depositedAt     DateTime?
+  Order           Order     @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+
+  @@index([collectedAt])
+  @@index([depositedAt])
+  @@index([orderId])
+  @@index([status])
+}
+
+model OrderItem {
+  id            String      @id
+  orderId       String
+  itemName      String
+  quantity      Int
+  price         Float
+  total         Float
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime
+  weightPerUnit Float?
+  weightUnit    WeightUnit?
+  Order         Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model OrderPayment {
+  id             String             @id
+  orderId        String             @unique
+  mode           OrderPaymentMode
+  codPaymentType CodPaymentType     @default(CASH)
+  status         OrderPaymentStatus @default(PENDING)
+  transactionId  String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime
+  Order          Order              @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([mode])
+  @@index([orderId])
+  @@index([status])
+}
+
+model OrderPricing {
+  id                 String @id
+  orderId            String @unique
+  itemTotal          Float?
+  deliveryFee        Float?
+  tax                Float?
+  platformCommission Float?
+  totalAmount        Float?
+  Order              Order  @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model OrderTracking {
+  id            String   @id
+  orderId       String   @unique
+  distanceInKm  Float?
+  durationInMin Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime
+  Order         Order    @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+
+  @@index([orderId])
+}
+
+model RiderIncentiveProgress {
+  id                   String                  @id
+  riderId              String
+  incentiveId          String
+  incentiveType        IncentiveProgressType
+  date                 String?
+  week                 String?
+  totalOrders          Int                     @default(0)
+  peakOrders           Int                     @default(0)
+  normalOrders         Int                     @default(0)
+  orderIds             String[]
+  slotName             String?
+  slotStart            String?
+  slotEnd              String?
+  slotCompleted        Boolean                 @default(false)
+  eligibleDays         Int                     @default(0)
+  dailyOrderMap        Json?
+  achievedSlabOrders   Int                     @default(0)
+  achievedReward       Float                   @default(0)
+  baseEarning          Float                   @default(0)
+  eligible             Boolean                 @default(false)
+  status               IncentiveProgressStatus @default(IN_PROGRESS)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime
+  completedNormalSlots Int                     @default(0)
+  completedPeakSlots   Int                     @default(0)
+  IncentivePayout      IncentivePayout[]
+  Incentive            Incentive               @relation(fields: [incentiveId], references: [id])
+  Rider                Rider                   @relation(fields: [riderId], references: [id])
+
+  @@unique([riderId, incentiveId, date])
+  @@index([incentiveId])
+  @@index([riderId, date])
+  @@index([riderId, week])
 }
 
 enum RiderType {
@@ -1278,13 +1489,9 @@ enum OrderStatus {
   CREATED
   CONFIRMED
   ASSIGNED
-  RIDER_EN_ROUTE_TO_PICKUP
-  RIDER_ARRIVED_AT_PICKUP
-  ORDER_PICKED_UP
-  IN_TRANSIT
-  RIDER_ARRIVED_AT_DROP
+  PICKED_UP
   DELIVERED
-  DELIVERY_FAILED
+  CANCELLED
 }
 
 enum SurgeType {
@@ -1423,50 +1630,30 @@ enum JoiningBonusType {
   HYBRID
 }
 
-model OrderCandidateRider {
+model DeliveryWebhookEvent {
   id String @id @default(uuid())
 
-  allocationId String
+  event      String
+  deliveryId String   @unique
+  eventTime  DateTime
 
-  riderId String
+  orderId String?
+  riderId String?
 
-  status AllocationStatus @default(PENDING)
+  riderName  String
+  riderPhone String
+  vehicle    String
 
-  notifiedAt DateTime?
+  latitude  Float?
+  longitude Float?
 
-  availabilityScore Float @default(0)
-
-  calculatedAt DateTime @default(now())
-
-  directionScore Float @default(0)
-
-  distanceToCustomer Float @default(0)
-
-  distanceToVendor Float @default(0)
-
-  etaToCustomer Float @default(0)
-
-  etaToVendor Float @default(0)
-
-  externalScore Float @default(0)
-
-  orderFitScore Float @default(0)
-
-  performanceScore Float @default(0)
-
-  proximityScore Float @default(0)
-
-  scoringVersion Int @default(1)
-
-  totalScore Float @default(0)
+  order Order? @relation(fields: [orderId], references: [orderId])
+  rider Rider? @relation(fields: [riderId], references: [id])
 
   createdAt DateTime @default(now())
-
   updatedAt DateTime @updatedAt
 
-  OrderAllocation OrderAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
-
-  @@index([allocationId])
+  @@index([deliveryId])
+  @@index([orderId])
   @@index([riderId])
-  @@index([totalScore])
 }
