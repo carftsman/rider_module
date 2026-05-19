@@ -632,22 +632,24 @@ if (
     continue;
   }
 
-  //////////////////////////////////////////////////
+   //////////////////////////////////////////////////
   // FIND TASK PROGRESS
   //////////////////////////////////////////////////
 
-  let taskProgress =
-    await prisma.programTaskProgress.findFirst({
+let taskProgress =
+  await prisma.programTaskProgress.findFirst({
 
-      where: {
+    where: {
 
-        riderId,
+      riderId,
 
-        programId: program.id,
+      programId: program.id,
 
-        taskId: todayTask.id
-      }
-    });
+      taskId: todayTask.id,
+
+      week: weekKey
+    }
+  });
 
   //////////////////////////////////////////////////
   // CREATE IF NOT EXISTS
@@ -655,26 +657,28 @@ if (
 
   if (!taskProgress) {
 
-    taskProgress =
-      await prisma.programTaskProgress.create({
+taskProgress =
+  await prisma.programTaskProgress.create({
 
-        data: {
+    data: {
 
-          riderId,
+      riderId,
 
-          programId: program.id,
+      programId: program.id,
 
-          taskId: todayTask.id,
+      taskId: todayTask.id,
 
-          dayNumber: currentDayNumber,
+      week: weekKey,
 
-          progressValue: 0,
+      dayNumber: currentDayNumber,
 
-          isCompleted: false,
+      progressValue: 0,
 
-          date: today
-        }
-      });
+      isCompleted: false,
+
+      date: today
+    }
+  });
   }
 
   //////////////////////////////////////////////////
@@ -859,7 +863,7 @@ isCompleted =
         // TIME FILTER
         ////////////////////////////////////////////////
 
-      const orderTime = new Date();
+const orderTime = new Date();
 
 const orderMinutes =
   orderTime.getHours() * 60 +

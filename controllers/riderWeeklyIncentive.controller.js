@@ -114,15 +114,22 @@ exports.getWeeklyIncentives = async (req, res) => {
     // TASK PROGRESSES
     //////////////////////////////////////////////////
 
-    const taskProgresses =
-      await prisma.programTaskProgress.findMany({
-        where: {
-          riderId,
-          programId: {
-            in: programs.map((p) => p.id)
-          }
-        }
-      });
+const weekStart = new Date();
+weekStart.setHours(0,0,0,0);
+weekStart.setDate(
+  weekStart.getDate() - weekStart.getDay() + 1
+);
+
+const taskProgresses =
+  await prisma.programTaskProgress.findMany({
+    where: {
+      riderId,
+      programId: {
+        in: programs.map((p) => p.id)
+      },
+      week
+    }
+  });
 
     //////////////////////////////////////////////////
     // RESPONSE
@@ -226,26 +233,33 @@ if (
   task.dayNumber <= currentDayNumber
 ) {
 
-  progress =
-    await prisma.programTaskProgress.create({
+progress =
+  await prisma.programTaskProgress.upsert({
 
-      data: {
+where: {
+  riderId_taskId_programId_week: {
+    riderId,
+    taskId: task.id,
+    programId: program.id,
+    week
+  }
+},
 
-        riderId,
+    update: {},
 
-        programId: program.id,
+    create: {
+      riderId,
+      programId: program.id,
+      taskId: task.id,
+      dayNumber: task.dayNumber,
 
-        taskId: task.id,
+      date: new Date(),
 
-        dayNumber: task.dayNumber,
-
-        date: new Date(),
-
-        progressValue: 0,
-
-        isCompleted: false
-      }
-    });
+      progressValue: 0,
+      
+      isCompleted: false
+    }
+  });
 }
 
             //////////////////////////////////////////////////
