@@ -1,17 +1,15 @@
-const Order = require("../models/OrderSchema");
 const crypto = require("crypto");
 const {notifyRider} = require("../webSocket");
-const Rider=require('../models/RiderModel')
 const axios = require("axios");
-const PricingConfig=require("../models/pricingConfigSchema")
-const mongoose=require('mongoose')
 const { getLatLng } = require("../services/geocodeService");
-const Incentive = require("../models/IncentiveSchema");
-const RiderIncentiveProgress = require("../models/RiderIncentiveProgressSchema");
-      
-
-
-// 👉 Dummy transaction generator
+const prisma=require('../config/prisma');
+const getWeather=require('../utils/weather');
+const {
+  processOrderIncentive
+} = require(
+  "../services/incentiveService"
+);
+//  Dummy transaction generator
 function generateTxn() {
   return "TXN_" + crypto.randomBytes(6).toString("hex");
 }
@@ -21,198 +19,29 @@ function generateOrderId(){
 }
 
 
-// async function createOrder(req, res) {
-//   try {
-//     const {
-//       vendorShopName,
-//       items,
-//       pickupAddress,
-//       deliveryAddress,
-//       payment
-//     } = req.body;
- 
-//     if (!vendorShopName) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "vendorShopName is required"
-//       });
-//     }
- 
-//     if (!items || !items.length) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Items are required"
-//       });
-//     }
- 
-//     // 🔹 Calculate item totals ONLY
-//     let itemTotal = 0;
-//     const formattedItems = items.map(item => {
-//       const total = item.quantity * item.price;
-//       itemTotal += total;
-//       return {
-//         itemName: item.itemName,
-//         quantity: item.quantity,
-//         price: item.price,
-//         total
-//       };
-//     });
- 
-//     // 🔹 Generate Order ID
-//     const orderId =
-//       "ORD-" + crypto.randomBytes(4).toString("hex").toUpperCase();
- 
-//     // 🔹 Create Order (NO dynamic data)
-//     const order = await Order.create({
-//   orderId,
-//   vendorShopName,
-//   items: formattedItems,
+//  helper function
+function convertToKg(weight, unit) {
+  switch (unit) {
+    case "g":
+      return weight / 1000;
 
-//   pickupAddress: {
-//     name: pickupAddress.name,
-//     addressLine: pickupAddress.addressLine,
-//     contactNumber: pickupAddress.contactNumber,
-//     location: {
-//       type: "Point",
-//       coordinates: [pickupAddress.lng, pickupAddress.lat]
-//     }
-//   },
+    case "kg":
+      return weight;
 
-//   deliveryAddress: {
-//     name: deliveryAddress.name,
-//     addressLine: deliveryAddress.addressLine,
-//     contactNumber: deliveryAddress.contactNumber,
-//     location: {
-//       type: "Point",
-//       coordinates: [deliveryAddress.lng, deliveryAddress.lat]
-//     }
-//   },
+    case "ml":
+      return weight / 1000;
 
-//   pricing: {
-//     itemTotal,
-//     deliveryFee: 0,
-//     tax: 0,
-//     platformCommission: 0,
-//     totalAmount: itemTotal
-//   },
+    case "l":
+      return weight;
 
-//   riderEarning: {
-//     basePay: 0,
-//     distancePay: 0,
-//     surgePay: 0,
-//     tips: 0,
-//     totalEarning: 0,
-//     credited: false
-//   },
-
-//   payment: {
-//     mode: payment.mode,
-//     status: payment.mode === "COD" ? "PENDING" : "SUCCESS"
-//   },
-
-//   orderStatus: "CREATED"
-// });
-
- 
-//     return res.status(201).json({
-//       success: true,
-//       orderId: order.orderId,
-//       mongoId: order._id
-//     });
- 
-//   } catch (error) {
-//     console.error("Create order error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Order creation failed"
-//     });
-//   }
-// }
- 
- 
-// async function confirmOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
- 
-//     // 1️⃣ Find order
-//     const order = await Order.findOne({ orderId });
- 
-//     if (!order) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Order not found"
-//       });
-//     }
- 
-//     if (order.orderStatus !== "CREATED") {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Order already processed"
-//       });
-//     }
- 
-//     // 2️⃣ Fetch 5 eligible riders
-//     const riders = await Rider.find({
-//       "deliveryStatus.isActive": true,
-//       orderState: "READY",
-//       "riderStatus.isOnline": true
-//     })
-//       .limit(5)
-//       .select("_id");
- 
-//     if (!riders.length) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "No riders available"
-//       });
-//     }
- 
-//     // 3️⃣ Update order
-//     order.orderStatus = "CONFIRMED";
-//     order.allocation = {
-//       candidateRiders: riders.map(r => ({
-//         riderId: r._id,
-//         status: "PENDING",
-//         notifiedAt: new Date()
-//       })),
-//       expiresAt: new Date(Date.now() + 30 * 1000) // 30 sec window
-//     };
- 
-//     await order.save();
- 
-//     // 4️⃣ Notify riders via WebSocket
-//     riders.forEach(rider => {
-//       notifyRider(rider._id.toString(), {
-//         type: "ORDER_POPUP",
-//         orderId: order.orderId,
-//         vendorShopName: order.vendorShopName
-//       });
-//     });
- 
-//     return res.json({
-//       success: true,
-//       message: "Order confirmed and sent to riders",
-//       notifiedRiders: riders.length
-//     });
- 
-//   } catch (err) {
-//     console.error("Confirm order error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to confirm order"
-//     });
-//   }
-// }
+    default:
+      throw new Error("Invalid weight unit");
+  }
+}
 
 async function createOrder(req, res) {
-
   try {
-
     const body = req.body;
-
-    // ===============================
-    // 1️⃣ ADDRESS → LAT LNG
-    // ===============================
 
     const pickupGeo = await getLatLng(
       body.pickupAddress.addressLine
@@ -222,245 +51,171 @@ async function createOrder(req, res) {
       body.deliveryAddress.addressLine
     );
 
-
-    // ===============================
-    // 2️⃣ PAYMENT LOGIC
-    // ===============================
-
     let paymentData = {
       mode: body.payment.mode,
       status: "PENDING"
     };
 
-    // 👉 ONLINE → create dummy txn
     if (body.payment.mode === "ONLINE") {
-
       paymentData.transactionId = generateTxn();
       paymentData.status = "SUCCESS";
-      paymentData.paidAt = new Date();
-
     }
 
-    // 👉 COD
     if (body.payment.mode === "COD") {
-
       paymentData.codPaymentType =
         body.payment.codPaymentType || "CASH";
-
     }
 
+    let itemTotal = 0;
+    let totalWeight = 0;
 
-    // ===============================
-    // 3️⃣ CALCULATE ITEM TOTAL
-    // ===============================
+    for (const item of body.items) {
+      itemTotal += item.total;
 
-    let itemTotal = body.items.reduce(
-      (sum, i) => sum + i.total,
-      0
-    );
+      
+      if (!item.weightPerUnit || !item.weightUnit) {
+        return res.status(400).json({
+          success: false,
+          message: "weightPerUnit and weightUnit are required"
+        });
+      }
+
+      const weightInKg = convertToKg(
+        item.weightPerUnit,
+        item.weightUnit.toLowerCase()
+      );
+
+      totalWeight += weightInKg * item.quantity;
+    }
+
+    
+    if (totalWeight > 20) {
+      return res.status(400).json({
+        success: false,
+        message: `Order weight ${totalWeight.toFixed(
+          2
+        )}kg exceeds 20kg limit for biker`
+      });
+    }
+
+    const deliveryFee = 40;
+    const tax = 5;
+    const platformCommission = 10;
+
+    const totalAmount =
+      itemTotal + deliveryFee + tax;
 
 
-    // ===============================
-    // 4️⃣ CREATE ORDER OBJECT
-    // ===============================
+    const order = await prisma.order.create({
+      data: {
+        orderId: generateOrderId(),
+        vendorShopName: body.vendorShopName,
 
-    const order = new Order({
+        
+        totalWeight: totalWeight,
 
-      orderId: generateOrderId(),
+        OrderItem: {
+          create: body.items.map(item => ({
+            itemName: item.itemName,
+            quantity: item.quantity,
+            price: item.price,
+            total: item.total,
+            weightPerUnit: item.weightPerUnit,
+            weightUnit: item.weightUnit.toLowerCase() 
+          }))
+        },
 
-      vendorShopName: body.vendorShopName,
+        
+        OrderPickupAddress: {
+          create: {
+            name: body.pickupAddress.name,
+            addressLine: body.pickupAddress.addressLine,
+            contactNumber:
+              body.pickupAddress.contactNumber,
+            latitude: pickupGeo.lat,
+            longitude: pickupGeo.lng,
+            pincode: body.pickupAddress.pincode 
+          }
+        },
 
-      items: body.items,
+        OrderDeliveryAddress: {
+          create: {
+            name: body.deliveryAddress.name,
+            addressLine:
+              body.deliveryAddress.addressLine,
+            contactNumber:
+              body.deliveryAddress.contactNumber,
+            latitude: deliveryGeo.lat,
+            longitude: deliveryGeo.lng
+          }
+        },
 
+        OrderPricing: {
+          create: {
+            itemTotal,
+            deliveryFee,
+            tax,
+            platformCommission,
+            totalAmount
+          }
+        },
 
-      // 👉 PICKUP WITH GEO
-      pickupAddress: {
-        name: body.pickupAddress.name,
-        addressLine: body.pickupAddress.addressLine,
-        contactNumber: body.pickupAddress.contactNumber,
-
-        location: {
-          type: "Point",
-          coordinates: [
-            pickupGeo.lng,
-            pickupGeo.lat
-          ]
-        }
+        OrderPayment: {
+          create: paymentData
+        },
+        OrderCod:
+          body.payment.mode === "COD"
+            ? {
+                create: {
+                  amount: totalAmount,
+                  pendingAmount: totalAmount
+                }
+              }
+            : undefined
       },
 
-
-      // 👉 DELIVERY WITH GEO
-      deliveryAddress: {
-        name: body.deliveryAddress.name,
-        addressLine: body.deliveryAddress.addressLine,
-        contactNumber: body.deliveryAddress.contactNumber,
-
-        location: {
-          type: "Point",
-          coordinates: [
-            deliveryGeo.lng,
-            deliveryGeo.lat
-          ]
-        }
-      },
-
-
-      // 👉 PRICING (basic dummy)
-      pricing: {
-        itemTotal: itemTotal,
-        deliveryFee: 40,
-        tax: 5,
-        platformCommission: 10,
-        totalAmount: itemTotal + 45
-      },
-
-
-      // 👉 PAYMENT
-      payment: paymentData,
-
-
-      // 👉 COD AMOUNT IF COD
-      cod:
-        body.payment.mode === "COD"
-          ? {
-              amount: itemTotal + 45,
-              pendingAmount: itemTotal + 45
-            }
-          : undefined
-
+      include: {
+        OrderPayment: true
+      }
     });
 
-
-    await order.save();
-
-
-    // ===============================
-    // 5️⃣ RESPONSE
-    // ===============================
-
+  
     return res.status(201).json({
       success: true,
       message: "Order created successfully",
       orderId: order.orderId,
-      payment: order.payment
+      totalWeight: totalWeight.toFixed(2) + " kg",
+      payment: order.OrderPayment
     });
 
-
   } catch (err) {
+    console.error(err);
 
     return res.status(500).json({
       success: false,
       message: err.message
     });
-
   }
 }
 
- 
-/* ===============================
-
-   GOOGLE DISTANCE + ETA HELPER
-
-================================ */
-
-// async function getRouteInfo(pickupAddress, deliveryAddress) {
-//   // 🛡️ Safety checks
-//   if (!pickupAddress || !deliveryAddress) {
-//     throw new Error("Pickup or Delivery address missing");
-//   }
-
-//   const { lat: pickupLat, lng: pickupLng } = pickupAddress;
-//   const { lat: dropLat, lng: dropLng } = deliveryAddress;
-
-//   if (
-//     pickupLat == null ||
-//     pickupLng == null ||
-//     dropLat == null ||
-//     dropLng == null
-//   ) {
-//     throw new Error("Invalid pickup/delivery coordinates");
-//   }
-
-//   const url = "https://maps.googleapis.com/maps/api/directions/json";
-
-//   const response = await axios.get(url, {
-//     params: {
-//       origin: `${pickupLat},${pickupLng}`,
-//       destination: `${dropLat},${dropLng}`,
-//       key: process.env.GOOGLE_KEY,
-//     },
-//   });
-
-//   if (!response.data.routes || response.data.routes.length === 0) {
-//     throw new Error("No route found between pickup and drop");
-//   }
-
-//   const leg = response.data.routes[0].legs[0];
-
-//   return {
-//     distanceKm: Number((leg.distance.value / 1000).toFixed(2)),
-//     etaMinutes: Math.ceil(leg.duration.value / 60),
-//   };
-// }
-
-// async function getRouteInfo(pickupAddress, deliveryAddress) {
-//   console.log("Pickup:99", order.pickupAddress);
-// console.log("Delivery:99", order.deliveryAddress);
-
-//   const pickupCoords = pickupAddress?.location?.coordinates;
-//   const dropCoords = deliveryAddress?.location?.coordinates;
-
-//   if (
-//     !Array.isArray(pickupCoords) || pickupCoords.length !== 2 ||
-//     !Array.isArray(dropCoords) || dropCoords.length !== 2
-//   ) {
-//     throw new Error("Invalid pickup/delivery coordinates");
-//   }
-
-//   const [pickupLng, pickupLat] = pickupCoords;
-//   const [dropLng, dropLat] = dropCoords;
-
-//   const response = await axios.get(
-//     "https://maps.googleapis.com/maps/api/directions/json",
-//     {
-//       params: {
-//         origin: `${pickupLat},${pickupLng}`,
-//         destination: `${dropLat},${dropLng}`,
-//         key: process.env.GOOGLE_KEY
-//       }
-//     }
-//   );
-
-//   if (!response.data.routes?.length) {
-//     throw new Error("No route found");
-//   }
-
-//   const leg = response.data.routes[0].legs[0];
-
-//   return {
-//     distanceKm: +(leg.distance.value / 1000).toFixed(2),
-//     etaMinutes: Math.ceil(leg.duration.value / 60)
-//   };
-// }
-//2nd line is new
 
 async function getRouteInfo(pickupAddress, deliveryAddress) {
   if (!pickupAddress || !deliveryAddress) {
     throw new Error("Pickup or Delivery address missing");
   }
 
-  const pickupCoords = pickupAddress.location?.coordinates;
-  const dropCoords = deliveryAddress.location?.coordinates;
+  const pickupLat = pickupAddress.latitude;
+  const pickupLng = pickupAddress.longitude;
+
+  const dropLat = deliveryAddress.latitude;
+  const dropLng = deliveryAddress.longitude;
 
   if (
-    !Array.isArray(pickupCoords) || pickupCoords.length !== 2 ||
-    !Array.isArray(dropCoords) || dropCoords.length !== 2
+    pickupLat == null || pickupLng == null ||
+    dropLat == null || dropLng == null
   ) {
     throw new Error("Invalid pickup/delivery coordinates");
   }
-
-  const [pickupLng, pickupLat] = pickupCoords;
-  const [dropLng, dropLat] = dropCoords;
 
   const response = await axios.get(
     "https://maps.googleapis.com/maps/api/directions/json",
@@ -473,7 +228,7 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
     }
   );
 
-  if (!response.data.routes || response.data.routes.length === 0) {
+  if (!response.data.routes?.length) {
     throw new Error("No route found between pickup and drop");
   }
 
@@ -485,905 +240,938 @@ async function getRouteInfo(pickupAddress, deliveryAddress) {
   };
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-/* ===============================
-
-   CONFIRM ORDER API
-
-================================ */
-
-// async function confirmOrder(req, res) {
-
-//   try {
-
-//     const { orderId } = req.params;
- 
-//     // 1️⃣ Find order
-
-//     const order = await Order.findOne({ orderId });
- 
-//     if (!order) {
-
-//       return res.status(404).json({
-
-//         success: false,
-
-//         message: "Order not found"
-
-//       });
-
-//     }
- 
-//     if (order.orderStatus !== "CREATED") {
-
-//       return res.status(400).json({
-
-//         success: false,
-
-//         message: "Order already processed"
-
-//       });
-
-//     }
- 
-//     // 2️⃣ Fetch eligible riders
-
-//     const riders = await Rider.find({
-
-//       "deliveryStatus.isActive": true,
-
-//       orderState: "READY",
-
-//       "riderStatus.isOnline": true
-
-//     })
-
-//       .limit(5)
-
-//       .select("_id");
- 
-//     if (!riders.length) {
-
-//       return res.status(400).json({
-
-//         success: false,
-
-//         message: "No riders available"
-
-//       });
-
-//     }
- 
-//     // 3️⃣ Update order allocation
-
-//     order.orderStatus = "CONFIRMED";
-
-//     order.allocation = {
-
-//       candidateRiders: riders.map(r => ({
-
-//         riderId: r._id,
-
-//         status: "PENDING",
-
-//         notifiedAt: new Date()
-
-//       })),
-
-//       expiresAt: new Date(Date.now() + 30 * 1000)
-
-//     };
- 
-//     await order.save();
- 
-//     /* =====================================
-
-//        DISTANCE + ETA + PRICING CALCULATION
-
-//     ====================================== */
- 
-//     // 📍 Distantailsce & ETA
-// console.log(`order details${order}`); 
-//     const routeInfo = await getRouteInfo(
-
-//       order.pickupAddress,
-
-//       order.deliveryAddress
-
-//     );
- 
-//     // 💰 Pricing config
-
-//     const pricingConfig = await PricingConfig.findOne({ isActive: true });
-
-//     if (!pricingConfig) {
-
-//       throw new Error("Pricing config not found");
-
-//     }
- 
-//     const currentTime = new Date().toTimeString().slice(0, 5);
-
-//     const isRaining = order.weather === "RAIN";
- 
-//     let estimatedEarning = 0;
- 
-//     // Base fare (ALWAYS)
-
-//     estimatedEarning += pricingConfig.baseFare.baseAmount;
- 
-//     // Distance fare
-
-//     if (routeInfo.distanceKm > pricingConfig.baseFare.baseDistanceKm) {
-
-//       const extraKm =
-
-//         routeInfo.distanceKm - pricingConfig.baseFare.baseDistanceKm;
- 
-//       estimatedEarning +=
-
-//         extraKm * pricingConfig.distanceFare.perKmRate;
-
-//     }
- 
-//     // Auto surges
-
-//     pricingConfig.surges.forEach(surge => {
-
-//       if (!surge.isActive) return;
- 
-//       let apply = false;
- 
-//       if (
-
-//         surge.type === "PEAK" &&
-
-//         currentTime >= surge.conditions.startTime &&
-
-//         currentTime <= surge.conditions.endTime
-
-//       ) apply = true;
- 
-//       if (surge.type === "RAIN" && isRaining) apply = true;
- 
-//       if (
-
-//         surge.type === "ZONE" &&
-
-//         surge.conditions.zoneIds?.includes(order.zoneId)
-
-//       ) apply = true;
- 
-//       if (apply) {
-
-//         estimatedEarning += surge.value;
-
-//       }
-
-//     });
- 
-//     // Save snapshot
-
-//     order.earningEstimate = {
-
-//       distanceKm: routeInfo.distanceKm,
-
-//       etaMinutes: routeInfo.etaMinutes,
-
-//       estimatedEarning
-
-//     };
- 
-//     await order.save();
- 
-//     /* ===============================
-
-//        WEBSOCKET NOTIFICATION
-
-//     ================================ */
-
-//     riders.forEach(rider => {
-
-//       notifyRider(rider._id.toString(), {
-
-//         type: "ORDER_POPUP",
-
-//         orderId: order.orderId,
-
-//         vendorShopName: order.vendorShopName,
-
-//         pickupLocation: order.pickupLocation,
-
-//         dropLocation: order.dropLocation,
-
-//         distanceKm: routeInfo.distanceKm,
-
-//         etaMinutes: routeInfo.etaMinutes,
-
-//         estimatedEarning
-
-//       });
-
-//     });
- 
-//     return res.json({
-
-//       success: true,
-
-//       message: "Order confirmed and sent to riders",
-
-//       notifiedRiders: riders.length
-
-//     });
- 
-//   } catch (err) {
-
-//     console.error("Confirm order error:", err);
-
-//     return res.status(500).json({
-
-//       success: false,
-
-//       message: "Failed to confirm order"
-
-//     });
-
-//   }
-
-// }
-
-
 async function confirmOrder(req, res) {
+
+  try {
+
+    const { orderId } = req.params;
+ 
+    /* =========================================================
+
+       FETCH ORDER
+
+    ========================================================= */
+ 
+    const order = await prisma.order.findFirst({
+
+      where: { orderId },
+
+      include: {
+
+        OrderPickupAddress: true,
+
+        OrderDeliveryAddress: true
+
+      }
+
+    });
+ 
+    if (!order) {
+
+      return res.status(404).json({
+
+        success: false,
+
+        message: "Order not found"
+
+      });
+
+    }
+ 
+    if (order.orderStatus !== "CREATED") {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "Order already processed"
+
+      });
+
+    }
+ 
+    const now = new Date();
+ 
+    const pickupPincode =
+
+      order.OrderPickupAddress?.pincode;
+ 
+    if (!pickupPincode) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "Pickup pincode missing"
+
+      });
+
+    }
+ 
+    /* =========================================================
+
+       RIDER FILTER
+
+    ========================================================= */
+ 
+    const riders = await prisma.rider.findMany({
+
+      where: {
+
+        isFullyRegistered: true,
+ 
+        orderState: "READY",
+ 
+        isOnline: true,
+ 
+       slotBookings: {
+
+          some: {
+
+            status: "BOOKED",
+ 
+            slotEndAt: {
+
+              gte: now
+
+            }
+
+          }
+
+        },
+         
+        location: {
+
+          is: {
+
+            pincode: pickupPincode
+
+          }
+
+        }
+
+      },
+ 
+      take: 10,
+ 
+      select: {
+
+        id: true,
+ 
+        isFullyRegistered: true,
+ 
+        location: {
+
+          select: {
+
+            pincode: true
+
+          }
+
+        }
+
+      }
+
+    });
+ 
+    console.log(
+
+      "✅ Eligible Riders:",
+
+      riders.map(r => ({
+
+        id: r.id,
+
+        isFullyRegistered: r.isFullyRegistered,
+
+        pincode: r.location?.pincode
+
+      }))
+
+    );
+ 
+    if (!riders.length) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "No riders available"
+
+      });
+
+    }
+ 
+    /* =========================================================
+
+       ROUTE INFO
+
+    ========================================================= */
+ 
+    const routeInfo = await getRouteInfo(
+
+      order.OrderPickupAddress,
+
+      order.OrderDeliveryAddress
+
+    );
+ 
+    /* =========================================================
+
+       PAYOUT CONFIG
+
+    ========================================================= */
+ 
+    const payoutConfig =
+
+      await prisma.payoutConfig.findFirst({
+
+        where: {
+
+          isActive: true,
+ 
+          OR: [
+
+            {
+
+              pincodeIds: {
+
+                has: pickupPincode
+
+              }
+
+            },
+ 
+            {
+
+              pincodeIds: {
+
+                isEmpty: true
+
+              }
+
+            }
+
+          ]
+
+        },
+ 
+        orderBy: {
+
+          version: "desc"
+
+        }
+
+      });
+ 
+    if (!payoutConfig) {
+
+      return res.status(400).json({
+
+        success: false,
+
+        message: "No payout config found"
+
+      });
+
+    }
+ 
+    const {
+
+      basePay,
+
+      perKmRate,
+
+      surgeConfig,
+
+      peakConfig,
+
+      weatherConfig
+
+    } = payoutConfig;
+ 
+    /* =========================================================
+
+       DISTANCE PAY
+
+    ========================================================= */
+ 
+    let distancePay = 0;
+ 
+    if (routeInfo.distanceKm > 4) {
+
+      distancePay =
+
+        (routeInfo.distanceKm - 4) * perKmRate;
+
+    }
+ 
+    /* =========================================================
+
+       SURGE PAY
+
+    ========================================================= */
+ 
+    let surgePay = 0;
+ 
+    if (surgeConfig?.enabled) {
+
+      const multiplier =
+
+        surgeConfig.multiplier || 1;
+ 
+      surgePay =
+
+        (basePay + distancePay) *
+
+        (multiplier - 1);
+
+    }
+ 
+    /* =========================================================
+
+       PEAK BONUS
+
+    ========================================================= */
+ 
+    let peakBonus = 0;
+ 
+    if (peakConfig?.enabled) {
+
+      const currentHour =
+
+        new Date().getHours();
+ 
+      const start = parseInt(
+
+        peakConfig.start.split(":")[0]
+
+      );
+ 
+      const end = parseInt(
+
+        peakConfig.end.split(":")[0]
+
+      );
+ 
+      if (
+
+        currentHour >= start &&
+
+        currentHour <= end
+
+      ) {
+
+        peakBonus = peakConfig.bonus || 0;
+
+      }
+
+    }
+ 
+    /* =========================================================
+
+       WEATHER BONUS
+
+    ========================================================= */
+ 
+    let weatherBonus = 0;
+ 
+    const weather = await getWeather(
+
+      order.OrderPickupAddress.latitude,
+
+      order.OrderPickupAddress.longitude
+
+    );
+ 
+    const isRaining = weather.isRaining;
+ 
+    if (
+
+      isRaining &&
+
+      weatherConfig?.RAIN
+
+    ) {
+
+      weatherBonus = weatherConfig.RAIN;
+
+    }
+ 
+    /* =========================================================
+
+       TOTAL EARNING
+
+    ========================================================= */
+ 
+    const totalEarning =
+
+      basePay +
+
+      distancePay +
+
+      surgePay +
+
+      peakBonus +
+
+      weatherBonus;
+ 
+    /* =========================================================
+
+       TRANSACTION
+
+    ========================================================= */
+ 
+    await prisma.$transaction(async (tx) => {
+
+      /* -------------------------
+
+         UPDATE ORDER
+
+      ------------------------- */
+ 
+      await tx.order.update({
+
+        where: {
+
+          id: order.id
+
+        },
+ 
+        data: {
+
+          orderStatus: "CONFIRMED"
+
+        }
+
+      });
+ 
+      /* -------------------------
+
+         CREATE ORDER ALLOCATION
+
+      ------------------------- */
+ 
+      await tx.orderAllocation.create({
+
+        data: {
+
+          orderId: order.orderId,
+ 
+          expiresAt: new Date(
+
+            Date.now() + 120000
+
+          ),
+ 
+          OrderCandidateRiders: {
+
+            create: riders.map(r => ({
+
+              riderId: r.id,
+
+              status: "PENDING",
+
+              notifiedAt: new Date()
+
+            }))
+
+          }
+
+        }
+
+      });
+ 
+      /* -------------------------
+
+         CREATE EARNING
+
+      ------------------------- */
+ 
+      await tx.orderRiderEarning.create({
+
+        data: {
+
+          orderId: order.orderId,
+ 
+          basePay,
+ 
+          distancePay,
+ 
+          surgePay,
+ 
+          tips: 0,
+ 
+          totalEarning,
+ 
+          credited: false
+
+        }
+
+      });
+ 
+      /* -------------------------
+
+         CREATE TRACKING
+
+      ------------------------- */
+ 
+      await tx.orderTracking.create({
+
+        data: {
+
+          orderId: order.orderId,
+ 
+          distanceInKm:
+
+            routeInfo.distanceKm,
+ 
+          durationInMin:
+
+            routeInfo.etaMinutes
+
+        }
+
+      });
+
+    });
+ 
+    /* =========================================================
+
+       NOTIFY RIDERS
+
+    ========================================================= */
+ 
+    for (const rider of riders) {
+
+      await notifyRider(rider.id, {
+
+        type: "ORDER_POPUP",
+ 
+        orderId: order.orderId,
+ 
+        vendorShopName:
+
+          order.vendorShopName,
+ 
+        pickupLocation:
+
+          order.OrderPickupAddress,
+ 
+        dropLocation:
+
+          order.OrderDeliveryAddress,
+ 
+        distanceKm:
+
+          routeInfo.distanceKm,
+ 
+        etaMinutes:
+
+          routeInfo.etaMinutes,
+ 
+        estimatedEarning:
+
+          totalEarning
+
+      });
+
+    }
+ 
+    /* =========================================================
+
+       RESPONSE
+
+    ========================================================= */
+ 
+    return res.status(200).json({
+
+      success: true,
+ 
+      message:
+
+        "Order confirmed and sent to riders",
+ 
+      estimatedEarning: totalEarning,
+ 
+      notifiedRiders: riders.length
+
+    });
+ 
+  } catch (err) {
+
+    console.error(
+
+      "❌ Confirm order error:",
+
+      err
+
+    );
+ 
+    return res.status(500).json({
+
+      success: false,
+ 
+      message:
+
+        err.message ||
+
+        "Failed to confirm order"
+
+    });
+
+  }
+
+}
+ 
+
+
+
+
+async function acceptOrder(req, res) {
   try {
     const { orderId } = req.params;
+    const riderId = req.rider.id;
 
-    /* ===============================
-       1️⃣ FETCH ORDER
-    =============================== */
-    const order = await Order.findOne({ orderId });
 
+    const order = await prisma.order.findUnique({
+      where: { orderId },
+      include: { OrderAllocation: true }
+    });
+
+    if (!order)
+      return res.status(404).json({ success: false, message: "Order not found" });
+
+    if (!order.OrderAllocation)
+      return res.status(400).json({ success: false, message: "Order not allocated" });
+
+
+    //////////////////////////////////////////////////////
+// FETCH RIDER
+//////////////////////////////////////////////////////
+
+const rider = await prisma.rider.findUnique({
+  where: {
+    id: riderId
+  },
+
+  select: {
+    isOnline: true,
+    orderState: true,
+    isFullyRegistered: true
+  }
+});
+
+if (!rider) {
+  return res.status(404).json({
+    success: false,
+    message: "Rider not found"
+  });
+}
+
+//////////////////////////////////////////////////////
+// VALIDATIONS
+//////////////////////////////////////////////////////
+
+    if (!rider.isFullyRegistered) {
+      return res.status(400).json({
+        success: false,
+        message: "Rider not registered"
+      });
+    }
+
+    if (!rider.isOnline) {
+      return res.status(400).json({
+        success: false,
+        message: "Rider is offline"
+      });
+    }
+
+    if (rider.orderState !== "READY") {
+      return res.status(400).json({
+        success: false,
+        message: "Rider is busy"
+      });
+    }
+
+
+
+    //////////////////////////////////////////////////////
+// SLOT VALIDATION
+//////////////////////////////////////////////////////
+
+    const now = new Date();
+
+    const activeSlotBooking =
+      await prisma.slotBooking.findFirst({
+
+        where: {
+
+          riderId,
+
+          status: "BOOKED",
+
+          slotStartAt: {
+            lte: now
+          },
+
+          slotEndAt: {
+            gte: now
+          }
+        }
+      });
+
+    if (!activeSlotBooking) {
+
+      return res.status(400).json({
+        success: false,
+        message: "No active slot booked"
+      });
+    }
+            
+
+    await prisma.$transaction(async (tx) => {
+
+      // Atomic update (prevents race condition)
+      const updated = await tx.order.updateMany({
+        where: {
+          orderId: orderId,
+          orderStatus: "CONFIRMED"
+        },
+        data: {
+          riderId: riderId,
+          orderStatus: "ASSIGNED"
+        }
+      });
+
+      if (updated.count === 0) {
+        throw new Error("Order already accepted");
+      }
+
+      // Accept this rider
+      await tx.orderCandidateRider.updateMany({
+        where: {
+          allocationId: order.OrderAllocation.id,
+          riderId: riderId,
+          status: "PENDING"
+        },
+        data: { status: "ACCEPTED" }
+      });
+
+      // Reject others
+      await tx.orderCandidateRider.updateMany({
+        where: {
+          allocationId: order.OrderAllocation.id,
+          riderId: { not: riderId },
+          status: "PENDING"
+        },
+        data: { status: "REJECTED" }
+      });
+
+      // Mark allocation assigned
+      await tx.orderAllocation.update({
+        where: { id: order.OrderAllocation.id },
+        data: { assignedAt: new Date() }
+      });
+
+      // Make rider busy
+      await tx.rider.update({
+        where: { id: riderId },
+        data: {
+          orderState: "BUSY",
+          currentOrderId: order.id
+        }
+      });
+    });
+
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+
+    const acceptCount = await prisma.orderCandidateRider.count({
+      where: {
+        riderId,
+        status: "ACCEPTED",
+        updatedAt: {
+          gte: todayStart,
+          lte: todayEnd
+        }
+      }
+    });
+
+
+    await prisma.riderPerformance.upsert({
+      where: {
+        riderId_date: {
+          riderId,
+          date: todayStart
+        }
+      },
+      update: {
+        totalOrdersAccepted: acceptCount
+      },
+      create: {
+        riderId,
+        date: todayStart,
+
+        // required fields
+        periodStart: todayStart,
+        periodEnd: todayEnd,
+
+        totalOrdersAccepted: acceptCount,
+        totalOrdersRejected: 0,
+        totalOrdersAssigned: 0,
+
+        acceptanceRate: 0,
+        performanceScore: 0.7
+      }
+    });
+
+
+    return res.json({
+      success: true,
+      message: "Order accepted successfully",
+      todayAcceptedOrders: acceptCount
+    });
+
+  } catch (err) {
+    console.error("Accept order error:", err);
+
+    return res.status(400).json({
+      success: false,
+      message: err.message || "Failed to accept order"
+    });
+  }
+}
+ 
+
+
+
+async function rejectOrder(req, res) {
+  try {
+    const { orderId } = req.params;
+    const riderId = req.rider.id;
+ 
+    
+    const order = await prisma.order.findUnique({
+      where: { orderId },
+      include: { OrderAllocation: true }
+    });
+ 
     if (!order) {
       return res.status(404).json({
         success: false,
         message: "Order not found"
       });
     }
-
-    if (order.orderStatus !== "CREATED") {
+ 
+    if (!order.OrderAllocation) {
       return res.status(400).json({
         success: false,
-        message: "Order already processed"
+        message: "Order not allocated"
       });
     }
-
-    /* ===============================
-       2️⃣ FETCH ELIGIBLE RIDERS
-    =============================== */
-    // const riders = await Rider.find({
-    //   // "deliveryStatus.isActive": true,
-    //   orderState: "READY",
-    //   "riderStatus.isOnline": true
-    // })
-    //   .limit(10)
-    //   .select("_id");
-     const now = new Date();
-
-const riders = await Rider.aggregate([
-  {
-    $match: {
-      orderState: "READY",
-      "riderStatus.isOnline": true
-    }
-  },
-  {
-    $lookup: {
-      from: "slotbookings",
-      let: { riderId: "$_id" },
-      pipeline: [
-        {
-          $match: {
-            $expr: {
-              $and: [
-                { $eq: ["$riderId", "$$riderId"] },
-                { $eq: ["$status", "BOOKED"] },
-                { $gte: ["$slotEndAt", now] } // active + upcoming
-              ]
-            }
-          }
-        }
-      ],
-      as: "validSlots"
-    }
-  },
-  {
-    $match: {
-      "validSlots.0": { $exists: true }
-    }
-  },
-  {
-    $limit: 10
-  },
-  {
-    $project: { _id: 1 }
-  }
-]);
-
-    // const riders = await Rider.find({}).limit(10);
-
-
-    if (!riders.length) {
-      return res.status(400).json({
-        success: false,
-        message: "No riders available"
-      });
-    }
-
-    /* ===============================
-       3️⃣ UPDATE ORDER STATUS + ALLOCATION
-    =============================== */
-    order.orderStatus = "CONFIRMED";
-    order.allocation = {
-      candidateRiders: riders.map(r => ({
-        riderId: r._id,
-        status: "PENDING",
-        notifiedAt: new Date()
-      })),
-      expiresAt: new Date(Date.now() + 120 * 1000)
-    };
-
-    await order.save();
-
-    /* ===============================
-       4️⃣ DISTANCE + ETA
-    =============================== */
-    const routeInfo = await getRouteInfo(
-      order.pickupAddress,
-      order.deliveryAddress
-    );
-
-    /* ===============================
-       5️⃣ FETCH PRICING CONFIG
-    =============================== */
-    const pricingConfig = await PricingConfig.findOne({ isActive: true });
-    if (!pricingConfig) {
-      throw new Error("Pricing config not found");
-    }
-
-    /* ===============================
-       6️⃣ RIDER EARNING CALCULATION
-    =============================== */
-    let basePay = pricingConfig.baseFare.baseAmount;
-    let distancePay = 0;
-    let surgePay = 0;
-    let appliedSurges = [];
-
-    const distanceKm = routeInfo.distanceKm;
-
-    // Distance pay
-    if (distanceKm > pricingConfig.baseFare.baseDistanceKm) {
-      const extraKm =
-        distanceKm - pricingConfig.baseFare.baseDistanceKm;
-
-      distancePay =
-        extraKm * pricingConfig.distanceFare.perKmRate;
-    }
-
-    // Surge logic
-    const currentTime = new Date().toTimeString().slice(0, 5);
-    const isRaining = order.weather === "RAIN";
-
-    pricingConfig.surges.forEach(surge => {
-      if (!surge.isActive) return;
-
-      let apply = false;
-
-      if (
-        surge.type === "PEAK" &&
-        currentTime >= surge.conditions.startTime &&
-        currentTime <= surge.conditions.endTime
-      ) apply = true;
-
-      if (surge.type === "RAIN" && isRaining) apply = true;
-
-      if (
-        surge.type === "ZONE" &&
-        surge.conditions.zoneIds?.includes(order.zoneId)
-      ) apply = true;
-
-      if (apply) {
-        surgePay += surge.value;
-
-        appliedSurges.push({
-          type: surge.type,
-          multiplierType: surge.multiplierType || "FIXED",
-          value: surge.value
-        });
+ 
+    const result = await prisma.orderCandidateRider.updateMany({
+      where: {
+        allocationId: order.OrderAllocation.id,
+        riderId,
+        status: "PENDING"
+      },
+      data: {
+        status: "REJECTED"
       }
     });
-
-    const totalEarning = basePay + distancePay + surgePay;
-
-    /* ===============================
-       7️⃣ SAVE SNAPSHOT INTO ORDER
-    =============================== */
-    order.riderEarning = {
-      basePay,
-      distancePay,
-      surgePay,
-      appliedSurges,
-      tips: 0,
-      totalEarning,
-      credited: false
-    };
-
-    order.tracking = {
-      distanceInKm: routeInfo.distanceKm,
-      durationInMin: routeInfo.etaMinutes
-    };
-
-    await order.save();
-
-    console.log(
-  "Riders getting popup:",
-  riders.map(r => r._id.toString())
-);
-
-
-    /* ===============================
-       8️⃣ WEBSOCKET NOTIFICATION
-    =============================== */
-    riders.forEach(rider => {
-      notifyRider(rider._id.toString(), {
-        type: "ORDER_POPUP",
-        orderId: order.orderId,
-        vendorShopName: order.vendorShopName,
-        pickupLocation: order.pickupAddress,
-        dropLocation: order.deliveryAddress,
-        distanceKm: routeInfo.distanceKm,
-        etaMinutes: routeInfo.etaMinutes,
-        estimatedEarning: totalEarning
-      });
-    });
-
-    /* ===============================
-       9️⃣ RESPONSE
-    =============================== */
-    return res.status(200).json({
-      success: true,
-      message: "Order confirmed and sent to riders",
-      estimatedEarning: totalEarning,
-      notifiedRiders: riders.length
-    });
-
-  } catch (err) {
-    console.error("Confirm order error:", err);
-    return res.status(500).json({
-      success: false,
-      message: err.message || "Failed to confirm order"
-    });
-  }
-}
-
-
  
-
-
-
-
-// async function acceptOrder(req, res) {
-
-//   try {
-
-//     const { orderId } = req.params;
-
-//     const riderId  = req.rider._id;
- 
-//     const now = new Date();
- 
-//     const order = await Order.findOneAndUpdate(
-
-//       {
-
-//         orderId,
-
-//         orderStatus: "CONFIRMED",
-
-//         riderId: null,
-
-//         "allocation.expiresAt": { $gt: now },
-
-//         "allocation.candidateRiders": {
-
-//           $elemMatch: {
-
-//             riderId,
-
-//             status: "PENDING"
-
-//           }
-
-//         }
-
-//       },
-
-//       {
-
-//         $set: {
-
-//           riderId,
-
-//           orderStatus: "ASSIGNED",
-
-//           "allocation.assignedAt": now,
-
-//           "allocation.candidateRiders.$[r].status": "ACCEPTED"
-
-//         }
-
-//       },
-
-//       {
-
-//         new: true,
-
-//         arrayFilters: [{ "r.riderId": riderId }]
-
-//       }
-
-//     );
- 
-//     if (!order) {
-
-//       return res.status(409).json({
-
-//         success: false,
-
-//         message: "Order already assigned or expired"
-
-//       });
-
-//     }
- 
-//     // Mark others as REJECTED
-
-//     await Order.updateOne(
-
-//       { orderId },
-
-//       {
-
-//         $set: {
-
-//           "allocation.candidateRiders.$[r].status": "REJECTED"
-
-//         }
-
-//       },
-
-//       {
-
-//         arrayFilters: [
-
-//           { "r.riderId": { $ne: riderId }, "r.status": "PENDING" }
-
-//         ]
-
-//       }
-
-//     );
- 
-//     return res.json({
-
-//       success: true,
-
-//       message: "Order assigned successfully",
-
-//       orderId: order.orderId
-
-//     });
- 
-//   } catch (err) {
-
-//     console.error("Accept order error:", err);
-
-//     return res.status(500).json({
-
-//       success: false,
-
-//       message: "Failed to accept order"
-
-//     });
-
-//   }
-
-// }
-
-
- 
-async function acceptOrder(req, res) {
-
-  const session = await mongoose.startSession();
- 
-  try {
-
-    const { orderId } = req.params;
-
-    const riderId = req.rider._id;
-
-    const now = new Date();
- 
-    // 🚫 Rider already busy
-
-    if (req.rider.orderState === "BUSY") {
-
+    if (result.count === 0) {
       return res.status(409).json({
-
         success: false,
-
-        message: "Rider already busy"
-
+        message: "Order already handled or not assigned"
       });
-
     }
  
-    session.startTransaction();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
  
-    /* ============================
-
-       1️⃣ ASSIGN ORDER
-
-    ============================ */
-
-    const order = await Order.findOneAndUpdate(
-
-      {
-
-        orderId,
-
-        orderStatus: "CONFIRMED",
-
-        riderId: null,
-
-        "allocation.expiresAt": { $gt: now },
-
-        "allocation.candidateRiders": {
-
-          $elemMatch: {
-
-            riderId,
-
-            status: "PENDING"
-
-          }
-
+    const todayEnd = new Date();
+    todayEnd.setHours(23, 59, 59, 999);
+ 
+    const rejectCount = await prisma.orderCandidateRider.count({
+      where: {
+        riderId,
+        status: "REJECTED",
+        updatedAt: {
+          gte: todayStart,
+          lte: todayEnd
         }
-
-      },
-
-      {
-
-        $set: {
-
-          riderId,
-
-          orderStatus: "ASSIGNED",
-
-          "allocation.assignedAt": now,
-
-          "allocation.candidateRiders.$[r].status": "ACCEPTED"
-
-        }
-
-      },
-
-      {
-
-        new: true,
-
-        session,
-
-        arrayFilters: [{ "r.riderId": riderId }]
-
       }
-
-    );
- 
-    if (!order) {
-
-      await session.abortTransaction();
-
-      return res.status(409).json({
-
-        success: false,
-
-        message: "Order already assigned or expired"
-
-      });
-
-    }
- 
-    /* ============================
-
-       2️⃣ MARK OTHER RIDERS REJECTED
-
-    ============================ */
-
-    await Order.updateOne(
-
-      { orderId },
-
-      {
-
-        $set: {
-
-          "allocation.candidateRiders.$[r].status": "REJECTED"
-
-        }
-
-      },
-
-      {
-
-        session,
-
-        arrayFilters: [
-
-          { "r.riderId": { $ne: riderId }, "r.status": "PENDING" }
-
-        ]
-
-      }
-
-    );
- 
-    /* ============================
-
-       3️⃣ UPDATE RIDER → BUSY
-
-    ============================ */
-
-    await Rider.updateOne(
-
-      {
-
-        _id: riderId,
-
-        orderState: "READY" // 🔒 safety check
-
-      },
-
-      {
-
-        $set: {
-
-          orderState: "BUSY",
-
-          currentOrderId: order._id
-
-        }
-
-      },
-
-      { session }
-
-    );
- 
-    await session.commitTransaction();
- 
-    return res.json({
-
-      success: true,
-
-      message: "Order accepted, rider is now busy",
-
-      orderId: order.orderId,
-      orderStatus:order.orderStatus
-
     });
  
-  } catch (err) {
-
-    await session.abortTransaction();
-
-    console.error("Accept order error:", err);
- 
-    return res.status(500).json({
-
-      success: false,
-
-      message: "Failed to accept order"
-
-    });
-
-  } finally {
-
-    session.endSession();
-
-  }
-
-}
-
- 
-
-async function rejectOrder(req, res) {
-  try {
-    const { orderId } = req.params;
-    const riderId = req.rider._id
    
+    let warning = null;
  
-    const result = await Order.findOneAndUpdate(
-      {
-        orderId,
-        orderStatus: "CONFIRMED",
-        riderId: null,
-        "allocation.candidateRiders": {
-          $elemMatch: {
-            riderId,
-            status: "PENDING"
-          }
-        }
-      },
-      {
-        $set: {
-          "allocation.candidateRiders.$[r].status": "REJECTED",
-          "allocation.candidateRiders.$[r].rejectedAt": new Date(),
-        
-        }
-      },
-      {
-        new: true,
-        arrayFilters: [
-          { "r.riderId": riderId, "r.status": "PENDING" }
-        ]
-      }
-    );
- 
-    if (!result) {
-      return res.status(409).json({
-        success: false,
-        message: "Order already assigned or cannot be rejected"
-      });
+    if (rejectCount >= 5 && rejectCount < 10) {
+      warning = "Too many rejections today. Please accept orders.";
     }
  
-    const pendingCount = result.allocation.candidateRiders.filter(
-      r => r.status === "PENDING"
-    ).length;
+    if (rejectCount >= 10) {
+      //  mark rider inactive
+      await prisma.rider.update({
+        where: { id: riderId },
+        data: {
+          isOnline: false
+        }
+      });
  
+      warning = " You are temporarily blocked due to high rejections";
+    }
+ 
+
     return res.json({
       success: true,
       message: "Order rejected successfully",
-      pendingRiders: pendingCount
+      todayRejectCount: rejectCount,
+      warning
     });
  
   } catch (err) {
     console.error("Reject order error:", err);
+ 
     return res.status(500).json({
       success: false,
       message: "Failed to reject order"
     });
   }
 }
-
-
+ 
 async function getOrderDetails(req, res) {
   try {
     const { orderId } = req.params;
 
-    // 1️⃣ Find order
-    const order = await Order.findOne({ orderId })
-      .populate("riderId", "name phone") // optional, if rider assigned
-      .lean();
+    const order = await prisma.order.findFirst({
+      where: { orderId },
+      include: {
+        OrderItem: true,
+        OrderPickupAddress: true,
+        OrderDeliveryAddress: true,
+        OrderPricing: true,
+        OrderRiderEarning: {
+          include: {
+            OrderSurges: true
+          }
+        },
+        OrderPayment: true,
+        OrderAllocation: {
+          include: {
+            OrderCandidateRiders: true
+          }
+        },
+        OrderSettlement: true
+      }
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -1392,24 +1180,103 @@ async function getOrderDetails(req, res) {
       });
     }
 
-
-     const filteredOrder = {
-      _id: order._id,
+    
+    const formattedOrder = {
+      _id: order.id, 
       orderId: order.orderId,
       vendorShopName: order.vendorShopName,
-      items: order.items,
-      pickupAddress: order.pickupAddress,
-      deliveryAddress: order.deliveryAddress,
-      pricing: order.pricing
-    };
+      orderStatus: order.orderStatus,
+      totalWeight: order.totalWeight,
+      weightUnit: "kg",
 
+      items: order.OrderItem.map(item => ({
+        _id: item.id,
+        itemName: item.itemName,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+        weightPerUnit: item.weightPerUnit,
+        weightUnit: item.weightUnit
+      })),
+
+      pickupAddress: order.OrderPickupAddress
+        ? {
+            name: order.OrderPickupAddress.name,
+            addressLine: order.OrderPickupAddress.addressLine,
+            contactNumber: order.OrderPickupAddress.contactNumber,
+            lat: order.OrderPickupAddress.latitude,
+            lng: order.OrderPickupAddress.longitude
+          }
+        : null,
+
+      deliveryAddress: order.OrderDeliveryAddress
+        ? {
+            name: order.OrderDeliveryAddress.name,
+            addressLine: order.OrderDeliveryAddress.addressLine,
+            contactNumber: order.OrderDeliveryAddress.contactNumber,
+            lat: order.OrderDeliveryAddress.latitude,
+            lng: order.OrderDeliveryAddress.longitude
+          }
+        : null,
+
+      pricing: order.OrderPricing
+        ? {
+            itemTotal: order.OrderPricing.itemTotal,
+            deliveryFee: order.OrderPricing.deliveryFee,
+            tax: order.OrderPricing.tax,
+            platformCommission: order.OrderPricing.platformCommission,
+            totalAmount: order.OrderPricing.totalAmount
+          }
+        : null,
+
+      riderEarning: order.OrderRiderEarning
+        ? {
+            basePay: order.OrderRiderEarning.basePay,
+            distancePay: order.OrderRiderEarning.distancePay,
+            surgePay: order.OrderRiderEarning.surgePay,
+            tips: order.OrderRiderEarning.tips,
+            totalEarning: order.OrderRiderEarning.totalEarning,
+            credited: order.OrderRiderEarning.credited
+          }
+        : null,
+
+      payment: order.OrderPayment
+        ? {
+            mode: order.OrderPayment.mode,
+            status: order.OrderPayment.status
+          }
+        : null,
+
+      allocation: order.OrderAllocation
+        ? {
+            expiresAt: order.OrderAllocation.expiresAt,
+            candidateRiders:
+              order.OrderAllocation.OrderCandidateRiders.map(r => ({
+                _id: r.id,
+                riderId: r.riderId,
+                status: r.status,
+                notifiedAt: r.notifiedAt
+              }))
+          }
+        : null,
+
+      settlement: order.OrderSettlement
+        ? {
+            riderEarningAdded: order.OrderSettlement.riderEarningAdded,
+            vendorSettled: order.OrderSettlement.vendorSettled
+          }
+        : null,
+
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      riderId: order.riderId
+    };
 
     return res.status(200).json({
       success: true,
       message: "Order details fetched successfully",
-      orderStatus:order.orderStatus,
-      order
-
+      orderStatus: order.orderStatus,
+      order: formattedOrder
     });
 
   } catch (err) {
@@ -1425,12 +1292,11 @@ async function getOrderDetails(req, res) {
 async function pickupOrder(req, res) {
   try {
     const { orderId } = req.params;
-    const riderId  = req.rider._id;
+    const riderId  = req.rider.id;
 
-    /* ===============================
-       1️⃣ FETCH ORDER
-    =============================== */
-    const order = await Order.findOne({ orderId });
+    const order = await prisma.Order.findUnique({
+      where: { orderId }
+    });
 
     if (!order) {
       return res.status(404).json({
@@ -1439,9 +1305,7 @@ async function pickupOrder(req, res) {
       });
     }
 
-    /* ===============================
-       2️⃣ VALIDATE ORDER STATE
-    =============================== */
+ 
     if (order.orderStatus !== "ASSIGNED") {
       return res.status(400).json({
         success: false,
@@ -1449,59 +1313,39 @@ async function pickupOrder(req, res) {
       });
     }
 
-    /* ===============================
-       3️⃣ VALIDATE RIDER
-    =============================== */
-    if (!order.riderId || order.riderId.toString() !== riderId.toString()) {
+
+    if (!order.riderId || order.riderId !== riderId) {
       return res.status(403).json({
         success: false,
         message: "You are not assigned to this order"
       });
     }
 
-    /* ===============================
-       4️⃣ UPDATE ORDER STATUS
-    =============================== */
-    order.orderStatus = "PICKED_UP";
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { orderId },
+        data: {
+          orderStatus: "PICKED_UP"
+        }
+      });
 
-    // Snapshot assigned rider info
-    order.assignedRider = {
-      riderId,
-      acceptedAt: order.assignedRider?.acceptedAt || new Date()
-    };
+      await tx.orderTracking.updateMany({
+        where: { orderId: order.id },
+        data: {
+          durationInMin: null
+        }
+      });
+    });
 
-    // Tracking update (optional but recommended)
-    order.tracking = {
-      ...order.tracking,
-      pickedUpAt: new Date()
-    };
-
-    await order.save();
-
-    /* ===============================
-       5️⃣ REAL-TIME NOTIFICATIONS
-    =============================== */
-
-    // Notify rider dashboard
     notifyRider(riderId.toString(), {
       type: "ORDER_PICKED_UP",
       orderId: order.orderId
     });
 
-    // Notify customer (if you have WS)
-
-    // notifyCustomer?.(order.customerId?.toString(), {
-    //   type: "ORDER_PICKED_UP",
-    //   orderId: order.orderId
-    // });
-
-    /* ===============================
-       6️⃣ RESPONSE
-    =============================== */
     return res.status(200).json({
       success: true,
       message: "Order picked up successfully",
-      orderStatus: order.orderStatus
+      orderStatus: "PICKED_UP"
     });
 
   } catch (err) {
@@ -1513,312 +1357,6 @@ async function pickupOrder(req, res) {
   }
 }
 
-
-
-
-// async function deliverOrder(req, res) {
-
-//   try {
-//     const { orderId } = req.params;
-//     const riderId  = req.rider._id; // ✅ FIXED
- 
-//     if (!riderId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "riderId is required"
-//       });
-//     }
- 
-//     /* ===============================
-//        1️⃣ FETCH ORDER
-//     =============================== */
-//     const order = await Order.findOne({ orderId });
- 
-//     if (!order) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Order not found"
-//       });
-//     }
- 
-//     /* ===============================
-//        2️⃣ VALIDATE ORDER STATUS
-//     =============================== */
-//     if (order.orderStatus !== "PICKED_UP") {
-//       return res.status(400).json({
-//         success: false,
-//         message: `Order cannot be delivered. Current status: ${order.orderStatus}`
-//       });
-//     }
- 
-//     /* ===============================
-//        3️⃣ VALIDATE RIDER ASSIGNMENT
-//     =============================== */
-//     if (!order.riderId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Order has no assigned rider"
-//       });
-//     }
- 
-//     const assignedRiderId =
-//       order.riderId._id
-//         ? order.riderId._id.toString()
-//         : order.riderId.toString();
- 
-//     if (assignedRiderId !== riderId.toString()) {
-//       return res.status(403).json({
-//         success: false,
-//         message: "You are not assigned to this order"
-//       });
-//     }
- 
-//     /* ===============================
-//        4️⃣ FETCH RIDER
-//     =============================== */
-//     const rider = await Rider.findById(riderId);
- 
-//     if (!rider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found"
-//       });
-//     }
- 
-//     /* ===============================
-//        5️⃣ CREDIT RIDER EARNING (ONCE)
-//     =============================== */
-//     if (!order.riderEarning.credited) {
-//       const earning = Number(order.riderEarning.totalEarning || 0);
- 
-//       rider.wallet.balance += earning;
-//       rider.wallet.totalEarned += earning;
- 
-//       order.riderEarning.credited = true;
-//       order.riderEarning.creditedAt = new Date();
-//       order.settlement.riderEarningAdded = true;
-//     }
- 
-//     /* ===============================
-//        6️⃣ HANDLE CASH ON DELIVERY
-//     =============================== */
-//     let codCollected = 0;
- 
-//     if (order.payment.mode === "COD") {
-//       codCollected = Number(order.pricing.totalAmount || 0);
- 
-//       if (rider.cashInHand.balance + codCollected > rider.cashInHand.limit) {
-//         rider.deliveryStatus.isActive = false;
-//         rider.deliveryStatus.inactiveReason = "COD_LIMIT_EXCEEDED";
- 
-//         await rider.save();
- 
-//         return res.status(400).json({
-//           success: false,
-//           message: "COD limit exceeded. Please settle cash."
-//         });
-//       }
- 
-//       rider.cashInHand.balance += codCollected;
-//       rider.cashInHand.lastUpdatedAt = new Date();
-//     }
- 
-//     /* ===============================
-//        7️⃣ UPDATE ORDER
-//     =============================== */
-//     order.orderStatus = "DELIVERED";
-//     order.payment.status = "SUCCESS";
-//     order.tracking.deliveredAt = new Date();
- 
-//     /* ===============================
-//        8️⃣ UPDATE RIDER STATE
-//     =============================== */
-//     rider.orderState = "READY";
-//     rider.currentOrderId = null;
- 
-//     /* ===============================
-//        9️⃣ SAVE
-//     =============================== */
-//     await Promise.all([order.save(), rider.save()]);
- 
-//     /* ===============================
-//        🔟 RESPONSE
-//     =============================== */
-//     return res.status(200).json({
-//       success: true,
-//       message: "Order delivered successfully",
-//       orderId: order.orderId,
-//       earningCredited: order.riderEarning.totalEarning,
-//       codCollected
-//     });
- 
-//   } catch (err) {
-//     console.error("Deliver order error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message || "Failed to deliver order"
-//     });
-//   }
-// }
-
-//
-
-//
-
-//2nd latest
-
-
-// async function deliverOrder(req, res) {
-//   try {
-//     const { orderId } = req.params;
-//     const riderId = req.rider._id;
- 
-//     if (!riderId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "riderId is required"
-//       });
-//     }
- 
-//     /* ===============================
-//        1️⃣ FETCH ORDER
-//     =============================== */
-//     const order = await Order.findOne({ orderId });
- 
-//     if (!order) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Order not found"
-//       });
-//     }
- 
-//     /* ===============================
-//        2️⃣ VALIDATE ORDER STATUS
-//     =============================== */
-//     if (order.orderStatus !== "PICKED_UP") {
-//       return res.status(400).json({
-//         success: false,
-//         message: `Order cannot be delivered. Current status: ${order.orderStatus}`
-//       });
-//     }
- 
-//     /* ===============================
-//        3️⃣ VALIDATE RIDER ASSIGNMENT
-//     =============================== */
-//     if (!order.riderId) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Order has no assigned rider"
-//       });
-//     }
- 
-//     const assignedRiderId =
-//       order.riderId._id
-//         ? order.riderId._id.toString()
-//         : order.riderId.toString();
- 
-//     if (assignedRiderId !== riderId.toString()) {
-//       return res.status(403).json({
-//         success: false,
-//         message: "You are not assigned to this order"
-//       });
-//     }
- 
-//     /* ===============================
-//        4️⃣ FETCH RIDER
-//     =============================== */
-//     const rider = await Rider.findById(riderId);
- 
-//     if (!rider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found"
-//       });
-//     }
- 
-//     /* ===============================
-//        5️⃣ CREDIT RIDER EARNING (ONCE)
-//     =============================== */
-//     if (!order.riderEarning.credited) {
-//       const earning = Number(order.riderEarning.totalEarning || 0);
- 
-//       rider.wallet.balance += earning;
-//       rider.wallet.totalEarned += earning;
- 
-//       order.riderEarning.credited = true;
-//       order.riderEarning.creditedAt = new Date();
-//       order.settlement.riderEarningAdded = true;
-//     }
- 
-//     /* ===============================
-//        6️⃣ HANDLE COD
-//     =============================== */
-//     let codCollected = 0;
- 
-//     if (order.payment.mode === "COD") {
-//       codCollected = Number(order.pricing.totalAmount || 0);
- 
-//       if (rider.cashInHand.balance + codCollected > rider.cashInHand.limit) {
-//         rider.deliveryStatus.isActive = false;
-//         rider.deliveryStatus.inactiveReason = "COD_LIMIT_EXCEEDED";
-//         await rider.save();
- 
-//         return res.status(400).json({
-//           success: false,
-//           message: "COD limit exceeded. Please settle cash."
-//         });
-//       }
- 
-//       rider.cashInHand.balance += codCollected;
-//       rider.cashInHand.lastUpdatedAt = new Date();
-//     }
- 
-//     /* ===============================
-//        7️⃣ UPDATE ORDER
-//     =============================== */
-//     order.orderStatus = "DELIVERED";
-//     order.payment.status = "SUCCESS";
-//     order.tracking.deliveredAt = new Date();
- 
-//     /* ===============================
-//        8️⃣ RESET RIDER STATE → READY
-//     =============================== */
-//     rider.orderState = "READY";
-//     rider.currentOrderId = null;
- 
-//     /* ===============================
-//        9️⃣ SAVE
-//     =============================== */
-//     await Promise.all([order.save(), rider.save()]);
- 
-//     /* ===============================
-//        🔟 RESPONSE
-//     =============================== */
-//     return res.status(200).json({
-//       success: true,
-//       message: "Order delivered successfully",
-//       orderStatus:order.orderStatus,
-//       orderId: order.orderId,
-//       earningCredited: order.riderEarning.totalEarning,
-//       codCollected
-//     });
- 
-//   } catch (err) {
-//     console.error("Deliver order error:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: err.message || "Failed to deliver order"
-//     });
-//   }
-// }
-
- 
-
-/* ===============================
-
-   HELPER FUNCTIONS
-
-=============================== */
 
 const getDateKey = (date = new Date()) =>
 
@@ -1843,599 +1381,345 @@ const getWeekKey = (date = new Date()) => {
   return `${year}-W${week}`;
 
 };
- 
+
 const isPeakSlot = (date) => {
 
   const hour = new Date(date).getHours();
 
-  return hour >= 6 && hour < 10; // example peak slot
+  return hour >= 6 && hour < 10; 
 
 };
  
-/* ===============================
-
-   DELIVER ORDER API
-
-=============================== */
-
 async function deliverOrder(req, res) {
-
   try {
-
     const { orderId } = req.params;
+    const riderId = req.rider?.id;
 
-    const riderId = req.rider._id;
- 
     if (!riderId) {
-
-      return res.status(400).json({ success: false, message: "riderId required" });
-
+      return res.status(400).json({
+        success: false,
+        message: "riderId required",
+      });
     }
- 
-    /* 1️⃣ FETCH ORDER */
 
-    const order = await Order.findOne({ orderId });
+    // Fetch order outside transaction
+    const order = await prisma.order.findUnique({
+      where: { orderId },
+      include: {
+        OrderRiderEarning: true,
+        OrderPayment: true,
+        OrderPricing: true,
+      },
+    });
 
     if (!order) {
-
-      return res.status(404).json({ success: false, message: "Order not found" });
-
+      return res.status(404).json({
+        success: false,
+        message: "Order not found",
+      });
     }
- 
-    /* 2️⃣ VALIDATE STATUS */
 
     if (order.orderStatus !== "PICKED_UP") {
-
       return res.status(400).json({
-
         success: false,
-
-        message: `Invalid status: ${order.orderStatus}`
-
+        message: `Invalid status: ${order.orderStatus}`,
       });
-
     }
- 
-    /* 3️⃣ VALIDATE RIDER */
 
-    const assignedRiderId = order.riderId._id
-
-      ? order.riderId._id.toString()
-
-      : order.riderId.toString();
- 
-    if (assignedRiderId !== riderId.toString()) {
-
+    if (order.riderId !== riderId) {
       return res.status(403).json({
-
         success: false,
-
-        message: "Not assigned to this order"
-
+        message: "Not assigned to this order",
       });
-
     }
- 
-    const rider = await Rider.findById(riderId);
 
-    if (!rider) {
-
-      return res.status(404).json({ success: false, message: "Rider not found" });
-
+    //Ensure payment record exists BEFORE transaction
+    if (!order.OrderPayment) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment record not found for this order",
+      });
     }
- 
-    /* 4️⃣ CREDIT RIDER EARNING */
 
-    if (!order.riderEarning.credited) {
-
-      const earning = Number(order.riderEarning.totalEarning || 0);
-
-      rider.wallet.balance += earning;
-
-      rider.wallet.totalEarned += earning;
- 
-      order.riderEarning.credited = true;
-
-      order.riderEarning.creditedAt = new Date();
-
-      order.settlement.riderEarningAdded = true;
-
-    }
- 
-    /* 5️⃣ HANDLE COD */
-
+    const earning = Number(order.OrderRiderEarning?.totalEarning || 0);
     let codCollected = 0;
 
-    if (order.payment.mode === "COD") {
+    await prisma.$transaction(
+      async (tx) => {
 
-      codCollected = Number(order.pricing.totalAmount || 0);
- 
-      if (rider.cashInHand.balance + codCollected > rider.cashInHand.limit) {
-
-        rider.deliveryStatus.isActive = false;
-
-        rider.deliveryStatus.inactiveReason = "COD_LIMIT_EXCEEDED";
-
-        await rider.save();
- 
-        return res.status(400).json({
-
-          success: false,
-
-          message: "COD limit exceeded"
-
+        //  Ensure wallet exists
+        await tx.riderWallet.upsert({
+          where: { riderId },
+          update: {},
+          create: { riderId },
         });
 
-      }
- 
-      rider.cashInHand.balance += codCollected;
+        //  Credit earning safely
+        if (!order.OrderRiderEarning?.credited && earning > 0) {
+          await tx.riderWallet.update({
+            where: { riderId },
+            data: {
+              balance: { increment: earning },
+              totalEarned: { increment: earning },
+            },
+          });
 
-      rider.cashInHand.lastUpdatedAt = new Date();
+          await tx.orderRiderEarning.update({
+            where: { orderId },
+            data: {
+              credited: true,
+              creditedAt: new Date(),
+            },
+          });
 
-    }
- 
-    /* 6️⃣ UPDATE ORDER */
-
-    order.orderStatus = "DELIVERED";
-
-    order.payment.status = "SUCCESS";
-
-    order.tracking.deliveredAt = new Date();
- 
-    /* 7️⃣ RESET RIDER STATE */
-
-    rider.orderState = "READY";
-
-    rider.currentOrderId = null;
- 
-    await Promise.all([order.save(), rider.save()]);
- 
-    /* ===============================
-
-       8️⃣ INCENTIVE PROGRESS UPDATE
-
-    =============================== */
-
-    /* ===============================
-   8️⃣ INCENTIVE PROGRESS UPDATE
-=============================== */
-
-const incentives = await Incentive.find({ status: "ACTIVE" });
-
-const dateKey = getDateKey();
-const weekKey = getWeekKey();
-const peak = isPeakSlot(order.tracking.deliveredAt);
-
-for (const incentive of incentives) {
-
-  /* 🔥 PEAK SLOT INCENTIVE */
-  if (incentive.incentiveType === "PEAK_SLOT" && peak) {
-
-    const progress = await RiderIncentiveProgress.findOneAndUpdate(
-      { riderId, incentiveId: incentive._id, date: dateKey },
-
-      {
-        $inc: { totalOrders: 1, peakOrders: 1 },
-
-        $setOnInsert: {
-          incentiveType: incentive.incentiveType
+          await tx.orderSettlement.upsert({
+            where: { orderId },
+            update: { riderEarningAdded: true },
+            create: {
+              orderId,
+              riderEarningAdded: true,
+            },
+          });
         }
-      },
 
-      { upsert: true, new: true, runValidators: true }
-    );
+        //  Handle COD
+        if (order.OrderPayment.mode === "COD") {
+          codCollected = Number(order.OrderPricing?.totalAmount || 0);
 
-    const peakSlabs = incentive.slabs?.[0]?.peak || [];
+          const cash = await tx.riderCashInHand.upsert({
+            where: { riderId },
+            update: {},
+            create: { riderId },
+          });
 
-    const slab = peakSlabs.find(s =>
-      progress.peakOrders >= s.minOrders &&
-      progress.peakOrders <= s.maxOrders
-    );
+          if (cash.balance + codCollected > cash.limit) {
+            throw "COD_LIMIT_EXCEEDED";
+          }
 
-    if (slab) {
-      progress.eligible = true;
-      progress.achievedReward = slab.rewardAmount;
-      await progress.save();
-    }
-  }
+          await tx.riderCashInHand.update({
+            where: { riderId },
+            data: {
+              balance: { increment: codCollected },
+              lastUpdatedAt: new Date(),
+            },
+          });
+        }
 
-  /* 🔥 DAILY TARGET INCENTIVE */
-  if (incentive.incentiveType === "DAILY_TARGET") {
 
-    const progress = await RiderIncentiveProgress.findOneAndUpdate(
-      { riderId, incentiveId: incentive._id, date: dateKey },
+    // Get rider active slot booking
+      const now = new Date();
 
-      {
-        $inc: {
-          totalOrders: 1,
-          peakOrders: peak ? 1 : 0,
-          normalOrders: peak ? 0 : 1
+      const slotBooking = await tx.slotBooking.findFirst({
+        where: {
+          riderId,
+          status: "BOOKED",
+
+          slotStartAt: {
+            lte: now,
+          },
+
+          slotEndAt: {
+            gte: now,
+          },
+        },
+      });
+
+
+        await tx.orderSlotInfo.upsert({
+        where: { orderId },
+
+        update: {
+          slotBookingId: slotBooking?.id,
+          slotId: slotBooking?.slotId,
+          isSlotBooked: true,
+          isPeakSlot: slotBooking?.isPeakSlot,
+          slotStartAt: slotBooking?.slotStartAt,
+          slotEndAt: slotBooking?.slotEndAt,
         },
 
-        $setOnInsert: {
-          incentiveType: incentive.incentiveType
-        }
+        create: {
+          orderId,
+          slotBookingId: slotBooking?.id,
+          slotId: slotBooking?.slotId,
+          isSlotBooked: true,
+          isPeakSlot: slotBooking?.isPeakSlot,
+          slotStartAt: slotBooking?.slotStartAt,
+          slotEndAt: slotBooking?.slotEndAt,
+        },
+      });
+
+
+
+        //  Update order
+        await tx.order.update({
+          where: { orderId },
+          data: { orderStatus: "DELIVERED" },
+        });
+
+        //  SAFER: use updateMany instead of update
+        await tx.orderPayment.updateMany({
+          where: { orderId },
+          data: { status: "SUCCESS" },
+        });
+
+        //     await tx.orderSlotInfo.upsert({
+        //   where: { orderId },
+        //   update: {
+        //     isSlotBooked: false,
+        //   },
+        //   create: {
+        //     orderId,
+        //     isSlotBooked: false,
+        //   },
+        // });
+
+        
+
+        //  Reset rider state
+        await tx.rider.update({
+          where: { id: riderId },
+          data: {
+            orderState: "READY",
+            currentOrderId: null,
+          },
+        });
       },
-
-      { upsert: true, new: true, runValidators: true }
+      { timeout: 10000 }
     );
-
-    if (
-      progress.peakOrders >= incentive.slotRules.minPeakSlots &&
-      progress.normalOrders >= incentive.slotRules.minNormalSlots
-    ) {
-      progress.eligible = true;
-      await progress.save();
-    }
-  }
-
-  /* 🔥 WEEKLY TARGET INCENTIVE */
-  if (incentive.incentiveType === "WEEKLY_TARGET") {
-
-    const progress = await RiderIncentiveProgress.findOneAndUpdate(
-      { riderId, incentiveId: incentive._id, week: weekKey },
-
-      {
-        $setOnInsert: {
-          incentiveType: incentive.incentiveType
-        }
-      },
-
-      { upsert: true, new: true, runValidators: true }
-    );
-
-    if (!progress.dailyOrders) {
-      progress.dailyOrders = new Map();
-    }
-
-    progress.eligibleDays = progress.eligibleDays || 0;
-
-    const todayCount = progress.dailyOrders.get(dateKey) || 0;
-    progress.dailyOrders.set(dateKey, todayCount + 1);
-
-    if (todayCount + 1 >= incentive.weeklyRules.minOrdersPerDay) {
-      progress.eligibleDays += 1;
-    }
-
-    if (progress.eligibleDays >= incentive.weeklyRules.totalDaysInWeek) {
-      progress.eligible = true;
-      progress.achievedReward = incentive.maxRewardPerWeek;
-    }
-
-    await progress.save();
-  }
-}
- 
-    /* 9️⃣ RESPONSE */
-
+await processOrderIncentive({
+  riderId,
+  orderId
+});
     return res.status(200).json({
-
       success: true,
-
       message: "Order delivered successfully",
-
-      orderId: order.orderId,
-
-      earningCredited: order.riderEarning.totalEarning,
-
-      codCollected
-
+      orderId,
+      orderStatus: "DELIVERED",
+      earningCredited: earning,
+      codCollected,
     });
- 
+
   } catch (err) {
+
+    if (err === "COD_LIMIT_EXCEEDED") {
+      return res.status(400).json({
+        success: false,
+        message: "COD limit exceeded",
+      });
+    }
 
     console.error("Deliver order error:", err);
 
     return res.status(500).json({
-
       success: false,
-
-      message: err.message || "Failed to deliver order"
-
+      message: "Failed to deliver order",
     });
-
   }
-
 }
  
 
-
  
-
-
-
- 
-
-
-
-
-// async function cancelOrder(req, res) {
-
-//   try {
-
-//     const { orderId } = req.params;
-//     const riderId= req.rider._id;
-//     const {  reasonCode, reasonText } = req.body; // ✅ FIXED
- 
-//     if (!riderId) {
-
-//       return res.status(400).json({
-
-//         success: false,
-
-//         message: "riderId is required"
-
-//       });
-
-//     }
- 
-//     /* ===============================
-
-//        1️⃣ FETCH ORDER
-
-//     =============================== */
-
-//     const order = await Order.findOne({ orderId });
- 
-//     if (!order) {
-
-//       return res.status(404).json({
-
-//         success: false,
-
-//         message: "Order not found"
-
-//       });
-
-//     }
- 
-//     /* ===============================
-
-//        2️⃣ VALIDATE STATE
-
-//     =============================== */
-
-//     if (["DELIVERED", "CANCELLED"].includes(order.orderStatus)) {
-
-//       return res.status(400).json({
-
-//         success: false,
-
-//         message: "Order cannot be cancelled"
-
-//       });
-
-//     }
- 
-//     if (!order.riderId) {
-
-//       return res.status(400).json({
-
-//         success: false,
-
-//         message: "Order has no assigned rider"
-
-//       });
-
-//     }
- 
-//     /* ===============================
-
-//        3️⃣ VALIDATE RIDER ASSIGNMENT
-
-//     =============================== */
-
-//     const assignedRiderId =
-
-//       order.riderId._id
-
-//         ? order.riderId._id.toString()
-
-//         : order.riderId.toString();
- 
-//     if (assignedRiderId !== riderId.toString()) {
-
-//       return res.status(403).json({
-
-//         success: false,
-
-//         message: "You are not assigned to this order"
-
-//       });
-
-//     }
- 
-//     /* ===============================
-
-//        4️⃣ UPDATE ORDER
-
-//     =============================== */
-
-//     order.orderStatus = "CANCELLED";
-
-//     order.cancelIssue = {
-
-//       cancelledBy: "RIDER",
-
-//       reasonCode,
-
-//       reasonText,
-
-//       cancelledAt: new Date()
-
-//     };
- 
-//     /* ===============================
-
-//        5️⃣ RESET RIDER STATE
-
-//     =============================== */
-
-//     await Rider.findByIdAndUpdate(riderId, {
-
-//       $set: {
-
-//         orderState: "READY",
-
-//         currentOrderId: null
-
-//       }
-
-//     });
- 
-//     await order.save();
- 
-//     /* ===============================
-
-//        6️⃣ WS NOTIFICATION
-
-//     =============================== */
-
-//     notifyRider(riderId.toString(), {
-
-//       type: "ORDER_CANCELLED",
-
-//       orderId: order.orderId,
-
-//       reason: reasonCode
-
-//     });
- 
-//     /* ===============================
-
-//        7️⃣ RESPONSE
-
-//     =============================== */
-
-//     return res.status(200).json({
-
-//       success: true,
-
-//       message: "Order cancelled successfully",
-
-//       cancelIssue: order.cancelIssue
-
-//     });
- 
-//   } catch (err) {
-
-//     console.error("Cancel order error:", err);
-
-//     return res.status(500).json({
-
-//       success: false,
-
-//       message: err.message || "Failed to cancel order"
-
-//     });
-
-//   }
-
-// }
-
 async function cancelOrder(req, res) {
   try {
     const { orderId } = req.params;
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
     const { reasonCode, reasonText } = req.body;
- 
+
     if (!riderId) {
       return res.status(400).json({
         success: false,
         message: "riderId is required"
       });
     }
- 
-    /* ===============================
-       1️⃣ FETCH ORDER
-    =============================== */
-    const order = await Order.findOne({ orderId });
- 
+
+   
+    const order = await prisma.order.findUnique({
+      where: { orderId }
+    });
+
     if (!order) {
       return res.status(404).json({
         success: false,
         message: "Order not found"
       });
     }
- 
-    /* ===============================
-       2️⃣ VALIDATE STATE
-    =============================== */
+
+   
     if (["DELIVERED", "CANCELLED"].includes(order.orderStatus)) {
       return res.status(400).json({
         success: false,
         message: "Order cannot be cancelled"
       });
     }
- 
+
     if (!order.riderId) {
       return res.status(400).json({
         success: false,
         message: "Order has no assigned rider"
       });
     }
- 
-    /* ===============================
-       3️⃣ VALIDATE RIDER ASSIGNMENT
-    =============================== */
-    const assignedRiderId =
-      order.riderId._id
-        ? order.riderId._id.toString()
-        : order.riderId.toString();
- 
-    if (assignedRiderId !== riderId.toString()) {
+
+    if (order.riderId !== riderId) {
       return res.status(403).json({
         success: false,
         message: "You are not assigned to this order"
       });
     }
- 
-    /* ===============================
-       4️⃣ UPDATE ORDER
-    =============================== */
-    order.orderStatus = "CANCELLED";
-    order.cancelIssue = {
+
+   const result = await prisma.$transaction(async (tx) => {
+  const updatedOrder = await tx.order.update({
+    where: { orderId },
+    data: { orderStatus: "CANCELLED" }
+  });
+
+  await tx.rider.updateMany({
+    where: {
+      id: riderId,
+      currentOrderId: order.id
+    },
+    data: {
+      orderState: "READY",
+      currentOrderId: null
+    }
+  });
+
+  await tx.orderCancelIssue.upsert({
+    where: { orderId:  order.orderId }, 
+    update: {
       cancelledBy: "RIDER",
       reasonCode,
-      reasonText,
-      cancelledAt: new Date()
-    };
- 
-    /* ===============================
-       5️⃣ RESET RIDER STATE → READY
-    =============================== */
-    await Rider.findOneAndUpdate(
-      { _id: riderId, currentOrderId: order._id },
-      {
-        $set: {
-          orderState: "READY",
-          currentOrderId: null
-        }
-      }
-    );
- 
-    await order.save();
- 
-    /* ===============================
-       6️⃣ WS NOTIFICATION
-    =============================== */
-    notifyRider(riderId.toString(), {
+      reasonText
+    },
+    create: {
+      orderId:  order.orderId, 
+      cancelledBy: "RIDER",
+      reasonCode,
+      reasonText
+    }
+  });
+
+  return updatedOrder;
+});
+
+
+    notifyRider(riderId, {
       type: "ORDER_CANCELLED",
-      orderId: order.orderId,
+      orderId,
       reason: reasonCode
     });
- 
-    /* ===============================
-       7️⃣ RESPONSE
-    =============================== */
+
     return res.status(200).json({
       success: true,
       message: "Order cancelled successfully",
-      orderStatus:order.orderStatus,
+      orderStatus: result.orderStatus,
 
-      cancelIssue: order.cancelIssue
+      cancelIssue: {
+        cancelledBy: "RIDER",
+        reasonCode,
+        reasonText
+      }
     });
- 
+
   } catch (err) {
     console.error("Cancel order error:", err);
     return res.status(500).json({
@@ -2444,14 +1728,6 @@ async function cancelOrder(req, res) {
     });
   }
 }
-
-
-/*
-=============================
-
-
-=============================
-*/
 
 async function getOrdersByRider(req, res) {
   try {
@@ -2558,7 +1834,6 @@ async function getDeliveredOrdersByRider(req, res) {
 }
 
 
-
 async function getCancelledOrdersByRider(req, res) {
   try {
     const riderId = req.rider._id;
@@ -2584,13 +1859,287 @@ async function getCancelledOrdersByRider(req, res) {
   }
 }
 
- 
+// async function getSurgeStatus(req, res)  {
 
- 
+//   try {
 
- 
- 
- 
-module.exports = { createOrder,confirmOrder,acceptOrder,rejectOrder,getOrderDetails,pickupOrder,deliverOrder, cancelOrder,getOrdersByRider,getDeliveredOrdersByRider,getCancelledOrdersByRider};
+//     //////////////////////////////////////////////////////
+//     // RIDER ID FROM TOKEN
+//     //////////////////////////////////////////////////////
+
+//     const riderId = req.rider.id;
+
+//     //////////////////////////////////////////////////////
+//     // FETCH RIDER
+//     //////////////////////////////////////////////////////
+
+//     const rider = await prisma.rider.findUnique({
+//       where: {
+//         id: riderId
+//       },
+
+//       include: {
+//         location: true
+//       }
+//     });
+
+//     if (!rider) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Rider not found"
+//       });
+//     }
+
+//     const pincode = rider.location?.pincode;
+
+//     const lat = rider.location?.latitude;
+
+//     const lng = rider.location?.longitude;
+
+//     console.log(rider);
+// console.log(rider.location);
+
+//     if (!pincode || !lat || !lng) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Rider location incomplete"
+//       });
+//     }
+
+//     //////////////////////////////////////////////////////
+//     // FETCH PAYOUT CONFIG
+//     //////////////////////////////////////////////////////
+
+//     const payoutConfig =
+//       await prisma.payoutConfig.findFirst({
+
+//         where: {
+//           isActive: true,
+
+//           pincodeIds: {
+//             has: pincode
+//           }
+//         },
+
+//         orderBy: {
+//           version: "desc"
+//         }
+//       });
+
+//     if (!payoutConfig) {
+
+//       return res.status(200).json({
+//         success: true,
+
+//         data: {
+//           surgeActive: false,
+//           surgeAmount: 0
+//         }
+//       });
+//     }
+
+//     //////////////////////////////////////////////////////
+//     // WEATHER CHECK
+//     //////////////////////////////////////////////////////
+
+//     const weather =
+//       await getWeather(lat, lng);
+
+//     //////////////////////////////////////////////////////
+//     // SURGE LOGIC
+//     //////////////////////////////////////////////////////
+
+//     let surgeActive = false;
+
+//     let multiplier = 1;
+
+//     if (
+//       weather.isRaining &&
+//       payoutConfig.surgeConfig?.enabled
+//     ) {
+
+//       surgeActive = true;
+
+//       multiplier =
+//         payoutConfig.surgeConfig.multiplier || 1.5;
+//     }
+
+//     //////////////////////////////////////////////////////
+//     // SURGE AMOUNT
+//     //////////////////////////////////////////////////////
+
+//     let surgeAmount = 0;
+
+//     if (surgeActive) {
+
+//       surgeAmount =
+//         payoutConfig.basePay *
+//         (multiplier - 1);
+//     }
+
+//     //////////////////////////////////////////////////////
+//     // RESPONSE
+//     //////////////////////////////////////////////////////
+
+//     return res.status(200).json({
+//       success: true,
+
+//       data: {
+
+//         riderId,
+
+//         pincode,
+
+//         weather: {
+//           isRaining: weather.isRaining
+//         },
+
+//         surgeActive,
+
+//         multiplier,
+
+//         surgeAmount
+//       }
+//     });
+
+//   } catch (err) {
+
+//     console.error(err);
+
+//     return res.status(500).json({
+//       success: false,
+//       message: err.message
+//     });
+//   }
+// };
+
+async function getSurgeStatus(req, res) {
+
+  try {
+
+    //////////////////////////////////////////////////////
+    // RIDER FROM TOKEN
+    //////////////////////////////////////////////////////
+
+    const riderId = req.rider.id;
+
+    //////////////////////////////////////////////////////
+    // FETCH RIDER
+    //////////////////////////////////////////////////////
+
+    const rider = await prisma.rider.findUnique({
+      where: {
+        id: riderId
+      },
+
+      include: {
+        location: true
+      }
+    });
+
+    if (!rider || !rider.location?.pincode) {
+      return res.status(400).json({
+        success: false,
+        message: "Rider pincode not found"
+      });
+    }
+
+    const pincode = rider.location.pincode;
+
+    //////////////////////////////////////////////////////
+    // FETCH PAYOUT CONFIG
+    //////////////////////////////////////////////////////
+
+    const payoutConfig =
+      await prisma.payoutConfig.findFirst({
+
+        where: {
+          isActive: true,
+
+          pincodeIds: {
+            has: pincode
+          }
+        },
+
+        orderBy: {
+          version: "desc"
+        }
+      });
+
+    //////////////////////////////////////////////////////
+    // NO CONFIG
+    //////////////////////////////////////////////////////
+
+    if (!payoutConfig) {
+
+      return res.status(200).json({
+        success: true,
+
+        data: {
+          surgeActive: false,
+          surgeAmount: 0
+        }
+      });
+    }
+
+    //////////////////////////////////////////////////////
+    // SURGE LOGIC
+    //////////////////////////////////////////////////////
+
+    const surgeConfig =
+      payoutConfig.surgeConfig || {};
+
+    const surgeActive =
+      surgeConfig.enabled === true;
+
+    //////////////////////////////////////////////////////
+    // SURGE AMOUNT
+    //////////////////////////////////////////////////////
+
+    let surgeAmount = 0;
+
+    if (surgeActive) {
+
+      const multiplier =
+        surgeConfig.multiplier || 1;
+
+      surgeAmount =
+        payoutConfig.basePay *
+        (multiplier - 1);
+    }
+
+    //////////////////////////////////////////////////////
+    // RESPONSE
+    //////////////////////////////////////////////////////
+
+    return res.status(200).json({
+      success: true,
+
+      data: {
+
+      
+
+        surgeActive,
+
+        multiplier:
+          surgeConfig.multiplier || 1,
+
+        surgeAmount
+      }
+    });
+
+  } catch (err) {
+
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
+  }
+};
+
+
+module.exports = { createOrder,confirmOrder,acceptOrder,rejectOrder,getOrderDetails,pickupOrder,deliverOrder, cancelOrder,getOrdersByRider,getDeliveredOrdersByRider,getCancelledOrdersByRider,getSurgeStatus};
  
  

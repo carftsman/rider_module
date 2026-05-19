@@ -1,174 +1,10 @@
-// controllers/riderEarningsController.js
-const RiderDailyEarnings = require("../models/RiderDailyEarnings");
-const RiderOrderEarnings = require("../models/RiderOrderEarnings");
-const Order = require("../models/OrderSchema");
-const { getISOWeekRange , getCurrentISOWeek} = require("../helpers/getWeekNumber");
-//1 Today / Week / Month cards
-exports.getEarningsSummary = async (req, res) => {
-  try {
-    const riderId = req.rider._id;
+const prisma = require('../config/prisma');
 
-    const today = new Date();
-    today.setHours(0,0,0,0);
-
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - today.getDay());
-
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-
-    const [todayData] = await RiderDailyEarnings.find({
-      riderId,
-      date: today
-    });
-
-    const weekAgg = await RiderDailyEarnings.aggregate([
-      { $match: { riderId, date: { $gte: weekStart } } },
-      { $group: {
-          _id: null,
-          total: { $sum: "$totalEarnings" }
-      }}
-    ]);
-
-    const monthAgg = await RiderDailyEarnings.aggregate([
-      { $match: { riderId, date: { $gte: monthStart } } },
-      { $group: {
-          _id: null,
-          base: { $sum: "$baseEarnings" },
-          incentives: { $sum: "$incentiveEarnings" },
-          tips: { $sum: "$tips" },
-          total: { $sum: "$totalEarnings" }
-      }}
-    ]);
-
-    res.json({
-      today: {
-        orders: todayData?.ordersCount || 0,
-        baseEarnings: todayData?.baseEarnings || 0,
-        incentives: todayData?.incentiveEarnings || 0,
-        tips: todayData?.tips || 0,
-        total: todayData?.totalEarnings || 0
-      },
-      week: {
-        total: weekAgg[0]?.total || 0
-      },
-      month: {
-        baseEarnings: monthAgg[0]?.base || 0,
-        incentives: monthAgg[0]?.incentives || 0,
-        tips: monthAgg[0]?.tips || 0,
-        total: monthAgg[0]?.total || 0
-      }
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Internal server error" });
-  }
-};
-
-
-// exports.new_getEarningsSummary = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-
-//     // -----------------------------
-//     // DATE RANGES (LOCAL DAY)
-//     // -----------------------------
-//     const now = new Date();
-
-//     const todayStart = new Date(now);
-//     todayStart.setHours(0, 0, 0, 0);
-
-//     const todayEnd = new Date(now);
-//     todayEnd.setHours(23, 59, 59, 999);
-
-//     // ISO week (Mon → Sun)
-//     const current = getCurrentISOWeek();
-//     const { start: weekStart, end: weekEnd } =
-//       getISOWeekRange(current.week, current.year);
-
-//     // Month start
-//     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-
-//     // -----------------------------
-//     // FETCH ALL REQUIRED ORDERS
-//     // -----------------------------
-//     const orders = await Order.find({
-//       riderId,
-//       orderStatus: "DELIVERED",
-//       updatedAt: { $gte: monthStart, $lte: todayEnd }
-//     });
-
-//     // -----------------------------
-//     // CALCULATIONS
-//     // -----------------------------
-//     let todayOrders = 0;
-//     let todayTotal = 0;
-
-//     let weekTotal = 0;
-
-//     let monthBase = 0;
-//     let monthIncentives = 0;
-//     let monthTips = 0;
-//     let monthTotal = 0;
-
-//     orders.forEach(order => {
-//       const deliveredAt = new Date(order.updatedAt);
-//       const earning = order.riderEarning || {};
-
-//       const totalEarning = earning.totalEarning || 0;
-//       const basePay = earning.basePay || 0;
-//       const incentive = earning.surgePay || 0;
-//       const tips = earning.tips || 0;
-
-//       // ---- TODAY ----
-//       if (deliveredAt >= todayStart && deliveredAt <= todayEnd) {
-//         todayOrders += 1;
-//         todayTotal += totalEarning;
-//       }
-
-//       // ---- THIS WEEK ----
-//       if (deliveredAt >= weekStart && deliveredAt <= weekEnd) {
-//         weekTotal += totalEarning;
-//       }
-
-//       // ---- THIS MONTH ----
-//       monthBase += basePay;
-//       monthIncentives += incentive;
-//       monthTips += tips;
-//       monthTotal += totalEarning;
-//     });
-
-//     // -----------------------------
-//     // RESPONSE (SAME SHAPE)
-//     // -----------------------------
-//     res.json({
-//       today: {
-//         orders: todayOrders,
-//         baseEarnings: 0,            // kept for compatibility
-//         incentives: 0,
-//         tips: 0,
-//         total: todayTotal
-//       },
-//       week: {
-//         total: weekTotal
-//       },
-//       month: {
-//         baseEarnings: monthBase,
-//         incentives: monthIncentives,
-//         tips: monthTips,
-//         total: monthTotal
-//       }
-//     });
-
-//   } catch (err) {
-//     console.error("Earnings summary error:", err);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
+const { getISOWeekRange, getCurrentISOWeek } = require("../helpers/getWeekNumber");
 
 exports.new_getEarningsSummary = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
 
     const now = new Date();
 
@@ -184,10 +20,18 @@ exports.new_getEarningsSummary = async (req, res) => {
 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const orders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: monthStart, $lte: todayEnd }
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId: riderId,
+        orderStatus: "DELIVERED",
+        updatedAt: {
+          gte: monthStart,
+          lte: todayEnd
+        }
+      },
+      include: {
+        OrderRiderEarning: true
+      }
     });
 
     let todayOrders = 0;
@@ -196,9 +40,13 @@ exports.new_getEarningsSummary = async (req, res) => {
     let todayIncentives = 0;
     let todayTips = 0;
 
+    let weekOrders = 0;
+    let weekBase = 0;
+    let weekIncentives = 0;
+    let weekTips = 0;
     let weekTotal = 0;
 
-    let monthOrders = 0;          // ✅ ADDED
+    let monthOrders = 0;
     let monthBase = 0;
     let monthIncentives = 0;
     let monthTips = 0;
@@ -206,14 +54,14 @@ exports.new_getEarningsSummary = async (req, res) => {
 
     orders.forEach(order => {
       const deliveredAt = new Date(order.updatedAt);
-      const earning = order.riderEarning || {};
+      const earning = order.OrderRiderEarning || {};
 
       const totalEarning = earning.totalEarning || 0;
       const basePay = earning.basePay || 0;
       const incentive = earning.surgePay || 0;
       const tips = earning.tips || 0;
 
-      // ---- TODAY ----
+      //Today
       if (deliveredAt >= todayStart && deliveredAt <= todayEnd) {
         todayOrders += 1;
         todayTotal += totalEarning;
@@ -224,11 +72,15 @@ exports.new_getEarningsSummary = async (req, res) => {
 
       // ---- THIS WEEK ----
       if (deliveredAt >= weekStart && deliveredAt <= weekEnd) {
+        weekOrders += 1;
+        weekBase += basePay;
+        weekIncentives += incentive;
+        weekTips += tips;
         weekTotal += totalEarning;
       }
 
-      // ---- THIS MONTH ----
-      monthOrders += 1;           // ✅ ADDED
+      //MONTH 
+      monthOrders += 1;
       monthBase += basePay;
       monthIncentives += incentive;
       monthTips += tips;
@@ -244,10 +96,14 @@ exports.new_getEarningsSummary = async (req, res) => {
         total: todayTotal
       },
       week: {
+        orders: weekOrders,
+        baseEarnings: weekBase,
+        incentives: weekIncentives,
+        tips: weekTips,
         total: weekTotal
       },
       month: {
-        orders: monthOrders,      // ✅ ADDED
+        orders: monthOrders,
         baseEarnings: monthBase,
         incentives: monthIncentives,
         tips: monthTips,
@@ -263,55 +119,39 @@ exports.new_getEarningsSummary = async (req, res) => {
 
 
 
-// 2 Bar chart (Mon–Sun)
-exports.getWeeklyChart = async (req, res) => {
-  try {
-    const riderId = req.rider._id;
-
-    const start = new Date();
-    start.setDate(start.getDate() - start.getDay());
-    start.setHours(0,0,0,0);
-
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-
-    const data = await RiderDailyEarnings.find({
-      riderId,
-      date: { $gte: start, $lte: end }
-    }).sort({ date: 1 });
-
-    const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-
-    const response = days.map((day, i) => {
-      const d = data.find(x => new Date(x.date).getDay() === i);
-      return {
-        day,
-        amount: d?.totalEarnings || 0,
-        orders: d?.ordersCount || 0
-      };
-    });
-
-    res.json({ week: response });
-
-  } catch (err) {
-    res.status(500).json({ message: "Internal server error" });
-  }
-};
-
-
+// Bar chart (Mon–Sun)
 exports.new_getWeeklyChart = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id; //Prisma id
 
-    // ---- CURRENT ISO WEEK ----
+    const rider = await prisma.rider.findUnique({
+      where: {
+        id: riderId
+      },
+      select: {
+        riderType: true
+      }
+    });
+
+    const riderType = rider?.riderType;
+
+    
     const current = getCurrentISOWeek();
     const { start, end } = getISOWeekRange(current.week, current.year);
 
-    // ---- FETCH DELIVERED ORDERS FOR WEEK ----
-    const orders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: start, $lte: end }
+   
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId,
+        orderStatus: "DELIVERED",
+        updatedAt: {
+          gte: start,
+          lte: end
+        }
+      },
+      include: {
+        OrderRiderEarning: true
+      }
     });
 
     // ---- GROUP BY DAY ----
@@ -328,7 +168,7 @@ exports.new_getWeeklyChart = async (req, res) => {
       }
 
       dayMap[key].orders += 1;
-      dayMap[key].amount += order.riderEarning?.totalEarning || 0;
+      dayMap[key].amount += order.OrderRiderEarning?.totalEarning || 0;
     });
 
     // ---- BUILD WEEK (MON → SUN) ----
@@ -348,7 +188,22 @@ exports.new_getWeeklyChart = async (req, res) => {
       });
     }
 
-    res.json({ week });
+    if (riderType === "COMPANY_EMPLOYEE") {
+      return res.json({
+        riderType,
+        week: week.map(day => ({
+          day: day.day,
+          orders: day.orders
+        }))
+      });
+    }
+
+   res.json({
+    riderType,
+    week
+    });
+
+    // res.json({ week });
 
   } catch (err) {
     console.error("Weekly chart error:", err);
@@ -356,149 +211,23 @@ exports.new_getWeeklyChart = async (req, res) => {
   }
 };
 
-
-
-// 3 Daily earnings list
-
-// exports.getDailyEarnings = async (req, res) => {
-//     // console.log("hited daily earnings controller");
-//     // console.log("Request query:", req.query); // Debugging line
-//     // console.log("Rider ID:", req.rider._id); // Debugging line
-//   try {
-//     const riderId = req.rider._id;
-//     const date = new Date(req.query.date);
-//     date.setHours(0,0,0,0);
-
-//     const daily = await RiderDailyEarnings.findOne({ riderId, date });
-//     const orders = await RiderOrderEarnings.find({
-//       riderId,
-//       completedAt: {
-//         $gte: date,
-//         $lte: new Date(date.getTime() + 86400000)
-//       }
-//     }).sort({ completedAt: -1 });
-
-//     res.json({
-//       date,
-//       totalEarnings: daily?.totalEarnings || 0,
-//       items: orders.map(o => ({
-//         type: "DELIVERY",
-//         orderId: o.orderId,
-//         amount: o.earnings.totalAmount,
-//         time: o.completedAt
-//       }))
-//     });
-
-//   } catch (err) {
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-
-exports.getDailyEarnings = async (req, res) => {
-  try {
-    const riderId = req.rider._id;
-
-    let year, month, day;
-
-    // -----------------------------
-    //SAFE DATE PARSING (LOCAL)
-    // -----------------------------
-    if (req.query.date) {
-      // Expecting YYYY-MM-DD
-      const parts = req.query.date.split("-").map(Number);
-
-      if (parts.length !== 3) {
-        return res.status(400).json({
-          message: "Invalid date format. Use YYYY-MM-DD"
-        });
-      }
-
-      [year, month, day] = parts;
-
-      if (!year || !month || !day) {
-        return res.status(400).json({
-          message: "Invalid date format. Use YYYY-MM-DD"
-        });
-      }
-    } else {
-      const today = new Date();
-      year = today.getFullYear();
-      month = today.getMonth() + 1;
-      day = today.getDate();
-    }
-
-    // -----------------------------
-    //CREATE LOCAL DAY RANGE
-    // -----------------------------
-    const baseDate = new Date(year, month - 1, day);
-
-    const startOfDay = new Date(baseDate);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(baseDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    // -----------------------------
-    //FETCH DAILY AGGREGATE
-    // -----------------------------
-    const daily = await RiderDailyEarnings.findOne({
-      riderId,
-      date: startOfDay
-    });
-
-    // -----------------------------
-    // FETCH ORDERS FOR THE DAY
-    // -----------------------------
-    const orders = await RiderOrderEarnings.find({
-      riderId,
-      completedAt: {
-        $gte: startOfDay,
-        $lte: endOfDay
-      }
-    }).sort({ completedAt: -1 });
-
-    // -----------------------------
-    // FORMAT DATE FOR UI
-    // -----------------------------
-    const responseDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-
-    // -----------------------------
-    // RESPONSE
-    // -----------------------------
-    res.json({
-      date: responseDate,
-      totalEarnings: daily?.totalEarnings || 0,
-      items: orders.map(o => ({
-        type: "DELIVERY",
-        orderId: o.orderId,
-        amount: o.earnings?.totalAmount || 0,
-        time: o.completedAt
-      }))
-    });
-
-  } catch (err) {
-    console.error("Daily earnings error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
-};
-
 exports.new_getDailyEarnings = async (req, res) => {
   try {
     console.log("Hitted new daily earnings controller");
-    const riderId = req.rider._id;
+
+    const riderId = req.rider.id; 
 
     let year, month, day;
 
-    // -----------------------------
-    // SAFE DATE PARSING (LOCAL)
-    // -----------------------------
     if (req.query.date) {
       const parts = req.query.date.split("-").map(Number);
+
       if (parts.length !== 3) {
         return res.status(400).json({
           message: "Invalid date format. Use YYYY-MM-DD"
         });
       }
+
       [year, month, day] = parts;
     } else {
       const today = new Date();
@@ -515,25 +244,48 @@ exports.new_getDailyEarnings = async (req, res) => {
     const endOfDay = new Date(baseDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // -----------------------------
-    // FETCH ORDERS (DELIVERED ONLY)
-    // -----------------------------
-    const orders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: startOfDay, $lte: endOfDay }
-    }).sort({ updatedAt: -1 });
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId: riderId,
+        orderStatus: "DELIVERED",
+        updatedAt: {
+          gte: startOfDay,
+          lte: endOfDay
+        }
+      },
+      include: {
+        OrderRiderEarning: true
+      },
+      orderBy: {
+        updatedAt: "desc"
+      }
+    });
+
+    console.log("orders : " ,orders.length)
 
     let totalEarnings = 0;
+    let baseEarnings = 0;
+    let incentives = 0;
     const items = [];
 
     orders.forEach(order => {
-      const earning = order.riderEarning || {};
-      const amount = earning.totalEarning || 0;
+      const earning = order.OrderRiderEarning;
+
+      const amount = earning?.totalEarning || 0;
+
+      const baseAmount =
+        earning?.basePay || 0;
+
+      const incentiveAmount =
+        earning?.surgePay || 0;
 
       totalEarnings += amount;
 
-      // Delivery row
+      baseEarnings += baseAmount;
+
+      incentives += incentiveAmount;
+
+      // DELIVERY ENTRY
       items.push({
         type: "DELIVERY",
         orderId: order.orderId,
@@ -541,128 +293,63 @@ exports.new_getDailyEarnings = async (req, res) => {
         time: order.updatedAt
       });
 
-      // Bonus row (if any incentive/peak)
-      if (earning.surgePay && earning.surgePay > 0) {
-        items.push({
-          type: "BONUS",
-          title: "Peak Hour Bonus",
-          amount: earning.surgePay,
-          time: order.updatedAt
-        });
-      }
+      // BONUS ENTRY
+      // if (surgePay > 0) {
+      //   items.push({
+      //     type: "BONUS",
+      //     title: "Peak Hour Bonus",
+      //     amount: surgePay,
+      //     time: order.updatedAt
+      //   });
+      // }
     });
 
-    // -----------------------------
-    // RESPONSE
-    // -----------------------------
     const responseDate = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 
     res.json({
       date: responseDate,
       totalEarnings,
-      items
+      baseEarnings,
+      incentives,
+      items,
+      count: items.length
     });
 
   } catch (err) {
-    console.error("Daily earnings error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
-};
-
-
-
-// 4
-
-// exports.getDeliveryEarnings = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     const { orderId } = req.params;
-
-//     const earning = await Order.findOne({ riderId, orderId });
-//     // const dummy = await Order.findOne({ riderId, orderId });
-//     console.log("dummy data:", earning); // Debugging line
-
-//     if (!earning) {
-//       return res.status(404).json({ message: "Not found" });
-//     }
-
-//     res.json({
-//     //   orderId,
-//       store: earning?.pickupAddress?.name || "Unknown Store",
-//       totalEarnings: earning?.earnings?.totalAmount || 0,
-//       breakup: earning?.earnings || {},
-//       status: "COMPLETED",
-//       time: earning?.completedAt || null
-//     });
-
-//   } catch (err) {
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-
-exports.getDeliveryEarnings = async (req, res) => {
-  try {
-    const riderId = req.rider._id;
-    const { orderId } = req.params;
-
-    const order = await Order.findOne({ riderId, orderId });
-
-    console.log("Order data:", order);
-
-    if (!order) {
-      return res.status(404).json({ message: "Order not found" });
-    }
-    console.log("Rider Earning data:", order.riderEarning.total);
-res.json({
-  orderId: order.orderId,
-  store: order.vendorShopName,
-  totalEarnings:
-    order.riderEarning?.total ??
-    order.riderEarning?.totalEarning ??
-    10,
-
-  breakup: {
-    baseFare: order.riderEarning?.baseFare || 0,
-    distanceFare: order.riderEarning?.distanceFare || 0,
-    surgePay: order.riderEarning?.surgePay || 0,
-    incentive: order.riderEarning?.incentive || 0,
-    tips: order.riderEarning?.tips || 0
-  },
-
-  status: order.orderStatus,
-  time: order.updatedAt
-});
-
-
-  } catch (err) {
     console.error("Delivery earnings error:", err);
-    res.status(500).json({ message: "Internal server error" });
+    return res.status(500).json({
+      message: "Internal server error",
+      error: err.message
+    });
   }
 };
 
 exports.new_getDeliveryEarnings = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
     const { orderId } = req.params;
-    console.log("Fetching earnings for Order ID:", orderId);
-    console.log("Rider ID:", riderId);
-    const order = await Order.findOne({ riderId, orderId });
-     console.log(order);
+    const order = await prisma.order.findFirst({
+      where: {
+        riderId: riderId,
+        orderId: orderId
+      },
+      include: {
+        OrderRiderEarning: true
+      }
+    });
     if (!order) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    const riderEarning = order.riderEarning || {};
+    const riderEarning = order.OrderRiderEarning || {};
 
     res.json({
       orderId: order.orderId,
       store: order.vendorShopName,
 
-      // ✅ FIX: correct field
       totalEarnings: riderEarning.totalEarning || 0,
 
       breakup: {
-        // ✅ FIX: correct field names
         basePay: riderEarning.basePay || 0,
         distancePay: riderEarning.distancePay || 0,
         surgePay: riderEarning.surgePay || 0,
@@ -680,228 +367,6 @@ exports.new_getDeliveryEarnings = async (req, res) => {
 };
 
 
-
-// 5
-// exports.getWeeklyEarnings = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-
-//     const start = new Date();
-//     start.setDate(start.getDate() - start.getDay());
-//     start.setHours(0,0,0,0);
-
-//     const data = await RiderDailyEarnings.find({
-//       riderId,
-//       date: { $gte: start }
-//     }).sort({ date: -1 });
-//     console.log("Weekly earnings data:", data); // Debugging line
-//     res.json({
-//       weekRange: "Current Week",
-//       total: data.reduce((s, d) => s + d.totalEarnings, 0),
-//       days: data.map(d => ({
-//         day: d.date.toDateString(),
-//         orders: d.ordersCount,
-//         amount: d.totalEarnings
-//       }))
-//     });
-
-//   } catch (err) {
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-
-exports.getWeeklyEarnings = async (req, res) => {
-  try {
-    const riderId = req.rider._id;
-    let { week, year } = req.query;
-
-    // ---- DEFAULT CURRENT ISO WEEK ----
-    if (!week || !year) {
-      const current = getCurrentISOWeek();
-      week = current.week;
-      year = current.year;
-    }
-
-    const { start, end } = getISOWeekRange(Number(week), Number(year));
-
-    // ---- FETCH ORDERS FOR THE WEEK ----
-    const orders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: start, $lte: end }
-    }).sort({ updatedAt: 1 });
-
-    // ---- GROUP ORDERS BY DAY ----
-    const ordersByDay = {};
-
-    orders.forEach(order => {
-      const dayKey = new Date(order.updatedAt).toDateString();
-
-      if (!ordersByDay[dayKey]) {
-        ordersByDay[dayKey] = [];
-      }
-
-      ordersByDay[dayKey].push({
-        orderId: order.orderId,
-        amount:
-          order.riderEarning?.total ??
-          order.riderEarning?.totalEarning ??
-          0,
-        time: order.updatedAt
-      });
-    });
-
-    // ---- BUILD 7 DAYS RESPONSE (MON → SUN) ----
-    const days = [];
-
-    for (let i = 0; i < 7; i++) {
-      const day = new Date(start);
-      day.setDate(start.getDate() + i);
-
-      const dayKey = day.toDateString();
-      const dayOrders = ordersByDay[dayKey] || [];
-
-      const totalAmount = dayOrders.reduce(
-        (sum, o) => sum + o.amount,
-        0
-      );
-
-      days.push({
-        day: day.toLocaleDateString("en-IN", { weekday: "short" }),
-        date: day.toISOString().split("T")[0],
-        ordersCount: dayOrders.length,
-        amount: totalAmount,
-        orders: dayOrders
-      });
-    }
-
-    res.json({
-      week: Number(week),
-      year: Number(year),
-      weekRange: `${start.toDateString()} - ${end.toDateString()}`,
-      total: days.reduce((s, d) => s + d.amount, 0),
-      days
-    });
-
-  } catch (err) {
-    console.error("Weekly earnings error:", err);
-    res.status(500).json({ message: "Internal server error" });
-  }
-};
-
-
-// exports.new_getWeeklyEarnings = async (req, res) => {
-//   try {
-//     const riderId = req.rider._id;
-//     let { week, year } = req.query;
-
-//     // ---- DEFAULT CURRENT ISO WEEK ----
-//     if (!week || !year) {
-//       const current = getCurrentISOWeek();
-//       week = current.week;
-//       year = current.year;
-//     }
-
-//     const { start, end } = getISOWeekRange(Number(week), Number(year));
-//     console.log("heloo" , start , end)
-//     // ---- FETCH ORDERS FOR CURRENT WEEK ----
-//     const orders = await Order.find({
-//       riderId,
-//       orderStatus: "DELIVERED",
-//       updatedAt: { $gte: start, $lte: end }
-//     }).sort({ updatedAt: -1 });
-
-//     // ---- GROUP ORDERS BY DAY ----
-//     const ordersByDay = {};
-
-//     orders.forEach(order => {
-//       const dayKey = new Date(order.updatedAt).toDateString();
-
-//       if (!ordersByDay[dayKey]) {
-//         ordersByDay[dayKey] = {
-//           ordersCount: 0,
-//           amount: 0,
-//           orders: []
-//         };
-//       }
-
-//       const earning = order.riderEarning?.totalEarning || 0;
-
-//       ordersByDay[dayKey].ordersCount += 1;
-//       ordersByDay[dayKey].amount += earning;
-
-//       ordersByDay[dayKey].orders.push({
-//         orderId: order.orderId,
-//         amount: earning,
-//         time: order.updatedAt
-//       });
-//     });
-
-//     // ---- BUILD WEEK DAYS (MON → SUN) ----
-//     const days = [];
-
-//     for (let i = 0; i < 7; i++) {
-//       const day = new Date(start);
-//       day.setDate(start.getDate() + i);
-
-//       const key = day.toDateString();
-//       const data = ordersByDay[key] || {
-//         ordersCount: 0,
-//         amount: 0,
-//         orders: []
-//       };
-
-//       days.push({
-//         day: day.toLocaleDateString("en-IN", { weekday: "long" }),
-//         date: day.toISOString().split("T")[0],
-//         orders: data.ordersCount,
-//         amount: data.amount,
-//         deliveries: data.orders     // delivered items array
-//       });
-//     }
-
-//     const total = days.reduce((sum, d) => sum + d.amount, 0);
-
-//     // ---- LAST WEEK COMPARISON ----
-//     const lastWeekStart = new Date(start);
-//     lastWeekStart.setDate(start.getDate() - 7);
-
-//     const lastWeekEnd = new Date(end);
-//     lastWeekEnd.setDate(end.getDate() - 7);
-
-//     const lastWeekOrders = await Order.find({
-//       riderId,
-//       orderStatus: "DELIVERED",
-//       updatedAt: { $gte: lastWeekStart, $lte: lastWeekEnd }
-//     });
-
-//     const lastWeekTotal = lastWeekOrders.reduce(
-//       (sum, o) => sum + (o.riderEarning?.totalEarning || 0),
-//       0
-//     );
-
-//     const changePercent =
-//       lastWeekTotal > 0
-//         ? Math.round(((total - lastWeekTotal) / lastWeekTotal) * 100)
-//         : 0;
-
-//     // ---- RESPONSE ----
-//     res.json({
-//       week: Number(week),
-//       year: Number(year),
-//       weekRange: `${start.toDateString()} - ${end.toDateString()}`,
-//       total,
-//       changePercent,
-//       days
-//     });
-
-//   } catch (err) {
-//     console.error("Weekly earnings error:", err);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
-
-
 function toISTDate(date) {
   return new Date(
     new Date(date).toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
@@ -910,7 +375,8 @@ function toISTDate(date) {
 
 exports.new_getWeeklyEarnings = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id || req.rider._id;
+  
     let { week, year } = req.query;
 
     if (!week || !year) {
@@ -921,11 +387,21 @@ exports.new_getWeeklyEarnings = async (req, res) => {
 
     const { start, end } = getISOWeekRange(Number(week), Number(year));
 
-    const orders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: start, $lte: end }
-    }).sort({ updatedAt: -1 });
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId: String(riderId),
+        orderStatus: "DELIVERED",
+        updatedAt: { gte: start, lte: end }
+      },
+      select: {
+        orderId: true,
+        updatedAt: true,
+        OrderRiderEarning: {
+          select: { totalEarning: true }
+        }
+      },
+      orderBy: { updatedAt: "desc" }
+    });
 
     const ordersByDay = {};
 
@@ -941,7 +417,7 @@ exports.new_getWeeklyEarnings = async (req, res) => {
         };
       }
 
-      const earning = order.riderEarning?.totalEarning || 0;
+      const earning = order.OrderRiderEarning?.totalEarning || 0;
 
       ordersByDay[dayKey].ordersCount += 1;
       ordersByDay[dayKey].amount += earning;
@@ -975,6 +451,27 @@ exports.new_getWeeklyEarnings = async (req, res) => {
       });
     }
 
+    // if (riderType === "COMPANY_EMPLOYEE") {
+    //   return res.json({
+    //     riderType,
+    //     week: Number(week),
+    //     year: Number(year),
+    //     weekRange: `${toISTDate(start).toDateString()} - ${toISTDate(end).toDateString()}`,
+
+    //     totalOrders: days.reduce((sum, d) => sum + d.orders, 0),
+
+    //     days: days.map(day => ({
+    //       day: day.day,
+    //       date: day.date,
+    //       orders: day.orders,
+    //       deliveries: day.deliveries.map(d => ({
+    //         orderId: d.orderId,
+    //         time: d.time
+    //       }))
+    //     }))
+    //   });
+    // }
+
     const total = days.reduce((sum, d) => sum + d.amount, 0);
 
     const lastWeekStart = new Date(start);
@@ -983,14 +480,21 @@ exports.new_getWeeklyEarnings = async (req, res) => {
     const lastWeekEnd = new Date(end);
     lastWeekEnd.setDate(end.getDate() - 7);
 
-    const lastWeekOrders = await Order.find({
-      riderId,
-      orderStatus: "DELIVERED",
-      updatedAt: { $gte: lastWeekStart, $lte: lastWeekEnd }
+    const lastWeekOrders = await prisma.order.findMany({
+      where: {
+        riderId: String(riderId),
+        orderStatus: "DELIVERED",
+        updatedAt: { gte: lastWeekStart, lte: lastWeekEnd }
+      },
+      select: {
+        OrderRiderEarning: {
+          select: { totalEarning: true }
+        }
+      }
     });
 
     const lastWeekTotal = lastWeekOrders.reduce(
-      (sum, o) => sum + (o.riderEarning?.totalEarning || 0),
+      (sum, o) => sum + (o.OrderRiderEarning?.totalEarning || 0),
       0
     );
 
@@ -998,6 +502,7 @@ exports.new_getWeeklyEarnings = async (req, res) => {
       lastWeekTotal > 0
         ? Math.round(((total - lastWeekTotal) / lastWeekTotal) * 100)
         : 0;
+
 
     res.json({
       week: Number(week),
@@ -1010,7 +515,7 @@ exports.new_getWeeklyEarnings = async (req, res) => {
 
   } catch (err) {
     console.error("Weekly earnings error:", err);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: err.message });
   }
 };
 

@@ -1,28 +1,20 @@
-const Rider = require("../models/RiderModel");
-
-
-
+const prisma=require('../config/prisma');
 
 exports.markOrderStateReady = async (req, res) => {
   try {
-    const riderId = req.rider._id;
-
-    const updatedRider = await Rider.findOneAndUpdate(
-      {
-        _id: riderId,
-        orderState: { $ne: "READY" } // only update if NOT READY
+    const riderId = req.rider.id; // prisma uses id not _id
+     console.log("ready state api : " ,riderId)
+    const updatedRider = await prisma.rider.updateMany({
+      where: {
+        id: riderId,
+        NOT: { orderState: "READY" }
       },
-      {
-        $set: {
-          orderState: "READY",
-          currentOrderId: null
-        }
-      },
-      { new: true }
-    );
-
-    // If null → already READY or rider not found
-    if (!updatedRider) {
+      data: {
+        orderState: "READY",
+        currentOrderId: null
+      }
+    });
+    if (updatedRider.count === 0) {
       return res.status(200).json({
         success: true,
         message: "Order state already READY"
@@ -31,8 +23,7 @@ exports.markOrderStateReady = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Order state changed to READY",
-      orderState: updatedRider.orderState
+      message: "Order state changed to READY"
     });
 
   } catch (error) {
@@ -43,5 +34,4 @@ exports.markOrderStateReady = async (req, res) => {
     });
   }
 };
-
 

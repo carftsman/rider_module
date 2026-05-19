@@ -1,16 +1,9 @@
-const Order = require("../models/OrderSchema");
-const Rider = require("../models/RiderModel");
-// const CashDeposit = require("../models/CashDeposit");
-// const WalletTransaction = require("../models/WalletTransaction");
-
-// ==============================
-// DELIVER ORDER (POST)
-// ==============================
+const prisma=require('../config/prisma');
 
 exports.markDelivered = async (req, res) => {
   try {
 
-    // ✅ KEEP AS ObjectId
+    // KEEP AS ObjectId
     const riderId = req.rider._id;
     const { orderId } = req.body;
 
@@ -44,9 +37,8 @@ exports.markDelivered = async (req, res) => {
       });
     }
 
-    // -----------------------------
-    // UPDATE ORDER
-    // -----------------------------
+    //  UPDATE ORDER
+  
 
     order.orderStatus = "DELIVERED";
     order.riderEarning.credited = true;
@@ -60,9 +52,8 @@ exports.markDelivered = async (req, res) => {
     // IST SAFE DATE
     const today = new Date().toLocaleDateString("en-CA");
 
-    // -----------------------------
-    // DAILY STATS
-    // -----------------------------
+    //  DAILY STATS
+   
 
     await RiderDailyStats.findOneAndUpdate(
       { riderId, date: today },
@@ -79,9 +70,8 @@ exports.markDelivered = async (req, res) => {
       { upsert: true }
     );
 
-    // -----------------------------
     // SLOT HISTORY
-    // -----------------------------
+
 
     const slotType = order.slotType || "NORMAL";
 
@@ -101,9 +91,8 @@ exports.markDelivered = async (req, res) => {
       { upsert: true }
     );
 
-    // -----------------------------
-    // COD CASH HANDLING
-    // -----------------------------
+    //  COD CASH HANDLING
+   
 
     let cashLimitExceeded = false;
 
@@ -160,9 +149,8 @@ exports.markDelivered = async (req, res) => {
   }
 };
 
-// ==============================
-// DASHBOARD (GET)
-// ==============================
+//  DASHBOARD (GET)
+
 
 exports.getDashboard = async (req, res) => {
   try {
@@ -190,9 +178,8 @@ exports.getDashboard = async (req, res) => {
   }
 };
 
-// ==============================
 // ORDERS HISTORY (GET)
-// ==============================
+
 
 exports.getOrders = async (req, res) => {
   try {
@@ -232,9 +219,8 @@ exports.getOrders = async (req, res) => {
   }
 };
 
-// ==============================
 // SLOT HISTORY (GET)
-// ==============================
+
 
 exports.getSlotHistory = async (req, res) => {
   try {
@@ -264,224 +250,36 @@ exports.getSlotHistory = async (req, res) => {
   }
 };
 
-// ==============================
-// WALLET (GET)
-// ==============================
 
 
-
-// exports.getCashInHand = async (req, res) => {
-//   try {
-//     if (!req.rider || !req.rider._id) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Rider info missing"
-//       });
-//     }
-
-//     const riderId = req.rider._id;
-
-//     // 1️⃣ Get rider cashInHand
-//     const rider = await Rider.findById(riderId)
-//       .select("cashInHand")
-//       .lean();
-
-//     if (!rider) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Rider not found"
-//       });
-//     }
-
-//     const cashLimit = rider.cashInHand?.limit || 2500;
-//     const cashBalance = rider.cashInHand?.balance || 0;
-
-//     // 2️⃣ Fetch COD orders (FIXED)
-//     const orders = await Order.find({
-//       riderId,
-//       "payment.mode": "COD"
-//     })
-//       .select(
-//         "orderId deliveryAddress.name pricing.totalAmount cod.amount cod.status cod.collectedAt cod.depositedAt"
-//       )
-//       .sort({ "cod.collectedAt": -1 })
-//       .lean();
-
-//     let pendingOrdersCount = 0;
-//     let pendingAmount = 0;
-
-//     const cashOrderHistory = orders.map(order => {
-//       // 🔥 FIX: fallback to pricing.totalAmount
-//       const amount =
-//         order.cod?.amount && order.cod.amount > 0
-//           ? order.cod.amount
-//           : order.pricing?.totalAmount || 0;
-
-//       const status = order.cod?.status ?? "PENDING";
-
-//       if (status === "PENDING") {
-//         pendingOrdersCount++;
-//         pendingAmount += amount;
-//       }
-
-//       return {
-//         orderId: order.orderId,
-//         customerName: order.deliveryAddress?.name || "Customer",
-//         amount,
-//         status,
-//         collectedAt: order.cod?.collectedAt || null,
-//         depositedAt: order.cod?.depositedAt || null
-//       };
-//     });
-
-//     // 3️⃣ Use rider's cashInHand.balance as totalCashCollected
-//     const totalCashCollected = cashBalance;
-
-//     return res.status(200).json({
-//       success: true,
-//       data: {
-//         cashSummary: {
-//           totalCashCollected,
-//           currency: "INR",
-//           toDeposit: pendingAmount,
-//           depositRequired: pendingAmount > cashLimit
-//         },
-//         lastDeposit: 0,
-//         pendingOrdersSummary: {
-//           pendingOrdersCount,
-//           pendingAmount
-//         },
-//         cashOrderHistory,
-//         rules: {
-//           depositWithinHours: 24,
-//           warningMessage:
-//             "Cash must be deposited within 24 hours of collection. Failure to deposit may result in account suspension."
-//         }
-//       }
-//     });
-//   } catch (error) {
-//     console.error("CASH SUMMARY ERROR:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to fetch cash summary"
-//     });
-//   }
-// };
-// exports.getCashInHand = async (req, res) => {
-//   try {
-//     const riderId = req.rider?._id;
-//     if (!riderId) return res.status(401).json({ success: false, message: "Unauthorized rider" });
-
-//     const rider = await Rider.findById(riderId).select("cashInHand").lean();
-//     if (!rider) return res.status(404).json({ success: false, message: "Rider not found" });
-
-//     const cashBalance = rider.cashInHand?.balance || 0;
-//     const cashLimit = rider.cashInHand?.limit || 2500;
-
-//     const orders = await Order.find({ riderId, "payment.mode": "COD" })
-//       .select("orderId deliveryAddress.name pricing.totalAmount cod")
-//       .sort({ "cod.collectedAt": -1 })
-//       .lean();
-//       let pendingOrdersCount = 0;
-// let pendingAmount = 0;
-
-// let totalCollected = 0;
-// let totalDeposited = 0;
-
-// let latestDeposit = 0;
-// let latestDepositAt = null;
-
-
-// const cashOrderHistory = orders.map(order => {
-//   const totalAmount =
-//     order.cod?.amount ||
-//     order.pricing?.totalAmount ||
-//     0;
-
-//   const depositedAmount = order.cod?.depositedAmount || 0;
-//   const pending = Math.max(totalAmount - depositedAmount, 0);
-
-//   // ✅ total COD collected
-//   totalCollected += totalAmount;
-
-//   // ✅ total deposited
-//   totalDeposited += depositedAmount;
-
-//   // ✅ latest deposit ONLY
-//   if (
-//     order.cod?.depositedAt &&
-//     (!latestDepositAt || order.cod.depositedAt > latestDepositAt)
-//   ) {
-//     latestDepositAt = order.cod.depositedAt;
-//     latestDeposit = depositedAmount;
-//   }
-
-//   if (pending > 0) {
-//     pendingOrdersCount++;
-//     pendingAmount += pending;
-//   }
-
-//   const status =
-//     pending === 0
-//       ? "DEPOSITED"
-//       : depositedAmount > 0
-//       ? "PARTIAL_DEPOSITED"
-//       : "PENDING";
-
-//   return {
-//     orderId: order.orderId,
-//     customerName: order.deliveryAddress?.name || "Customer",
-//     totalAmount,
-//     depositedAmount,
-//     pendingAmount: pending,
-//     status,
-//     collectedAt: order.cod?.collectedAt || null,
-//     depositedAt: order.cod?.depositedAt || null
-//   };
-// });
-
-//     return res.status(200).json({
-//       success: true,
-//       data: {
-//         cashSummary: {
-//           // totalCashCollected: pendingAmount + (cashBalance || 0),
-//           totalCashCollected: cashBalance ,
-
-//           currency: "INR",
-//           toDeposit: cashBalance,
-//           depositRequired: cashBalance > cashLimit
-//         },
-//         latestDeposit,
-//         pendingOrdersSummary: {
-//           pendingOrdersCount,
-//           pendingAmount
-//         },
-//         cashOrderHistory,
-//         rules: {
-//           depositWithinHours: 24,
-//           warningMessage: "Cash must be deposited within 24 hours of collection. Failure to deposit may result in account suspension."
-//         }
-//       }
-//     });
-
-//   } catch (error) {
-//     console.error("CASH SUMMARY ERROR:", error);
-//     return res.status(500).json({ success: false, message: "Failed to fetch cash summary" });
-//   }
-// };
 exports.getCashInHand = async (req, res) => {
   try {
-    const riderId = req.rider?._id;
+    const riderId = req.rider?.id;
+
     if (!riderId) {
-      return res.status(401).json({ success: false, message: "Unauthorized rider" });
+      return res.status(401).json({
+        success: false,
+        message: "Unauthorized rider",
+      });
     }
 
-    const orders = await Order.find({
-      riderId,
-      "payment.mode": "COD",
-    })
-      .sort({ createdAt: -1 })
-      .lean();
+    const orders = await prisma.order.findMany({
+      where: {
+        riderId,
+        OrderPayment: {
+          mode: "COD", 
+        },
+      },
+      include: {
+        OrderPayment: true,
+        OrderPricing: true,
+        OrderCod: true,
+        OrderDeliveryAddress: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
 
     let pendingOrdersCount = 0;
     let pendingAmount = 0;
@@ -491,17 +289,18 @@ exports.getCashInHand = async (req, res) => {
     const cashOrderHistory = [];
 
     for (const order of orders) {
-      // ✅ SAFE TOTAL AMOUNT
+      // SAFE TOTAL AMOUNT
       const totalAmount =
-        Number(order.cod?.amount) ||
-        Number(order.pricing?.totalAmount) ||
+        Number(order.OrderCod?.amount) ||
+        Number(order.OrderPricing?.totalAmount) ||
         0;
 
-      const depositedAmount = Number(order.cod?.depositedAmount || 0);
+      const depositedAmount = Number(
+        order.OrderCod?.depositedAmount || 0
+      );
 
       // ✅ SAFE PENDING
-      let pending =
-        Number(order.cod?.pendingAmount);
+      let pending = Number(order.OrderCod?.pendingAmount);
 
       if (isNaN(pending)) {
         pending = Math.max(totalAmount - depositedAmount, 0);
@@ -513,16 +312,18 @@ exports.getCashInHand = async (req, res) => {
       }
 
       if (
-        order.cod?.depositedAt &&
-        (!latestDepositAt || order.cod.depositedAt > latestDepositAt)
+        order.OrderCod?.depositedAt &&
+        (!latestDepositAt ||
+          order.OrderCod.depositedAt > latestDepositAt)
       ) {
-        latestDepositAt = order.cod.depositedAt;
+        latestDepositAt = order.OrderCod.depositedAt;
         latestDeposit = depositedAmount;
       }
 
       cashOrderHistory.push({
         orderId: order.orderId,
-        customerName: order.deliveryAddress?.name || "Customer",
+        customerName:
+          order.OrderDeliveryAddress?.name || "Customer",
         totalAmount,
         depositedAmount,
         pendingAmount: pending,
@@ -532,8 +333,8 @@ exports.getCashInHand = async (req, res) => {
             : depositedAmount > 0
             ? "PARTIAL_DEPOSITED"
             : "PENDING",
-        collectedAt: order.cod?.collectedAt || null,
-        depositedAt: order.cod?.depositedAt || null,
+        collectedAt: order.OrderCod?.collectedAt || null,
+        depositedAt: order.OrderCod?.depositedAt || null,
       });
     }
 
@@ -543,7 +344,7 @@ exports.getCashInHand = async (req, res) => {
       success: true,
       data: {
         cashSummary: {
-          totalCashCollected: pendingAmount, // ✅ WILL MATCH DB (2100)
+          totalCashCollected: pendingAmount,
           currency: "INR",
           toDeposit: pendingAmount,
           depositRequired: pendingAmount > 0,
@@ -573,12 +374,11 @@ exports.getCashInHand = async (req, res) => {
   }
 };
 
-
 exports.getWallet = async (req, res) => {
   try {
     const riderId = req.rider._id;
 
-    // 1️⃣ Fetch rider info
+    // 1️Fetch rider info
     const rider = await Rider.findById(riderId)
       .select("wallet cashInHand bankDetails")
       .lean();
@@ -590,7 +390,7 @@ exports.getWallet = async (req, res) => {
       });
     }
 
-    // 2️⃣ Calculate pending COD from delivered orders
+    // Calculate pending COD from delivered orders
     const codOrders = await Order.find({
       riderId,
       "payment.mode": "COD",
@@ -603,7 +403,7 @@ exports.getWallet = async (req, res) => {
       0
     );
 
-    // 3️⃣ Determine actions
+    // Determine actions
     const actions = {
       canWithdraw: rider.wallet.balance >= 500, // Minimum withdrawal threshold
       canAddMoney: true,
@@ -614,7 +414,7 @@ exports.getWallet = async (req, res) => {
       )
     };
 
-    // 4️⃣ Build response
+    //  Build response
     return res.status(200).json({
       success: true,
       data: {
