@@ -955,7 +955,7 @@ exports.getRiderOrderHistory = async (req, res) => {
         ...(filter !== "all" && { createdAt: dateFilter }),
       },
       include: {
-        OrderItems: true,
+        OrderItem: true,
         OrderPricing: true,
         OrderTracking: true,
         OrderPickupAddress: true,
@@ -1033,7 +1033,7 @@ exports.getRiderOrderHistory = async (req, res) => {
         orderId: order.orderId,
 
         items:
-          order.OrderItems?.map((item) => ({
+          order.OrderItem?.map((item) => ({
             itemName: item.itemName,
             quantity: item.quantity,
             price: item.price,

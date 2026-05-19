@@ -956,7 +956,7 @@ model ProgramTaskProgress {
   completedAt   DateTime?
   progressValue Float       @default(0)
   createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt @default(now())
+  updatedAt     DateTime    @default(now()) @updatedAt
   program       Program     @relation(fields: [programId], references: [id], onDelete: Cascade)
   rider         Rider       @relation(fields: [riderId], references: [id], onDelete: Cascade)
   task          ProgramTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
@@ -1650,10 +1650,30 @@ model DeliveryWebhookEvent {
   order Order? @relation(fields: [orderId], references: [orderId])
   rider Rider? @relation(fields: [riderId], references: [id])
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  riderWebhook RiderWebhook?
 
   @@index([deliveryId])
   @@index([orderId])
   @@index([riderId])
+}
+
+model RiderWebhook {
+  id String @id @default(uuid())
+
+  riderCode  String?
+  riderName  String?
+  riderPhone String?
+  vehicle    String?
+
+  latitude  Float?
+  longitude Float?
+
+  deliveryEvent DeliveryWebhookEvent @relation(fields: [deliveryEventId], references: [id])
+
+  deliveryEventId String @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
