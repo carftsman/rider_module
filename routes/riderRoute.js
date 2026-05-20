@@ -814,30 +814,6 @@ riderRouter.post(
   saveAppPermissions
 );
 
-
-
-// ============================================================
-//   GET PROFILE
-// ============================================================
-
-/**
- * @swagger
- * /api/rider/profile:
- *   get:
- *     tags: [Rider Profile]
- *     summary: Get rider complete profile
- *     security:
- *       - bearerAuth: [] 
- *     responses:
- *       200:
- *         description: Profile fetched successfully
- *       404:
- *         description: Rider not found
- */
-riderRouter.get("/rider/profile", riderAuthMiddleWare, getProfile);
-
-
-
 /**
  * @swagger
  * /api/rider/logout:

@@ -819,35 +819,6 @@ exports.saveAppPermissions = async (req, res) => {
   }
 };
 
-exports.getProfile = async (req, res) => {
-  try {
-    const riderId = req.rider.id; // ID extracted from JWT
-
-    const rider = await Rider.findById(riderId).select("-password -otp");
-
-    if (!rider) {
-      return res.status(404).json({
-        success: false,
-        message: "Rider not found",
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: "Profile fetched successfully",
-      data: rider,
-    });
-
-  } catch (err) {
-    console.error("Get Profile Error:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
-  }
-};
-
-
 exports.logoutOrDelete = async (req, res) => {
   try {
     const riderId = req.rider._id;

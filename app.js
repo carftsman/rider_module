@@ -37,7 +37,9 @@ const riderReferralRoutes = require("./routes/riderReferralRoutes");
 const joiningBonusRouter = require("./routes/adminJoiningBonusRoutes")
 const riderJoiningBonusRouter = require("./routes/riderJoiningBonusRoutes")
 const bannerRouter = require("./routes/bannerRoutes")
-
+const pincodeMetricsRoutes = require(
+  "./routes/pincodeMetricsRoutes"
+);
 const riderRatingRouter= require("./routes/riderRatingRoutes")
 const app = express();
 
@@ -104,7 +106,7 @@ app.use("/api/orders", require("./routes/orderRoutes"));
 app.use("/api/aerial", require("./routes/gpsRoutes"));
 app.use("/api/web", webIncentiveRoutes); 
 
-
+app.use("/api/metrics",pincodeMetricsRoutes);
 app.use("/api/rider/incentives", riderIncentivesRouter);
 app.use("/api", riderWeeklyRoutes);
 app.use("/api/notifications", notificationRoutes);

@@ -452,31 +452,34 @@ model SlotBooking {
 }
 
 model Order {
-  id                    String                 @id @default(uuid())
-  orderId               String                 @unique
-  riderId               String?
-  vendorShopName        String
-  orderStatus           OrderStatus            @default(CREATED)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  totalWeight           Float?
-  riderRatingId         String?
-  Rider                 Rider?                 @relation(fields: [riderId], references: [id])
-  RiderRating           RiderRating?           @relation(fields: [riderRatingId], references: [id])
-  OrderAllocation       OrderAllocation?
-  OrderCancelIssue      OrderCancelIssue?
-  chats                 OrderChat[]
-  OrderCod              OrderCod?
-  OrderDeliveryAddress  OrderDeliveryAddress?
-  OrderItem             OrderItem[]
-  OrderPayment          OrderPayment?
-  OrderPickupAddress    OrderPickupAddress?
-  OrderPricing          OrderPricing?
-  OrderRiderEarning     OrderRiderEarning?
-  OrderSettlement       OrderSettlement?
-  OrderSlotInfo         OrderSlotInfo?
-  OrderTracking         OrderTracking?
-  deliveryWebhookEvents DeliveryWebhookEvent[]
+  id                     String                 @id @default(uuid())
+  orderId                String                 @unique
+  riderId                String?
+  vendorShopName         String
+  orderStatus            OrderStatus            @default(CREATED)
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  totalWeight            Float?
+  riderRatingId          String?
+  Rider                  Rider?                 @relation(fields: [riderId], references: [id])
+  RiderRating            RiderRating?           @relation(fields: [riderRatingId], references: [id])
+  OrderAllocation        OrderAllocation?
+  OrderCancelIssue       OrderCancelIssue?
+  chats                  OrderChat[]
+  OrderCod               OrderCod?
+  OrderDeliveryAddress   OrderDeliveryAddress?
+  OrderItem              OrderItem[]
+  OrderPayment           OrderPayment?
+  OrderPickupAddress     OrderPickupAddress?
+  OrderPricing           OrderPricing?
+  OrderRiderEarning      OrderRiderEarning?
+  OrderSettlement        OrderSettlement?
+  OrderSlotInfo          OrderSlotInfo?
+  OrderTracking          OrderTracking?
+  storeId                String?
+  deliveryId             String?                @unique
+  deliveryConfirmationId String?                @unique
+  deliveryWebhookEvents  DeliveryWebhookEvent[]
 
   @@index([orderStatus])
   @@index([riderId])
@@ -612,29 +615,32 @@ model City {
 }
 
 model Pincode {
-  id           String        @id @default(cuid())
-  code         String
-  name         String
-  isActive     Boolean       @default(true)
-  cityId       String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  areas        Area[]
-  city         City          @relation(fields: [cityId], references: [id])
-  slotBookings SlotBooking[]
-  weeklySlots  WeeklySlot[]
+  id             String          @id @default(cuid())
+  code           String
+  name           String
+  isActive       Boolean         @default(true)
+  cityId         String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  areas          Area[]
+  city           City            @relation(fields: [cityId], references: [id])
+  slotBookings   SlotBooking[]
+  weeklySlots    WeeklySlot[]
+  pincodeMetrics PincodeMetrics?
 
   @@unique([code, cityId])
 }
 
 model Area {
-  id        String   @id @default(cuid())
-  name      String
-  isActive  Boolean  @default(true)
-  pincodeId String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  pincode   Pincode  @relation(fields: [pincodeId], references: [id])
+  id               String          @id @default(cuid())
+  name             String
+  isActive         Boolean         @default(true)
+  pincodeId        String
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  pincode          Pincode         @relation(fields: [pincodeId], references: [id])
+  metrics          PincodeMetrics? @relation(fields: [pincodeMetricsId], references: [id])
+  pincodeMetricsId String?
 
   @@unique([name, pincodeId])
 }
@@ -843,24 +849,29 @@ model ReferralConfig {
 }
 
 model Referral {
-  id                  String    @id @default(uuid())
+  id                  String                @id @default(uuid())
   referrerId          String
-  refereeId           String    @unique
+  refereeId           String                @unique
   programId           String
   referralCode        String
   targetOrders        Int
-  totalOrders         Int       @default(0)
-  joiningBonusGiven   Boolean   @default(false)
+  earnedAmount        Float                 @default(0)
+  maxReward           Float?
+  status              ReferralStatus        @default(NOT_STARTED)
+  progressPercentage  Float                 @default(0)
+  totalOrders         Int                   @default(0)
+  joiningBonusGiven   Boolean               @default(false)
   joiningBonusGivenAt DateTime?
-  isCompleted         Boolean   @default(false)
+  isCompleted         Boolean               @default(false)
   completedAt         DateTime?
-  rewardGiven         Boolean   @default(false)
+  rewardGiven         Boolean               @default(false)
   rewardGivenAt       DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-  program             Program   @relation(fields: [programId], references: [id], onDelete: Cascade)
-  referee             Rider     @relation("Referee", fields: [refereeId], references: [id], onDelete: Cascade)
-  referrer            Rider     @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  program             Program               @relation(fields: [programId], references: [id], onDelete: Cascade)
+  referee             Rider                 @relation("Referee", fields: [refereeId], references: [id], onDelete: Cascade)
+  referrer            Rider                 @relation("Referrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  taskProgresses      ProgramTaskProgress[] @relation("ReferralTaskProgress")
 
   @@unique([referrerId, refereeId])
   @@index([referrerId])
@@ -944,24 +955,27 @@ model ProgramEnrollment {
 }
 
 model ProgramTaskProgress {
-  id            String      @id @default(uuid())
+  id            String         @id @default(uuid())
   enrollmentId  String?
   riderId       String
   programId     String
   taskId        String
   week          String?
   date          DateTime
+  referralId    String?
   dayNumber     Int
-  isCompleted   Boolean     @default(false)
+  isCompleted   Boolean        @default(false)
   completedAt   DateTime?
-  progressValue Float       @default(0)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @default(now()) @updatedAt
-  program       Program     @relation(fields: [programId], references: [id], onDelete: Cascade)
-  rider         Rider       @relation(fields: [riderId], references: [id], onDelete: Cascade)
-  task          ProgramTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  role          IncentiveRole?
+  progressValue Float          @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now()) @updatedAt
+  program       Program        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  rider         Rider          @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  task          ProgramTask    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  referral      Referral?      @relation("ReferralTaskProgress", fields: [referralId], references: [id])
 
-  @@unique([riderId, taskId,  programId, week])
+  @@unique([riderId, taskId, programId, week])
 }
 
 model OrderChat {
@@ -1631,49 +1645,66 @@ enum JoiningBonusType {
 }
 
 model DeliveryWebhookEvent {
-  id String @id @default(uuid())
-
-  event      String
-  deliveryId String   @unique
+  id         String            @id @default(uuid())
+  event      DeliveryEventType
+  deliveryId String            @unique
   eventTime  DateTime
-
-  orderId String?
-  riderId String?
-
-  riderName  String
-  riderPhone String
-  vehicle    String
-
-  latitude  Float?
-  longitude Float?
-
-  order Order? @relation(fields: [orderId], references: [orderId])
-  rider Rider? @relation(fields: [riderId], references: [id])
-
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  riderWebhook RiderWebhook?
-
-  @@index([deliveryId])
-  @@index([orderId])
-  @@index([riderId])
-}
-
-model RiderWebhook {
-  id String @id @default(uuid())
-
-  riderCode  String?
+  riderId    String?
   riderName  String?
   riderPhone String?
   vehicle    String?
+  latitude   Float?
+  longitude  Float?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  rider      Rider?            @relation(fields: [riderId], references: [id])
+  order      Order?            @relation(fields: [orderId], references: [id])
+  orderId    String?
 
-  latitude  Float?
-  longitude Float?
+  @@index([deliveryId])
+}
 
-  deliveryEvent DeliveryWebhookEvent @relation(fields: [deliveryEventId], references: [id])
+enum DeliveryEventType {
+  SEARCHING_FOR_RIDER
+  RIDER_ASSIGNED
+}
 
-  deliveryEventId String @unique
+enum ReferralStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  REWARDED
+  EXPIRED
+}
+
+model PincodeMetrics {
+  id String @id @default(uuid())
+
+  pincodeId String  @unique
+  pincode   Pincode @relation(fields: [pincodeId], references: [id])
+
+  totalOrders Int @default(0)
+
+  liveOrders      Int @default(0)
+  assignedOrders  Int @default(0)
+  deliveredOrders Int @default(0)
+  cancelledOrders Int @default(0)
+
+  availableRiders Int @default(0)
+  busyRiders      Int @default(0)
+  offlineRiders   Int @default(0)
+
+  acceptedOrders Int @default(0)
+  rejectedOrders Int @default(0)
+  timeoutOrders  Int @default(0)
+
+  avgAcceptanceRate Float @default(0)
+  avgDeliveryTime   Float @default(0)
+
+  lastOrderAt       DateTime?
+  lastRiderOnlineAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  areas     Area[]
 }
