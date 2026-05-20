@@ -229,3 +229,61 @@ exports.deleteZonePoint = async (req, res) => {
     res.status(500).json({ success: false, message: "Delete failed" });
   }
 };
+
+
+// controllers/admin/cityController.js
+
+exports.getAllCities = async (req, res) => {
+  try {
+
+    const cities = await prisma.city.findMany({
+      where: {
+        isActive: true
+      },
+
+      select: {
+        id: true,
+        name: true,
+        state: true,
+
+        pincodes: {
+          where: {
+            isActive: true
+          },
+
+          select: {
+            id: true,
+            code: true,
+            name: true
+          },
+
+          orderBy: {
+            code: "asc"
+          }
+        }
+      },
+
+      orderBy: {
+        name: "asc"
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      count: cities.length,
+      data: cities
+    });
+
+  } catch (error) {
+
+    console.error(
+      "Get All Cities Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
