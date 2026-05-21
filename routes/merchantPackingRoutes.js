@@ -10,15 +10,16 @@ const merchantRouter = express.Router();
  *   post:
  *     tags:
  *       - Merchant Packing
- *     summary: Send merchant packed order to rider module
+ *     summary: Send merchant packing data to rider module
  *     description: >
- *       Sends merchant packed order details to the rider module API.
- *       
- *       Workflow:
- *       - Validates merchant packing payload
- *       - Calls rider order creation API
- *       - Generates delivery event automatically
- *       - Returns both API responses
+ *       Sends merchant packing details to rider module API
+ *       and creates delivery event automatically.
+ *
+ *       Flow:
+ *       - Validate merchant packing payload
+ *       - Call rider module create order API
+ *       - Create delivery event
+ *       - Return combined response
  *
  *     requestBody:
  *       required: true
@@ -38,15 +39,15 @@ const merchantRouter = express.Router();
  *
  *               orderId:
  *                 type: string
- *                 example: ORD123456
+ *                 example: ORD12352
  *
  *               storeId:
  *                 type: string
- *                 example: STORE789
+ *                 example: STORE456
  *
  *               vendorShopName:
  *                 type: string
- *                 example: Fresh Mart Grocery
+ *                 example: KFC Madhapur
  *
  *               pickupAddress:
  *                 type: object
@@ -62,15 +63,15 @@ const merchantRouter = express.Router();
  *
  *                   merchantName:
  *                     type: string
- *                     example: Fresh Mart Grocery
+ *                     example: KFC Madhapur
  *
  *                   addressLine:
  *                     type: string
- *                     example: Madhapur, Hyderabad
+ *                     example: Madhapur Main Road, Hyderabad
  *
  *                   contactNumber:
  *                     type: string
- *                     example: 9876543210
+ *                     example: "9876543210"
  *
  *                   latitude:
  *                     type: number
@@ -97,23 +98,23 @@ const merchantRouter = express.Router();
  *
  *                   name:
  *                     type: string
- *                     example: Rohit Kumar
+ *                     example: Lakshmi Narayana
  *
  *                   addressLine:
  *                     type: string
- *                     example: Kukatpally, Hyderabad
+ *                     example: Gachibowli Hyderabad
  *
  *                   contactNumber:
  *                     type: string
- *                     example: 9123456780
+ *                     example: "9123456780"
  *
  *                   latitude:
  *                     type: number
- *                     example: 17.4948
+ *                     example: 17.4401
  *
  *                   longitude:
  *                     type: number
- *                     example: 78.3996
+ *                     example: 78.3489
  *
  *               orderDetails:
  *                 type: object
@@ -126,13 +127,19 @@ const merchantRouter = express.Router();
  *
  *                   items:
  *                     type: array
+ *
  *                     items:
  *                       type: object
+ *                       required:
+ *                         - name
+ *                         - quantity
+ *                         - price
+ *
  *                       properties:
  *
- *                         itemName:
+ *                         name:
  *                           type: string
- *                           example: Rice Bag
+ *                           example: Rice 5kg
  *
  *                         quantity:
  *                           type: number
@@ -140,11 +147,11 @@ const merchantRouter = express.Router();
  *
  *                         price:
  *                           type: number
- *                           example: 500
+ *                           example: 250
  *
  *                   totalAmount:
  *                     type: number
- *                     example: 1000
+ *                     example: 620
  *
  *                   estimatedWeight:
  *                     type: number
@@ -192,15 +199,11 @@ const merchantRouter = express.Router();
  *                 message:
  *                   type: string
  *                   examples:
- *
  *                     missingOrderId:
  *                       value: orderId is required
  *
  *                     missingStoreId:
  *                       value: storeId is required
- *
- *                     missingVendor:
- *                       value: vendorShopName is required
  *
  *                     missingPickup:
  *                       value: pickupAddress is required
@@ -212,7 +215,7 @@ const merchantRouter = express.Router();
  *                       value: orderDetails is required
  *
  *       500:
- *         description: Failed to call rider order API
+ *         description: Internal server error
  *         content:
  *           application/json:
  *             schema:
