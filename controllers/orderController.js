@@ -2140,6 +2140,208 @@ async function getSurgeStatus(req, res) {
 };
 
 
-module.exports = { createOrder,confirmOrder,acceptOrder,rejectOrder,getOrderDetails,pickupOrder,deliverOrder, cancelOrder,getOrdersByRider,getDeliveredOrdersByRider,getCancelledOrdersByRider,getSurgeStatus};
+async function OrderDetailsStored  (req, res)  {
+  try {
+    const {
+      orderId,
+      storeId,
+      vendorShopName,
+      pickupAddress,
+      deliveryAddress,
+      orderDetails
+    } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: "orderId is required"
+      });
+    }
+
+    if (!storeId) {
+      return res.status(400).json({
+        success: false,
+        message: "storeId is required"
+      });
+    }
+
+    if (!vendorShopName) {
+      return res.status(400).json({
+        success: false,
+        message: "vendorShopName is required"
+      });
+    }
+
+    if (!pickupAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "pickupAddress is required"
+      });
+    }
+
+    if (!deliveryAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "deliveryAddress is required"
+      });
+    }
+
+    if (!orderDetails) {
+      return res.status(400).json({
+        success: false,
+        message: "orderDetails is required"
+      });
+    }
+
+    if (
+      !Array.isArray(orderDetails.items) ||
+      orderDetails.items.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one item is required"
+      });
+    }
+
+
+    const existingOrder = await prisma.order.findUnique({
+      where: {
+        orderId
+      }
+    });
+
+    if (existingOrder) {
+      return res.status(400).json({
+        success: false,
+        message: "Order already exists"
+      });
+    }
+
+
+    const deliveryId = `DEL-${Date.now()}`;
+
+    const deliveryConfirmationId =
+      `CNF-${Date.now()}`;
+
+    const {
+      items,
+      totalAmount,
+      estimatedWeight
+    } = orderDetails;
+
+
+    const order = await prisma.order.create({
+      data: {
+        orderId,
+        storeId,
+        vendorShopName,
+
+        totalWeight: estimatedWeight,
+        deliveryId,
+        deliveryConfirmationId,
+
+        OrderPickupAddress: {
+          create: {
+            name: pickupAddress.merchantName,
+            addressLine: pickupAddress.addressLine,
+            contactNumber: pickupAddress.contactNumber,
+            latitude: pickupAddress.latitude,
+            longitude: pickupAddress.longitude,
+            pincode: pickupAddress.pincode
+          }
+        },
+
+        OrderDeliveryAddress: {
+          create: {
+            name: deliveryAddress.name,
+            addressLine: deliveryAddress.addressLine,
+            contactNumber: deliveryAddress.contactNumber,
+            latitude: deliveryAddress.latitude,
+            longitude: deliveryAddress.longitude
+          }
+        },
+
+        OrderItem: {
+          create: items.map((item) => ({
+            itemName: item.name,
+            quantity: item.quantity,
+            price: item.price || 0,
+            total: (item.price || 0) * item.quantity
+          }))
+        },
+
+        OrderPricing: {
+          create: {
+            itemTotal: totalAmount,
+            totalAmount: totalAmount
+          }
+        },
+
+        OrderSettlement: {
+          create: {}
+        }
+      },
+
+      include: {
+        OrderPickupAddress: true,
+        OrderDeliveryAddress: true,
+        OrderItem: true,
+        OrderPricing: true,
+        OrderSettlement: true
+      }
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Order created successfully",
+
+      data: {
+        orderId: order.orderId,
+
+        storeId: order.storeId,
+
+        vendorShopName:
+          order.vendorShopName,
+
+        deliveryId:
+         deliveryId,
+
+        deliveryConfirmationId:
+          deliveryConfirmationId,
+
+        totalAmount:
+          order.totalAmount,
+
+        totalWeight:
+          order.totalWeight,
+
+        pickupAddress:
+          order.OrderPickupAddress,
+
+        deliveryAddress:
+          order.OrderDeliveryAddress,
+
+        items: order.OrderItem
+      }
+    });
+
+  } catch (error) {
+    console.error(
+      "Create Order Error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "Internal server error",
+
+      error: error.message
+    });
+  }
+};
+
+
+module.exports = { createOrder,confirmOrder,acceptOrder,rejectOrder,getOrderDetails,pickupOrder,deliverOrder, cancelOrder,getOrdersByRider,getDeliveredOrdersByRider,getCancelledOrdersByRider,getSurgeStatus , OrderDetailsStored};
  
  

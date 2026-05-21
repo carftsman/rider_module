@@ -14,7 +14,8 @@ const {
     getOrdersByRider,
     getDeliveredOrdersByRider,
     getCancelledOrdersByRider,
-    getSurgeStatus
+    getSurgeStatus,
+    OrderDetailsStored
 } = require("../controllers/orderController");
 
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
@@ -1315,6 +1316,12 @@ router.get("/cancelled",riderAuthMiddleWare,getCancelledOrdersByRider);
  *                   example: Failed to fetch surge status
  */
 router.get("/rider/surge-status", riderAuthMiddleWare, getSurgeStatus);
+
+
+
+router.post("/rider/store-order-details", OrderDetailsStored);
+
+
 
 
 module.exports = router;

@@ -53,6 +53,7 @@ const adminZoneRoutes=require("./routes/adminZoneRoutes");
 
 const riderGpsRoutes = require("./routes/riderGps.routes");
 const deliveryEventRoutes = require("./routes/DeliveryEvent.routes");
+const merchantRouter = require("./routes/merchantPackingRoutes");
 
 // app.use(cors())
 app.use(
@@ -148,6 +149,10 @@ app.use("/api/banner",bannerRouter)
 
 app.use("/api/rider-gps",riderGpsRoutes);
 app.use("/api", deliveryEventRoutes);
+
+//merchant
+
+app.use("/api/merchant",merchantRouter);
 
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");
