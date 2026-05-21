@@ -3,385 +3,287 @@ const prisma = require("../config/prisma");
 const {getWeather} =
   require("../utils/weather");
 
-const createPayoutConfig = async (req, res) => {
+const createCityPayoutConfig =
+  async (req, res) => {
 
-  try {
+    try {
 
-    const {
-      name,
-      scenarioType,
-      cityId,
-      pincodeIds = [],
-      vehicleType,
-      basePay,
-      perKmRate,
-      surgeConfig,
-      peakConfig,
-      weatherConfig,
-      notes,
-      applicableFrom,
-      applicableTill,
-
-      // FRONTEND COORDINATES
-      latitude,
-      longitude
-
-    } = req.body;
-
-    /**
-     * VALIDATION
-     */
+      const {
+        name,
+        scenarioType,
+        cityId,
+        vehicleType,
+        basePay,
+        perKmRate,
+        surgeConfig,
+        peakConfig,
+        weatherConfig,
+        notes,
+        latitude,
+        longitude
+      } = req.body;
 
     if (!name || !scenarioType) {
-
-      return res.status(400).json({
-        success: false,
-        message:
-          "name and scenarioType are required"
-      });
-
-    }
-
-    if (!cityId) {
-
-      return res.status(400).json({
-        success: false,
-        message:
-          "cityId is required"
-      });
-
-    }
-
-    if (!basePay || basePay <= 0) {
-
-      return res.status(400).json({
-        success: false,
-        message:
-          "basePay must be greater than 0"
-      });
-
-    }
-
-    if (perKmRate < 0) {
-
-      return res.status(400).json({
-        success: false,
-        message:
-          "perKmRate must be >= 0"
-      });
-
-    }
-
-    /**
-     * DATE VALIDATION
-     */
-
-    if (
-      applicableFrom &&
-      applicableTill
-    ) {
-
-      if (
-        new Date(applicableFrom) >
-        new Date(applicableTill)
-      ) {
-
         return res.status(400).json({
           success: false,
-          message:
-            "applicableFrom cannot be greater than applicableTill"
+          message: "name and scenarioType are required"
         });
-
       }
 
-    }
-
-    /**
-     * PEAK CONFIG VALIDATION
-     */
-
-    if (peakConfig?.enabled) {
-
-      if (
-        peakConfig.maxOrdersPerRider === undefined ||
-        peakConfig.maxOrdersPerRider <= 0
-      ) {
-
+      if (!cityId) {
         return res.status(400).json({
           success: false,
-          message:
-            "peakConfig.maxOrdersPerRider must be greater than 0"
+          message: "cityId is required"
         });
-
       }
 
-    }
+      if (!basePay || basePay <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "basePay must be greater than 0"
+        });
+      }
 
-    /**
-     * WEATHER CHECK
-     */
+      if (perKmRate < 0) {
+        return res.status(400).json({
+          success: false,
+          message: "perKmRate must be >= 0"
+        });
+      }
 
-    let weatherResult = {
-      isRaining: false
-    };
+      /**
+       * WEATHER CHECK
+       */
 
-    if (
-      weatherConfig?.enabled &&
-      latitude &&
-      longitude
-    ) {
+      let weatherResult = {
+        isRaining: false
+      };
 
-      weatherResult =
-        await getWeather(
-          latitude,
-          longitude
-        );
+      if (
+        weatherConfig?.enabled &&
+        latitude &&
+        longitude
+      ) {
+        weatherResult = await getWeather(latitude, longitude);
+      }
 
-    }
+      const isWeatherEnabled =
+        weatherConfig?.enabled &&
+        weatherResult.isRaining;
 
-    /**
-     * AUTO ENABLE WEATHER
-     */
-const isWeatherEnabled =
-  weatherConfig?.enabled &&
-  weatherResult.isRaining;
+      const finalWeatherConfig = {
+        enabled: isWeatherEnabled || false,
+        isRaining: weatherResult.isRaining,
+        rainExtraPay: isWeatherEnabled
+          ? weatherConfig?.rainExtraPay || 0
+          : 0,
+        multiplier: isWeatherEnabled
+          ? weatherConfig?.multiplier || 1
+          : 1
+      };
 
-const finalWeatherConfig = {
+      /**
+       * EXISTING CONFIG CHECK
+       */
 
-  // AUTO FALSE IF NOT RAINING
-  enabled: isWeatherEnabled || false,
-
-  isRaining:
-    weatherResult.isRaining,
-
-  rainExtraPay:
-    isWeatherEnabled
-      ? weatherConfig?.rainExtraPay || 0
-      : 0,
-
-  multiplier:
-    isWeatherEnabled
-      ? weatherConfig?.multiplier || 1
-      : 1
-
-};
-    /**
-     * EXISTING CONFIG CHECK
-     */
-
-    let existingConfig;
-
-    // PINCODE LEVEL
-
-    if (pincodeIds.length > 0) {
-
-      existingConfig =
+      const existingConfig =
         await prisma.payoutConfig.findFirst({
-
           where: {
             cityId,
             scenarioType,
             vehicleType,
             isActive: true,
+            pincodeIds: {
+              isEmpty: true
+            }
+          }
+        });
 
+      if (existingConfig) {
+        return res.status(400).json({
+          success: false,
+          message: "City config already exists",
+          data: {
+            existingConfigId: existingConfig.id
+          }
+        });
+      }
+
+      /**
+       * CREATE CONFIG
+       */
+
+      const newConfig =
+        await prisma.payoutConfig.create({
+          data: {
+            name,
+            scenarioType,
+            cityId,
+            pincodeIds: [],
+            vehicleType,
+            basePay,
+            perKmRate,
+            surgeConfig,
+            peakConfig,
+            weatherConfig: finalWeatherConfig,
+            notes,
+            version: 1,
+            isActive: true,
+            createdBy: "admin"
+          }
+        });
+
+      /**
+       * RESPONSE (RETURN EXACT REQUEST BODY)
+       */
+
+      return res.status(201).json({
+        success: true,
+        data: req.body
+      });
+
+    } catch (error) {
+
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
+
+    }
+
+  };  
+ //PINCODE LEVEL API
+ 
+
+const createPincodePayoutConfig =
+  async (req, res) => {
+
+    try {
+
+      const {
+        name,
+        scenarioType,
+        cityId,
+        pincodeIds = [],
+        vehicleType,
+        basePay,
+        perKmRate,
+        surgeConfig,
+        peakConfig,
+        weatherConfig,
+        notes,
+        latitude,
+        longitude
+      } = req.body;
+
+      
+    if (!pincodeIds.length) {
+        return res.status(400).json({
+          success: false,
+          message: "pincodeIds are required"
+        });
+      }
+
+      /**
+       * WEATHER CHECK (ONLY INTERNAL)
+       */
+
+      let weatherResult = { isRaining: false };
+
+      if (
+        weatherConfig?.enabled &&
+        latitude &&
+        longitude
+      ) {
+        weatherResult =
+          await getWeather(latitude, longitude);
+      }
+
+      const isWeatherEnabled =
+        weatherConfig?.enabled &&
+        weatherResult.isRaining;
+
+      const finalWeatherConfig = {
+        enabled: isWeatherEnabled || false,
+        isRaining: weatherResult.isRaining,
+        rainExtraPay: isWeatherEnabled
+          ? weatherConfig?.rainExtraPay || 0
+          : 0,
+        multiplier: isWeatherEnabled
+          ? weatherConfig?.multiplier || 1
+          : 1
+      };
+
+      /**
+       * EXISTING CHECK
+       */
+
+      const existingConfig =
+        await prisma.payoutConfig.findFirst({
+          where: {
+            cityId,
+            scenarioType,
+            vehicleType,
+            isActive: true,
             pincodeIds: {
               hasSome: pincodeIds
             }
           }
-
         });
 
-    }
-
-    // CITY LEVEL
-
-    else {
-
-      existingConfig =
-        await prisma.payoutConfig.findFirst({
-
-          where: {
-            cityId,
-            scenarioType,
-            vehicleType,
-            isActive: true,
-
-            pincodeIds: {
-              isEmpty: true
-            }
-
+      if (existingConfig) {
+        return res.status(400).json({
+          success: false,
+          message: "Pincode config already exists",
+          data: {
+            existingConfigId: existingConfig.id
           }
-
         });
+      }
 
-    }
+      /**
+       * CREATE
+       */
 
-    if (existingConfig) {
-
-      return res.status(400).json({
-
-        success: false,
-
-        message:
-          "Config already exists for this segment",
-
-        data: {
-          existingConfigId:
-            existingConfig.id
-        }
-
-      });
-
-    }
-
-    /**
-     * CREATE CONFIG
-     */
-
-    const newConfig =
       await prisma.payoutConfig.create({
-
         data: {
-
           name,
           scenarioType,
           cityId,
           pincodeIds,
-
           vehicleType,
-
           basePay,
           perKmRate,
-
           surgeConfig,
-
-          /**
-           * PEAK CONFIG
-           */
-
-          peakConfig: {
-
-            enabled:
-              peakConfig?.enabled || false,
-
-            maxOrdersPerRider:
-              peakConfig?.maxOrdersPerRider || 8,
-
-            extraPay:
-              peakConfig?.extraPay || 0,
-
-            multiplier:
-              peakConfig?.multiplier || 1
-
-          },
-
-          /**
-           * WEATHER CONFIG
-           */
-
-          weatherConfig:
-            finalWeatherConfig,
-
+          peakConfig,
+          weatherConfig: finalWeatherConfig,
           notes,
-
           version: 1,
-
           isActive: true,
-
-          createdBy: "admin",
-
-          applicableFrom:
-            applicableFrom
-              ? new Date(applicableFrom)
-              : null,
-
-          applicableTill:
-            applicableTill
-              ? new Date(applicableTill)
-              : null
-
+          createdBy: "admin"
         }
-
       });
 
-    /**
-     * RESPONSE
-     */
+      /**
+       * RESPONSE (ONLY REQUEST BODY)
+       */
 
-    return res.status(201).json({
+      return res.status(201).json({
+        success: true,
+        data: req.body
+      });
 
-      success: true,
+    } catch (error) {
 
-      message:
-        "Payout config created successfully",
+      return res.status(500).json({
+        success: false,
+        message: error.message
+      });
 
-      data: {
+    }
 
-        id:
-          newConfig.id,
-
-        name:
-          newConfig.name,
-
-        scenarioType:
-          newConfig.scenarioType,
-
-        cityId:
-          newConfig.cityId,
-
-        pincodeIds:
-          newConfig.pincodeIds,
-
-        payout: {
-
-          basePay:
-            newConfig.basePay,
-
-          perKmRate:
-            newConfig.perKmRate
-
-        },
-
-        peakConfig:
-          newConfig.peakConfig,
-
-        weatherConfig:
-          newConfig.weatherConfig,
-
-        weatherStatus: {
-
-          rainDetected:
-            weatherResult.isRaining
-
-        },
-
-        createdAt:
-          newConfig.createdAt
-
-      }
-
-    });
-
-  } catch (error) {
-
-    console.log(
-      "CREATE PAYOUT CONFIG ERROR:",
-      error
-    );
-
-    return res.status(500).json({
-
-      success: false,
-
-      message:
-        error.message
-
-    });
-
-  }
-
-};
-const getActivePayoutConfig = async (req, res) => {
+  };
+    const getActivePayoutConfig = async (req, res) => {
   try {
     const { cityId } = req.query;
 
@@ -987,7 +889,8 @@ const getSurgeStatus = async (req, res) => {
 };
 
 module.exports = {
-  createPayoutConfig,
+  createPincodePayoutConfig,
+   createCityPayoutConfig,
   getActivePayoutConfig,
   getPayoutConfigHistory,
   updateBasePay,
