@@ -321,6 +321,11 @@ const response = programs.map((p) => {
 
     cityId:
       p.cityId?.[0] || null,
+    city:
+          riderLocation.city || null,
+ 
+    status:
+          p.isActive ? "ACTIVE" : "INACTIVE",
 
     dateRange: {
       startDate: p.validFrom,
