@@ -16,7 +16,7 @@ const profileRoutes = require("./routes/profileRoutes");
 const webIncentiveRoutes = require("./routes/order.routes");
 const kitRoutes = require("./routes/kitSelectionRoutes");
 const adminPayoutConfigRoutes = require("./routes/adminPayoutConfig.routes");
- 
+const referralRoutes =require("./routes/referral.routes"); 
 const riderEarningsRoutes = require("./routes/riderEarningsRoutes");
   
 const notificationRoutes = require("./routes/notificationRoutes");
@@ -37,7 +37,9 @@ const riderReferralRoutes = require("./routes/riderReferralRoutes");
 const joiningBonusRouter = require("./routes/adminJoiningBonusRoutes")
 const riderJoiningBonusRouter = require("./routes/riderJoiningBonusRoutes")
 const bannerRouter = require("./routes/bannerRoutes")
-
+const pincodeMetricsRoutes = require(
+  "./routes/pincodeMetricsRoutes"
+);
 const riderRatingRouter= require("./routes/riderRatingRoutes")
 const app = express();
 
@@ -50,6 +52,8 @@ const getPeakSlotProgresses=require("./routes/getPeakSlotProgressRoutes")
 const adminZoneRoutes=require("./routes/adminZoneRoutes");
 
 const riderGpsRoutes = require("./routes/riderGps.routes");
+const deliveryEventRoutes = require("./routes/DeliveryEvent.routes");
+const merchantRouter = require("./routes/merchantPackingRoutes");
 
 // app.use(cors())
 app.use(
@@ -104,7 +108,7 @@ app.use("/api/orders", require("./routes/orderRoutes"));
 app.use("/api/aerial", require("./routes/gpsRoutes"));
 app.use("/api/web", webIncentiveRoutes); 
 
-
+app.use("/api/metrics",pincodeMetricsRoutes);
 app.use("/api/rider/incentives", riderIncentivesRouter);
 app.use("/api", riderWeeklyRoutes);
 app.use("/api/notifications", notificationRoutes);
@@ -119,7 +123,7 @@ app.use("/api", orderStateReady);
 app.use("/api/kit", kitRoutes);
 app.use("/api/company", companySelectionRoutes);
 app.use("/api/status", todayRiderOnlineRoutes);
-app.use("/api/refer", adminReferralRoutes);
+app.use("/api/admin", adminReferralRoutes);
 
 app.use("/api/admin/incentive", adminDailyIncentiveRoutes);
 app.use("/api", adminPayoutConfigRoutes);
@@ -128,7 +132,7 @@ app.use("/api", riderDailyIncentiveRoutes);
 app.use("/api/refer/rider", adminReferralRoutes);
 app.use("/api/refer/", riderReferralRoutes);
 //joining bonus
-
+app.use("/api/referral",referralRoutes);
 app.use("/api/admin/joining/bonus", joiningBonusRouter);
 app.use("/api/rider/joining/bonus", riderJoiningBonusRouter);
 
@@ -144,6 +148,11 @@ app.use("/rider",getPeakSlotProgresses)
 app.use("/api/banner",bannerRouter)
 
 app.use("/api/rider-gps",riderGpsRoutes);
+app.use("/api", deliveryEventRoutes);
+
+//merchant
+
+app.use("/api/merchant",merchantRouter);
 
 app.get("/", (req, res) => {
   res.send("Vega Delivery Partner API Running. Open /api-docs");

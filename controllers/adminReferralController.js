@@ -69,8 +69,6 @@ const buildReferralProgramResponse = (program) => {
     ruleType: program.ruleType,
     validFrom: program.validFrom,
     validTill: program.validTill,
-    daysOfWeek: program.daysOfWeek,
-    weekStartDay: program.weekStartDay,
     isActive: program.isActive,
     priority: program.priority,
     createdAt: program.createdAt,
@@ -214,17 +212,29 @@ const buildReferralProgramResponse = (program) => {
       if (!existingDay) {
         existingDay = {
           dayNumber: task.dayNumber,
-          slabs: [],
+         tasks: [],
         };
 
         groupedTasks.push(existingDay);
       }
 
-      existingDay.slabs.push({
-        minOrders: task.minOrders,
-        maxOrders: task.maxOrders,
-        rewardAmount: task.rewardAmount,
-      });
+      existingDay.tasks.push({
+  taskRuleType: task.taskRuleType,
+
+  minOrders: task.minOrders,
+  maxOrders: task.maxOrders,
+minEarnings: task.minEarnings,
+maxEarning: task.maxEarning,
+  rewardAmount: task.rewardAmount,
+  rewardPerOrder: task.rewardPerOrder,
+  targetOrders: task.targetOrders,
+
+  minAcceptanceRate:
+    task.minAcceptanceRate,
+
+  minCompletionRate:
+    task.minCompletionRate
+});
     });
 
     return removeEmptyValues({
@@ -244,42 +254,52 @@ const buildReferralProgramResponse = (program) => {
 
   return removeEmptyValues(baseResponse);
 };
-exports.createReferralConfig = async (req, res) => {
+exports.createReferralProgram = async (req, res) => {
   try {
-    const {
-      name,
-      description,
-      programType = "REFERRAL",
-      trackingType,
-      ruleType,
-      taskRuleType,
-      referralConfig,
-      refereeRules,
-      referrerReward,
-      validFrom,
-      validTill,
-      daysOfWeek,
-      weekStartDay,
-       cityId ,
-     pincodeIds,
-      isActive,
-      priority,
-    } = req.body;
+const {
 
-    if (
-      !name ||
-      !trackingType ||
-      !ruleType ||
-      !referralConfig ||
-      !refereeRules ||
-      !referrerReward
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "name, trackingType, ruleType, referralConfig, refereeRules and referrerReward are required",
-      });
-    }
+  name,
+  description,
+
+  trackingType,
+  ruleType,
+  rewardFlow,
+
+  cityId,
+  pincodeIds,
+
+  validFrom,
+  validTill,
+
+  targetOrders,
+  rewardAmount,
+
+  slabs,
+
+  rewardPerOrder,
+  maxOrders,
+  maxEarning,
+
+  conditions,
+  days,
+
+  programType,
+  isActive,
+  priority
+} = req.body;
+if (
+  !name ||
+  !programType ||
+  !trackingType ||
+  !ruleType ||
+  !rewardFlow
+) {
+  return res.status(400).json({
+    success: false,
+    message:
+      "name, trackingType, ruleType and rewardFlow are required",
+  });
+}
 
     if (!validFrom || !validTill) {
       return res.status(400).json({
@@ -287,152 +307,307 @@ exports.createReferralConfig = async (req, res) => {
         message: "validFrom and validTill are required",
       });
     }
+const today = new Date();
 
+today.setHours(0,0,0,0);
+
+if (new Date(validFrom) < today) {
+  return res.status(400).json({
+    success: false,
+    message:
+      "Past dates are not allowed"
+  });
+}
     const targetsCreate = [];
     const slabsCreate = [];
     const tasksCreate = [];
 
-    // FIXED_TARGET
-    if (ruleType === "FIXED_TARGET") {
-      if (
-        refereeRules?.target?.orders == null ||
-        refereeRules?.reward?.amount == null ||
-        referrerReward?.amount == null
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "refereeRules.target.orders, refereeRules.reward.amount and referrerReward.amount are required",
+if (ruleType === "FIXED_TARGET") {
+
+  if (
+    !targetOrders ||
+    !rewardAmount
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "targetOrders and rewardAmount are required"
+    });
+  }
+
+  targetsCreate.push({
+    targetOrders,
+    rewardAmount
+  });
+}
+
+if (ruleType === "SLAB") {
+
+  if (
+    !Array.isArray(slabs) ||
+    slabs.length === 0
+  ) {
+    return res.status(400).json({
+      success: false,
+      message: "slabs are required"
+    });
+  }
+
+  slabs.forEach((slab) => {
+
+    slabsCreate.push({
+      role: "REFEREE",
+
+      minValue: slab.minOrders,
+
+      maxValue: slab.maxOrders,
+
+      rewardAmount: slab.rewardAmount
+    });
+  });
+}
+
+  if (ruleType === "PER_ORDER") {
+
+  tasksCreate.push({
+
+    role: "REFEREE",
+
+    taskRuleType: "PER_ORDER",
+
+    rewardPerOrder,
+
+    maxOrders,
+
+    maxEarning,
+
+    taskType: "ORDERS"
+  });
+}
+
+   if (ruleType === "HYBRID") {
+
+  tasksCreate.push({
+
+    role: "REFEREE",
+
+    taskRuleType: "HYBRID",
+
+    minOrders:
+      conditions?.minOrders,
+
+    minEarnings:
+      conditions?.minEarnings,
+
+    minAcceptanceRate:
+      conditions?.minAcceptanceRate,
+
+    minCompletionRate:
+      conditions?.minCompletionRate,
+
+    rewardAmount,
+
+    taskType: "ORDERS"
+  });
+}
+
+if (ruleType === "TASK") {
+
+  if (
+    !Array.isArray(days) ||
+    days.length === 0
+  ) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "At least one task day is required"
+    });
+  }
+
+  const totalProgramDays =
+    Math.ceil(
+      (
+        new Date(validTill) -
+        new Date(validFrom)
+      ) /
+      (1000 * 60 * 60 * 24)
+    ) + 1;
+
+  if (
+    days.length !== totalProgramDays
+  ) {
+
+    return res.status(400).json({
+      success: false,
+      message:
+        `Program duration is ${totalProgramDays} days, so ${totalProgramDays} task days are required`
+    });
+  }
+const uniqueDays =
+  new Set(
+    days.map((d) => d.dayNumber)
+  );
+
+if (
+  uniqueDays.size !== days.length
+) {
+
+  return res.status(400).json({
+    success: false,
+    message:
+      "Duplicate day numbers are not allowed"
+  });
+}
+  days.forEach((day) => {
+if (
+  !day.dayNumber ||
+  day.dayNumber < 1 ||
+  day.dayNumber > totalProgramDays
+) {
+
+  throw new Error(
+    `Invalid dayNumber ${day.dayNumber}`
+  );
+}
+    // SLAB
+    if (day.taskRuleType === "SLAB") {
+
+      day.slabs.forEach((slab) => {
+
+        tasksCreate.push({
+
+          role: "REFEREE",
+
+          dayNumber: day.dayNumber,
+
+          taskRuleType: "SLAB",
+
+          minOrders: slab.minOrders,
+
+          maxOrders: slab.maxOrders,
+
+          rewardAmount: slab.rewardAmount,
+
+          taskType: "ORDERS"
         });
-      }
 
-      targetsCreate.push({
-        targetOrders: refereeRules.target.orders,
-        rewardAmount: refereeRules.reward.amount,
       });
 
-      tasksCreate.push({
-        role: "REFERRER",
-        taskRuleType: "FIXED_TARGET",
-        targetOrders: refereeRules.target.orders,
-        rewardAmount: referrerReward.amount,
-        taskType: "ORDERS",
-      });
     }
 
-    // SLAB
-    if (ruleType === "SLAB") {
-      if (
-        !Array.isArray(refereeRules.slabs) ||
-        refereeRules.slabs.length === 0 ||
-        !Array.isArray(referrerReward.slabs) ||
-        referrerReward.slabs.length === 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message: "refereeRules.slabs and referrerReward.slabs are required",
-        });
-      }
+    // FIXED_TARGET
+    if (
+      day.taskRuleType === "FIXED_TARGET"
+    ) {
 
-      refereeRules.slabs.forEach((slab) => {
-        slabsCreate.push({
-          role: "REFEREE",
-          minValue: slab.minOrders,
-          maxValue: slab.maxOrders,
-          rewardAmount: slab.rewardAmount,
-        });
-      });
+      tasksCreate.push({
 
-      referrerReward.slabs.forEach((slab) => {
-        slabsCreate.push({
-          role: "REFERRER",
-          minValue: slab.minOrders,
-          maxValue: slab.maxOrders,
-          rewardAmount: slab.rewardAmount,
-        });
+        role: "REFEREE",
+
+        dayNumber: day.dayNumber,
+
+        taskRuleType: "FIXED_TARGET",
+
+        targetOrders: day.targetOrders,
+
+        rewardAmount: day.rewardAmount,
+
+        taskType: "ORDERS"
       });
     }
 
     // PER_ORDER
-    if (ruleType === "PER_ORDER") {
-      tasksCreate.push({
-        role: "REFEREE",
-        taskRuleType: "PER_ORDER",
-        rewardPerOrder: refereeRules.rewardPerOrder,
-        maxOrders: refereeRules.maxOrders,
-        maxEarning: refereeRules.maxEarning,
-        taskType: "ORDERS",
-      });
+    if (
+      day.taskRuleType === "PER_ORDER"
+    ) {
 
       tasksCreate.push({
-        role: "REFERRER",
+
+        role: "REFEREE",
+
+        dayNumber: day.dayNumber,
+
         taskRuleType: "PER_ORDER",
-        rewardPerOrder: referrerReward.rewardPerOrder,
-        maxOrders: referrerReward.maxOrders,
-        maxEarning: referrerReward.maxEarning,
-        taskType: "ORDERS",
+
+        rewardPerOrder:
+          day.rewardPerOrder,
+
+        maxOrders: day.maxOrders,
+
+        maxEarning: day.maxEarning,
+
+        taskType: "ORDERS"
       });
     }
 
     // HYBRID
-    if (ruleType === "HYBRID") {
+    if (
+      day.taskRuleType === "HYBRID"
+    ) {
+
       tasksCreate.push({
+
         role: "REFEREE",
-        taskRuleType: "HYBRID",
-        minOrders: refereeRules.conditions?.minOrders,
-        minEarnings: refereeRules.conditions?.minEarnings,
-        minAcceptanceRate: refereeRules.conditions?.minAcceptanceRate,
-        minCompletionRate: refereeRules.conditions?.minCompletionRate,
-        rewardAmount: refereeRules.reward?.amount || 0,
-        taskType: "ORDERS",
-      });
 
-      tasksCreate.push({
-        role: "REFERRER",
+        dayNumber: day.dayNumber,
+
         taskRuleType: "HYBRID",
-        rewardAmount: referrerReward.amount,
-        taskType: "ORDERS",
+
+        minOrders:
+          day.conditions?.minOrders,
+
+        minEarnings:
+          day.conditions?.minEarnings,
+
+        minAcceptanceRate:
+          day.conditions?.minAcceptanceRate,
+
+        minCompletionRate:
+          day.conditions?.minCompletionRate,
+
+        rewardAmount:
+          day.rewardAmount,
+
+        taskType: "ORDERS"
       });
     }
 
-    // TASK
-    if (ruleType === "TASK") {
-      if (!taskRuleType) {
-        return res.status(400).json({
-          success: false,
-          message: "taskRuleType is required when ruleType is TASK",
-        });
+  });
+
+}
+const existingProgram =
+  await prisma.program.findFirst({
+
+where: {
+
+  isActive: true,
+
+  programType: "REFERRAL",
+
+      pincodeIds: {
+        hasSome: pincodeIds
+      },
+
+      validFrom: {
+        lte: new Date(validTill)
+      },
+
+      validTill: {
+        gte: new Date(validFrom)
       }
-
-      if (!Array.isArray(refereeRules.tasks)) {
-        return res.status(400).json({
-          success: false,
-          message: "refereeRules.tasks is required",
-        });
-      }
-
-      refereeRules.tasks.forEach((task) => {
-        task.slabs.forEach((slab) => {
-          tasksCreate.push({
-            role: "REFEREE",
-            taskRuleType,
-            dayNumber: task.dayNumber,
-            minOrders: slab.minOrders,
-            maxOrders: slab.maxOrders,
-            rewardAmount: slab.rewardAmount,
-            taskType: "ORDERS",
-          });
-        });
-      });
-
-      tasksCreate.push({
-        role: "REFERRER",
-        taskRuleType,
-        rewardAmount: referrerReward.amount,
-        taskType: "ORDERS",
-      });
     }
+  });
 
+if (existingProgram) {
+
+  return res.status(400).json({
+
+    success: false,
+
+    message:
+      "Another active referral program already exists for this pincode"
+  });
+}
     const program = await prisma.program.create({
       data: {
         name,
@@ -444,13 +619,11 @@ exports.createReferralConfig = async (req, res) => {
         ruleType,
         applicableWhen: "WITH_REFERRAL",
 
-        referralConfig: {
-          create: {
-            rewardFlow: referralConfig.rewardFlow,
-            maxReferralsPerUser: referralConfig.maxReferralsPerUser || null,
-            maxEarningPerUser: referralConfig.maxEarningPerUser || null,
-          },
-        },
+       referralConfig: {
+  create: {
+    rewardFlow
+  },
+},
 
         targets: targetsCreate.length ? { create: targetsCreate } : undefined,
         slabs: slabsCreate.length ? { create: slabsCreate } : undefined,
@@ -460,9 +633,6 @@ exports.createReferralConfig = async (req, res) => {
         validTill: new Date(validTill),
         isActive: isActive ?? true,
         priority: priority || 1,
-        weekStartDay: weekStartDay || "MON",
-        daysOfWeek:
-          daysOfWeek || ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"],
       },
       include: {
         referralConfig: true,
@@ -499,7 +669,6 @@ exports.updateReferralConfig = async (req, res) => {
       validFrom,
       validTill,
       isActive,
-      weekStartDay,
 
       cityId,
       pincodeIds,
@@ -558,32 +727,19 @@ exports.updateReferralConfig = async (req, res) => {
         validTill: validTill ? new Date(validTill) : existingProgram.validTill,
 
         isActive: isActive ?? existingProgram.isActive,
-        weekStartDay: weekStartDay || existingProgram.weekStartDay,
 
         cityId: Array.isArray(cityId) ? cityId : existingProgram.cityId,
         pincodeIds: Array.isArray(pincodeIds)
           ? pincodeIds
           : existingProgram.pincodeIds,
 
-        referralConfig: referralConfig
-          ? {
-              update: {
-                rewardFlow:
-                  referralConfig.rewardFlow ||
-                  existingProgram.rewardFlow,
-
-                maxReferralsPerUser:
-                  referralConfig.maxReferralsPerUser !== undefined
-                    ? Number(referralConfig.maxReferralsPerUser)
-                    : undefined,
-
-                maxEarningPerUser:
-                  referralConfig.maxEarningPerUser !== undefined
-                    ? Number(referralConfig.maxEarningPerUser)
-                    : undefined
-              }
-            }
-          : undefined
+referralConfig: rewardFlow
+  ? {
+      update: {
+        rewardFlow
+      }
+    }
+  : undefined
       }
     });
 
@@ -628,8 +784,53 @@ exports.updateReferralConfig = async (req, res) => {
             task.dayNumber !== undefined && task.dayNumber !== null
               ? Number(task.dayNumber)
               : null,
-          minOrders: Number(task.minOrders),
-          rewardAmount: Number(task.rewardAmount)
+minOrders:
+  task.minOrders !== undefined
+    ? Number(task.minOrders)
+    : null,
+
+maxOrders:
+  task.maxOrders !== undefined
+    ? Number(task.maxOrders)
+    : null,
+
+targetOrders:
+  task.targetOrders !== undefined
+    ? Number(task.targetOrders)
+    : null,
+
+rewardAmount:
+  task.rewardAmount !== undefined
+    ? Number(task.rewardAmount)
+    : null,
+
+rewardPerOrder:
+  task.rewardPerOrder !== undefined
+    ? Number(task.rewardPerOrder)
+    : null,
+
+maxEarning:
+  task.maxEarning !== undefined
+    ? Number(task.maxEarning)
+    : null,
+
+minEarnings:
+  task.minEarnings !== undefined
+    ? Number(task.minEarnings)
+    : null,
+
+minAcceptanceRate:
+  task.minAcceptanceRate !== undefined
+    ? Number(task.minAcceptanceRate)
+    : null,
+
+minCompletionRate:
+  task.minCompletionRate !== undefined
+    ? Number(task.minCompletionRate)
+    : null,
+
+taskRuleType:
+  task.taskRuleType || null,          
         }))
       });
     }
@@ -683,8 +884,10 @@ exports.getAllReferralConfigs = async (req, res) => {
         description: program.description,
         targetOrderCount: program.targets[0]?.targetOrders || 0,
         referralRewardAmount: program.targets[0]?.rewardAmount || 0,
-        joiningBonusAmount: program.tasks[0]?.rewardAmount || 0,
-        rewardFlow: program.referralConfig?.rewardFlow,
+ruleType: program.ruleType,
+trackingType: program.trackingType,
+rewardFlow:
+  program.referralConfig?.rewardFlow,
         validFrom: program.validFrom,
         validTill: program.validTill,
         isActive: program.isActive

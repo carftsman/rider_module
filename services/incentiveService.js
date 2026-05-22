@@ -236,23 +236,27 @@ include: {
     if (
 
       (
-        program.programType ===
-        "DAILY_TARGET" &&
+  (
+    program.programType === 
+    "DAILY_TARGET"
+  )&&
 
-        program.trackingType ===
-        "DAILY"
-      )
+  program.trackingType === 
+  "DAILY"
+)
 
       ||
 
     (
-  program.programType ===
-  "WEEKLY_TARGET" &&
+(
+  (
+    program.programType === "WEEKLY_TARGET"
+  )
 
-  program.trackingType ===
-  "WEEKLY" &&
+  &&
 
-  program.ruleType !== "TASK"
+  program.ruleType === "TASK"
+)
 )
     ) {
 
@@ -595,11 +599,43 @@ include: {
 //////////////////////////////////////////////////////
 // WEEKLY TASK PROGRAMS
 //////////////////////////////////////////////////////
-
 if (
-  program.programType === "WEEKLY_TARGET" &&
-  program.ruleType === "TASK"
+
+  program.programType ===
+  "REFERRAL"
+
+  &&
+
+  program.ruleType ===
+  "TASK"
 ) {
+
+
+}
+if (
+
+  (
+    program.programType ===
+    "WEEKLY_TARGET"
+
+    &&
+
+    program.ruleType ===
+    "TASK"
+  )
+
+  ||
+
+  (
+    program.programType ===
+    "REFERRAL"
+
+    &&
+
+    program.ruleType ===
+    "TASK"
+  )
+){
 
   //////////////////////////////////////////////////
   // CURRENT DAY NUMBER
@@ -743,60 +779,68 @@ taskProgress =
     "SLAB"
   ) {
 
-    const slab =
-      program.slabs?.find(
-
-        s =>
-
-          updatedProgress.progressValue >=
-            s.minValue &&
-
-          updatedProgress.progressValue <=
-            s.maxValue
-      );
-
-    if (slab) {
-      isCompleted = true;
-    }
-  }
-
-  //////////////////////////////////////////////////
-  // HYBRID
-  //////////////////////////////////////////////////
-
-  if (
-    todayTask.taskRuleType ===
-    "HYBRID"
-  ) {
-
-isCompleted =
+  isCompleted =
   updatedProgress.progressValue >=
-    (todayTask.minOrders || 0) &&
+  (todayTask.maxOrders || 0);
 
-  (updatedProgress.acceptanceRate || 0) >=
-    (todayTask.minAcceptanceRate || 0) &&
-
-  (updatedProgress.earnings || 0) >=
-    (todayTask.minEarnings || 0);
+    
   }
+
+if (
+  todayTask.taskRuleType ===
+  "HYBRID"
+) {
+
+  isCompleted =
+    updatedProgress.progressValue >=
+    (todayTask.minOrders || 0);
+}
 
   //////////////////////////////////////////////////
   // UPDATE COMPLETED
   //////////////////////////////////////////////////
 
-  if (isCompleted) {
+if (isCompleted) {
 
-    await prisma.programTaskProgress.update({
+  await prisma.programTaskProgress.update({
+    where: {
+      id: taskProgress.id
+    },
+
+    data: {
+      isCompleted: true
+    }
+  });
+
+  ////////////////////////////////////////////////
+  // UPDATE REFERRAL
+  ////////////////////////////////////////////////
+
+  if (
+    program.programType ===
+    "REFERRAL"
+  ) {
+
+    await prisma.referral.updateMany({
 
       where: {
-        id: taskProgress.id
+
+        refereeId: riderId,
+
+        programId: program.id
+
       },
 
       data: {
-        isCompleted: true
+
+        totalOrders: {
+          increment: 1
+        }
       }
+
     });
   }
+}
 
   //////////////////////////////////////////////////
   // SOCKET
@@ -1148,9 +1192,11 @@ await prisma.programProgress
     ////////////////////////////////////////////////////
 
     if (
-      program.programType ===
-      "REFERRAL"
-    ) {
+  program.programType ===
+  "REFERRAL"
+  &&
+  program.ruleType !== "TASK"
+) {
 
       const referral =
         await prisma.referral

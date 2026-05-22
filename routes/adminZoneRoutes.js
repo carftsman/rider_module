@@ -6,7 +6,8 @@ const {
   createZonePoint,
   getZonePoints,
   updateZonePoint,
-  deleteZonePoint
+  deleteZonePoint,
+  getAllCities
 } = require("../controllers/adminZoneController");
 
 
@@ -215,5 +216,87 @@ adminZoneRoutes.get("/zone-point", getZonePoints);
 //  *         description: Deleted successfully
 //  */
 // adminZoneRoutes.delete("/zone-point/:id", deleteZonePoint);
+
+
+/**
+ * @swagger
+ * /admin/getCities:
+ *   get:
+ *     summary: Get all active cities with pincodes
+ *     description: Fetch all active cities along with their active pincodes
+ *     tags:
+ *       - Admin Zone Points
+ *
+ *     responses:
+ *       200:
+ *         description: Cities fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *
+ *                 count:
+ *                   type: integer
+ *                   example: 2
+ *
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *
+ *                       id:
+ *                         type: string
+ *                         example: city_123
+ *
+ *                       name:
+ *                         type: string
+ *                         example: Hyderabad
+ *
+ *                       state:
+ *                         type: string
+ *                         example: Telangana
+ *
+ *                       pincodes:
+ *                         type: array
+ *                         items:
+ *                           type: object
+ *                           properties:
+ *
+ *                             id:
+ *                               type: string
+ *                               example: pin_123
+ *
+ *                             code:
+ *                               type: string
+ *                               example: "500081"
+ *
+ *                             name:
+ *                               type: string
+ *                               example: Madhapur
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
+ */
+adminZoneRoutes.get("/getCities", getAllCities);
+
 
 module.exports = adminZoneRoutes;

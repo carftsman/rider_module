@@ -522,7 +522,7 @@ exports.new_getWeeklyEarnings = async (req, res) => {
 
 exports.getEarningsHistory = async (req, res) => {
   try {
-    const riderId = req.rider._id;
+    const riderId = req.rider.id;
 
     const {
       from,
