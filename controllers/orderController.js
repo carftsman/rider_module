@@ -1026,7 +1026,8 @@ const rider = await prisma.rider.findUnique({
       const deliveryId = order.deliveryId;
 
       await axios.patch(
-  `http://localhost:5050/api/delivery-event/${deliveryId}`,
+  // `http://localhost:5050/api/delivery-event/${deliveryId}`,
+  ` ${process.env.RENDER_URL}/api/delivery-event/${deliveryId}`,
   {
     riderId: rider.id,
     riderName: rider.profile?.fullName,

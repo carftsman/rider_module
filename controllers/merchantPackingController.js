@@ -120,7 +120,8 @@ exports.merchantPackingApi = async (req, res) => {
 
     const createOrderResponse =
       await axios.post(
-        `http://localhost:5050/api/orders/rider/store-order-details`,  // ${process.env.RENDER_URL}/api/orders/rider/store-order-details
+        // `http://localhost:5050/api/orders/rider/store-order-details`,  
+         `${process.env.RENDER_URL}/api/orders/rider/store-order-details`,
         createOrderPayload
       );
 
@@ -128,12 +129,14 @@ exports.merchantPackingApi = async (req, res) => {
         deliveryId : createOrderResponse.data.data.deliveryId
     }
     const merchentResponse =   await axios.post(
-        `http://localhost:5050/api/delivery-event`,  // ${process.env.RENDER_URL}/api/delivery-event
+        // `http://localhost:5050/api/delivery-event`,  
+        ` ${process.env.RENDER_URL}/api/delivery-event`,
         deliveryId
       );
 
     const confirmApiResponse =   await axios.patch(
-        `http://localhost:5050/api/orders/${orderId}/confirm`,  // ${process.env.RENDER_URL}/api/delivery-event
+        // `http://localhost:5050/api/orders/${orderId}/confirm`, 
+         ` ${process.env.RENDER_URL}/api/orders/${orderId}/confirm`,
         deliveryId
       );
 
