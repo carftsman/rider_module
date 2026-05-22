@@ -7,12 +7,16 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
 
 
 
- /**
+/**
  * @swagger
  * /api/admin/payout-config/city:
  *   post:
- *     summary: Create city-wise payout configuration
- *     description: Creates a payout configuration for a specific city with surge, peak, and weather-based payout settings.
+ *     summary: Create city payout configuration (versioned)
+ *     description: |
+ *       Creates a new city-level payout configuration with versioning support.
+ *       Automatically deactivates the previous active configuration for the same
+ *       city, scenario type, and vehicle type, then creates a new version.
+ *
  *     tags:
  *       - Admin Payout Config
  *
@@ -28,35 +32,28 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *               - cityId
  *               - basePay
  *             properties:
+ *
  *               name:
  *                 type: string
- *                 example: "Chennai Bike Normal Payout"
+ *                 example: "Chennai City Base Config"
  *
  *               scenarioType:
  *                 type: string
- *                 enum:
- *                   - NORMAL
- *                   - SURGE
- *                   - PEAK
- *                   - WEATHER
+ *                 enum: [NORMAL, SURGE, PEAK, WEATHER]
  *                 example: "NORMAL"
  *
  *               cityId:
  *                 type: string
- *                 example: "c4f7f0e2-2e5f-4c8d-8a5e-3a2b8d4f1234"
+ *                 example: "city_6"
  *
  *               vehicleType:
  *                 type: string
- *                 enum:
- *                   - BIKE
- *                   - SCOOTER
- *                   - CYCLE
- *                   - AUTO
+ *                 enum: [BIKE, SCOOTER, CYCLE, AUTO]
  *                 example: "BIKE"
  *
  *               basePay:
  *                 type: number
- *                 example: 40
+ *                 example: 45
  *
  *               perKmRate:
  *                 type: number
@@ -68,14 +65,15 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                   enabled:
  *                     type: boolean
  *                     example: true
- *
- *                   minOrders:
- *                     type: integer
- *                     example: 20
- *
  *                   multiplier:
  *                     type: number
  *                     example: 1.5
+ *                   minLiveOrders:
+ *                     type: integer
+ *                     example: 40
+ *                   extraPay:
+ *                     type: number
+ *                     example: 20
  *
  *               peakConfig:
  *                 type: object
@@ -83,15 +81,12 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                   enabled:
  *                     type: boolean
  *                     example: true
- *
  *                   startTime:
  *                     type: string
  *                     example: "18:00"
- *
  *                   endTime:
  *                     type: string
  *                     example: "22:00"
- *
  *                   extraPay:
  *                     type: number
  *                     example: 25
@@ -102,18 +97,16 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                   enabled:
  *                     type: boolean
  *                     example: true
- *
  *                   multiplier:
  *                     type: number
  *                     example: 1.3
- *
  *                   rainExtraPay:
  *                     type: number
  *                     example: 30
  *
  *               notes:
  *                 type: string
- *                 example: "Weekend payout config for Chennai"
+ *                 example: "City level payout config with versioning"
  *
  *               latitude:
  *                 type: number
@@ -124,6 +117,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                 example: 80.2707
  *
  *     responses:
+ *
  *       201:
  *         description: City payout config created successfully
  *         content:
@@ -131,18 +125,20 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *             schema:
  *               type: object
  *               properties:
+ *
  *                 success:
  *                   type: boolean
  *                   example: true
  *
  *                 data:
  *                   type: object
+ *                   description: Returns the original request body
  *                   example:
- *                     name: "Chennai Bike Normal Payout"
+ *                     name: "Chennai City Base Config"
  *                     scenarioType: "NORMAL"
- *                     cityId: "c4f7f0e2-2e5f-4c8d-8a5e-3a2b8d4f1234"
+ *                     cityId: "city_6"
  *                     vehicleType: "BIKE"
- *                     basePay: 40
+ *                     basePay: 45
  *                     perKmRate: 8
  *                     weatherConfig:
  *                       enabled: true
@@ -150,26 +146,28 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                       rainExtraPay: 30
  *
  *       400:
- *         description: Validation error or config already exists
+ *         description: Validation error
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *
  *                 success:
  *                   type: boolean
  *                   example: false
  *
  *                 message:
  *                   type: string
- *                   example: "City config already exists"
- *
- *                 data:
- *                   type: object
- *                   properties:
- *                     existingConfigId:
- *                       type: string
- *                       example: "d30eb1d7-21a6-42c3-80d9-4ad2e8b6cf0f"
+ *                   examples:
+ *                     nameScenario:
+ *                       value: "name and scenarioType are required"
+ *                     cityRequired:
+ *                       value: "cityId is required"
+ *                     basePayInvalid:
+ *                       value: "basePay must be greater than 0"
+ *                     perKmRateInvalid:
+ *                       value: "perKmRate must be >= 0"
  *
  *       500:
  *         description: Internal server error
@@ -178,6 +176,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *             schema:
  *               type: object
  *               properties:
+ *
  *                 success:
  *                   type: boolean
  *                   example: false
@@ -191,8 +190,12 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  * @swagger
  * /api/admin/payout-config/pincode:
  *   post:
- *     summary: Create pincode-wise payout configuration
- *     description: Creates payout configuration for specific pincodes with surge, peak, and weather-based payout settings.
+ *     summary: Create pincode payout configuration (versioned)
+ *     description: |
+ *       Creates a new pincode-level payout configuration with versioning support.
+ *       Automatically deactivates existing active configs for the same city, scenario type,
+ *       vehicle type, and overlapping pincode sets, then creates a new versioned config.
+ *
  *     tags:
  *       - Admin Payout Config
  *
@@ -203,29 +206,25 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *           schema:
  *             type: object
  *             required:
- *               - name
- *               - scenarioType
  *               - cityId
+ *               - scenarioType
+ *               - vehicleType
  *               - pincodeIds
  *               - basePay
  *             properties:
  *
  *               name:
  *                 type: string
- *                 example: "Hyderabad Bike Pincode Payout"
+ *                 example: "Hyderabad Pincode Surge Config"
  *
  *               scenarioType:
  *                 type: string
- *                 enum:
- *                   - NORMAL
- *                   - SURGE
- *                   - PEAK
- *                   - WEATHER
+ *                 enum: [NORMAL, SURGE, PEAK, WEATHER]
  *                 example: "SURGE"
  *
  *               cityId:
  *                 type: string
- *                 example: "f8f7c111-1f92-4a8d-9f1e-123456789abc"
+ *                 example: "city_6"
  *
  *               pincodeIds:
  *                 type: array
@@ -237,11 +236,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *
  *               vehicleType:
  *                 type: string
- *                 enum:
- *                   - BIKE
- *                   - SCOOTER
- *                   - CYCLE
- *                   - AUTO
+ *                 enum: [BIKE, SCOOTER, CYCLE, AUTO]
  *                 example: "BIKE"
  *
  *               basePay:
@@ -255,35 +250,31 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *               surgeConfig:
  *                 type: object
  *                 properties:
- *
  *                   enabled:
  *                     type: boolean
  *                     example: true
- *
- *                   minOrders:
- *                     type: integer
- *                     example: 30
- *
  *                   multiplier:
  *                     type: number
  *                     example: 2
+ *                   minLiveOrders:
+ *                     type: integer
+ *                     example: 30
+ *                   extraPay:
+ *                     type: number
+ *                     example: 25
  *
  *               peakConfig:
  *                 type: object
  *                 properties:
- *
  *                   enabled:
  *                     type: boolean
  *                     example: true
- *
  *                   startTime:
  *                     type: string
  *                     example: "19:00"
- *
  *                   endTime:
  *                     type: string
  *                     example: "23:00"
- *
  *                   extraPay:
  *                     type: number
  *                     example: 40
@@ -291,22 +282,19 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *               weatherConfig:
  *                 type: object
  *                 properties:
- *
  *                   enabled:
  *                     type: boolean
  *                     example: true
- *
  *                   multiplier:
  *                     type: number
  *                     example: 1.5
- *
  *                   rainExtraPay:
  *                     type: number
  *                     example: 35
  *
  *               notes:
  *                 type: string
- *                 example: "Special payout for heavy demand pincodes"
+ *                 example: "Pincode-level dynamic payout config"
  *
  *               latitude:
  *                 type: number
@@ -330,25 +318,67 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                   type: boolean
  *                   example: true
  *
+ *                 message:
+ *                   type: string
+ *                   example: "Pincode config created successfully"
+ *
  *                 data:
  *                   type: object
- *                   example:
- *                     name: "Hyderabad Bike Pincode Payout"
- *                     scenarioType: "SURGE"
- *                     cityId: "f8f7c111-1f92-4a8d-9f1e-123456789abc"
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: "d30eb1d7-21a6-42c3-80d9-4ad2e8b6cf0f"
+ *
+ *                     name:
+ *                       type: string
+ *                       example: "Hyderabad Pincode Surge Config"
+ *
+ *                     scenarioType:
+ *                       type: string
+ *                       example: "SURGE"
+ *
+ *                     cityId:
+ *                       type: string
+ *                       example: "city_6"
+ *
  *                     pincodeIds:
- *                       - "500081"
- *                       - "500032"
- *                     vehicleType: "BIKE"
- *                     basePay: 50
- *                     perKmRate: 10
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example:
+ *                         - "500081"
+ *                         - "500032"
+ *
+ *                     vehicleType:
+ *                       type: string
+ *                       example: "BIKE"
+ *
+ *                     basePay:
+ *                       type: number
+ *                       example: 50
+ *
+ *                     perKmRate:
+ *                       type: number
+ *                       example: 10
+ *
+ *                     version:
+ *                       type: integer
+ *                       example: 3
+ *
+ *                     isActive:
+ *                       type: boolean
+ *                       example: true
+ *
  *                     weatherConfig:
- *                       enabled: true
- *                       multiplier: 1.5
- *                       rainExtraPay: 35
+ *                       type: object
+ *                       example:
+ *                         enabled: true
+ *                         isRaining: false
+ *                         multiplier: 1.5
+ *                         rainExtraPay: 35
  *
  *       400:
- *         description: Validation error or existing config found
+ *         description: Validation error
  *         content:
  *           application/json:
  *             schema:
@@ -361,15 +391,15 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *
  *                 message:
  *                   type: string
- *                   example: "Pincode config already exists"
- *
- *                 data:
- *                   type: object
- *                   properties:
- *
- *                     existingConfigId:
- *                       type: string
- *                       example: "d30eb1d7-21a6-42c3-80d9-4ad2e8b6cf0f"
+ *                   examples:
+ *                     requiredFields:
+ *                       value: "cityId, scenarioType, vehicleType are required"
+ *                     pincodeRequired:
+ *                       value: "pincodeIds are required"
+ *                     basePayInvalid:
+ *                       value: "basePay must be greater than 0"
+ *                     perKmRateInvalid:
+ *                       value: "perKmRate must be >= 0"
  *
  *       500:
  *         description: Internal server error
@@ -389,78 +419,206 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  */
 router.post("/admin/payout-config/pincode", controller.createPincodePayoutConfig);
 
+// /**
+//  * @swagger
+//  * /api/admin/payout-config/active:
+//  *   get:
+//  *     summary: Get active payout config by city
+//  *     tags: [Admin Payout Config]
+//  *     parameters:
+//  *       - in: query
+//  *         name: cityId
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         example: city_001
+//  *         description: City ID to fetch active payout config
+//  *
+//  *     responses:
+//  *       200:
+//  *         description: Active payout config fetched successfully
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: true
+//  *               data:
+//  *                 configId: cfg_123
+//  *                 scenarioType: HIGH_DEMAND
+//  *                 name: High Demand Boost V2
+//  *                 cityId: city_001
+//  *                 pincodeIds: ["500081"]
+//  *                 vehicleType: bike
+//  *                 basePay: 35
+//  *                 perKmRate: 6
+//  *                 surgeConfig:
+//  *                   enabled: true
+//  *                   minDemand: 50
+//  *                   multiplier: 1.8
+//  *                 peakConfig:
+//  *                   enabled: true
+//  *                   start: "18:00"
+//  *                   end: "21:00"
+//  *                   bonus: 25
+//  *                 weatherConfig:
+//  *                   RAIN: 40
+//  *                 version: 3
+//  *                 isActive: true
+//  *                 createdAt: "2026-05-05T10:00:00Z"
+//  *
+//  *       400:
+//  *         description: Missing or invalid query params
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: false
+//  *               message: cityId is required
+//  *
+//  *       404:
+//  *         description: No active config found
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: false
+//  *               message: No active config found for this city
+//  *
+//  *       500:
+//  *         description: Internal server error
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: false
+//  *               message: Internal server error
+//  */
+router.get("/admin/payout-config/active", controller.getActivePayoutConfig);
 /**
  * @swagger
- * /api/admin/payout-config/active:
+ * /api/admin/all/payout-config:
  *   get:
- *     summary: Get active payout config by city
- *     tags: [Admin Payout Config]
+ *     summary: Get payout configurations
+ *     description: Fetches all payout configurations, optionally filtered by cityId, sorted by latest created first.
+ *     tags:
+ *       - Admin Payout Config
+ *
  *     parameters:
  *       - in: query
  *         name: cityId
- *         required: true
+ *         required: false
  *         schema:
  *           type: string
- *         example: city_001
- *         description: City ID to fetch active payout config
+ *         description: Filter payout configs by city ID
+ *         example: "city_6"
  *
  *     responses:
+ *
  *       200:
- *         description: Active payout config fetched successfully
+ *         description: Payout configs fetched successfully
  *         content:
  *           application/json:
- *             example:
- *               success: true
- *               data:
- *                 configId: cfg_123
- *                 scenarioType: HIGH_DEMAND
- *                 name: High Demand Boost V2
- *                 cityId: city_001
- *                 pincodeIds: ["500081"]
- *                 vehicleType: bike
- *                 basePay: 35
- *                 perKmRate: 6
- *                 surgeConfig:
- *                   enabled: true
- *                   minDemand: 50
- *                   multiplier: 1.8
- *                 peakConfig:
- *                   enabled: true
- *                   start: "18:00"
- *                   end: "21:00"
- *                   bonus: 25
- *                 weatherConfig:
- *                   RAIN: 40
- *                 version: 3
- *                 isActive: true
- *                 createdAt: "2026-05-05T10:00:00Z"
+ *             schema:
+ *               type: object
+ *               properties:
  *
- *       400:
- *         description: Missing or invalid query params
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: cityId is required
+ *                 success:
+ *                   type: boolean
+ *                   example: true
  *
- *       404:
- *         description: No active config found
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: No active config found for this city
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *
+ *                       configId:
+ *                         type: string
+ *                         example: "d30eb1d7-21a6-42c3-80d9-4ad2e8b6cf0f"
+ *
+ *                       scenarioType:
+ *                         type: string
+ *                         example: "NORMAL"
+ *
+ *                       name:
+ *                         type: string
+ *                         example: "Chennai Base Config"
+ *
+ *                       cityId:
+ *                         type: string
+ *                         example: "city_6"
+ *
+ *                       pincodeIds:
+ *                         type: array
+ *                         items:
+ *                           type: string
+ *                         example:
+ *                           - "600001"
+ *                           - "600002"
+ *
+ *                       vehicleType:
+ *                         type: string
+ *                         example: "BIKE"
+ *
+ *                       basePay:
+ *                         type: number
+ *                         example: 40
+ *
+ *                       perKmRate:
+ *                         type: number
+ *                         example: 8
+ *
+ *                       surgeConfig:
+ *                         type: object
+ *                         example:
+ *                           enabled: true
+ *                           multiplier: 1.5
+ *
+ *                       peakConfig:
+ *                         type: object
+ *                         example:
+ *                           enabled: true
+ *                           startTime: "18:00"
+ *                           endTime: "22:00"
+ *                           extraPay: 25
+ *
+ *                       weatherConfig:
+ *                         type: object
+ *                         example:
+ *                           enabled: true
+ *                           isRaining: false
+ *                           multiplier: 1.2
+ *                           rainExtraPay: 20
+ *
+ *                       version:
+ *                         type: integer
+ *                         example: 2
+ *
+ *                       isActive:
+ *                         type: boolean
+ *                         example: true
+ *
+ *                       createdAt:
+ *                         type: string
+ *                         format: date-time
+ *                         example: "2026-05-21T10:00:00.000Z"
  *
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
- *             example:
- *               success: false
- *               message: Internal server error
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: "Internal server error"
  */
-router.get("/admin/payout-config/active", controller.getActivePayoutConfig);
-
+router.get(
+  "/admin/all/payout-config",
+  controller.getPayoutConfigs
+);
 /**
  * @swagger
  * /api/admin/payout-config/history:
@@ -1161,112 +1319,220 @@ router.patch("/admin/surge-config/:id",controller.updateSurgeConfig)
 router.patch("/admin/weather-config/:id", controller.updateWeatherConfig);
 /**
  * @swagger
- * /api/admin/{id}/rollback:
+ * /api/admin/rollback:
  *   post:
- *     summary: Rollback payout config
- *     tags: [Admin Payout Config]
+ *     summary: Rollback payout configuration to previous version
+ *     description: |
+ *       Rolls back the active payout configuration for a city to its previous version.
+ *       The current active config is deactivated and the previous version is activated.
+ *
+ *     tags:
+ *       - Admin Payout Config
+ *
  *     parameters:
- *       - in: path
- *         name: id
+ *       - in: query
+ *         name: cityId
  *         required: true
  *         schema:
  *           type: string
- *         example: cfg_122
+ *         description: City ID for which rollback is performed
+ *         example: "city_6"
+ *
  *     responses:
+ *
  *       200:
  *         description: Rollback successful
  *         content:
  *           application/json:
- *             example:
- *               success: true
- *               message: Rollback successful
- *               data:
- *                 configId: cfg_122
- *                 version: 2
- *                 isActive: true
- *                 rolledBackAt: 2026-05-05T11:00:00Z
- */
-router.post("/admin/:id/rollback", controller.rollbackPayoutConfig);
-
-/**
- * @swagger
- * /api/admin/{id}/status:
- *   patch:
- *     summary: Toggle payout config status
- *     tags: [Admin Payout Config]
- *     parameters:
- *       - in: path
- *         name: id
- *         required: true
- *         schema:
- *           type: string
- *         example: cfg_123
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               isActive:
- *                 type: boolean
- *                 example: false
- *     responses:
- *       200:
- *         description: Status updated
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *
+ *                 message:
+ *                   type: string
+ *                   example: "Rollback successful"
+ *
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *
+ *                     id:
+ *                       type: string
+ *                       example: "d30eb1d7-21a6-42c3-80d9-4ad2e8b6cf0f"
+ *
+ *                     cityId:
+ *                       type: string
+ *                       example: "city_6"
+ *
+ *                     scenarioType:
+ *                       type: string
+ *                       example: "SURGE"
+ *
+ *                     vehicleType:
+ *                       type: string
+ *                       example: "BIKE"
+ *
+ *                     version:
+ *                       type: integer
+ *                       example: 3
+ *
+ *                     isActive:
+ *                       type: boolean
+ *                       example: true
+ *
+ *                     basePay:
+ *                       type: number
+ *                       example: 50
+ *
+ *                     perKmRate:
+ *                       type: number
+ *                       example: 10
+ *
+ *                     surgeConfig:
+ *                       type: object
+ *                       example:
+ *                         enabled: true
+ *                         multiplier: 2
+ *
+ *                     peakConfig:
+ *                       type: object
+ *                       example:
+ *                         enabled: true
+ *                         startTime: "19:00"
+ *                         endTime: "23:00"
+ *                         extraPay: 40
+ *
+ *                     weatherConfig:
+ *                       type: object
+ *                       example:
+ *                         enabled: true
+ *                         isRaining: false
+ *                         multiplier: 1.5
+ *                         rainExtraPay: 35
+ *
  *       400:
- *         description: Cannot deactivate only active config
- */
-router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
-
-/**
- * @swagger
- * /api/rider/payout/surge-status:
- *   get:
- *     summary: Get rider surge status
- *     tags: [Surge]
- *     description: Fetches current surge status based on authenticated rider location
- *
- *     security:
- *       - bearerAuth: []
- *
- *     responses:
- *       200:
- *         description: Surge status fetched successfully
+ *         description: Validation or business error
  *         content:
  *           application/json:
- *             example:
- *               success: true
- *               data:
- *                 isSurgeActive: true
- *                 scenarioType: HIGH_DEMAND
- *                 multiplier: 1.8
- *                 minDemand: 50
+ *             schema:
+ *               type: object
+ *               properties:
  *
- *       401:
- *         description: Unauthorized
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Unauthorized
+ *                 success:
+ *                   type: boolean
+ *                   example: false
  *
- *       404:
- *         description: No active config found
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: No active config found
+ *                 message:
+ *                   type: string
+ *                   examples:
+ *                     missingCity:
+ *                       value: "cityId is required"
+ *                     noActive:
+ *                       value: "No active config found"
+ *                     noPrevious:
+ *                       value: "No previous version found to rollback"
  *
  *       500:
  *         description: Internal server error
  *         content:
  *           application/json:
- *             example:
- *               success: false
- *               message: Internal server error
+ *             schema:
+ *               type: object
+ *               properties:
+ *
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: "Internal server error"
  */
+router.post("/admin/rollback", controller.rollbackPayoutConfig);
+
+// /**
+//  * @swagger
+//  * /api/admin/{id}/status:
+//  *   patch:
+//  *     summary: Toggle payout config status
+//  *     tags: [Admin Payout Config]
+//  *     parameters:
+//  *       - in: path
+//  *         name: id
+//  *         required: true
+//  *         schema:
+//  *           type: string
+//  *         example: cfg_123
+//  *     requestBody:
+//  *       required: true
+//  *       content:
+//  *         application/json:
+//  *           schema:
+//  *             type: object
+//  *             properties:
+//  *               isActive:
+//  *                 type: boolean
+//  *                 example: false
+//  *     responses:
+//  *       200:
+//  *         description: Status updated
+//  *       400:
+//  *         description: Cannot deactivate only active config
+//  */
+router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
+
+// /**
+//  * @swagger
+//  * /api/rider/payout/surge-status:
+//  *   get:
+//  *     summary: Get rider surge status
+//  *     tags: [Surge]
+//  *     description: Fetches current surge status based on authenticated rider location
+//  *
+//  *     security:
+//  *       - bearerAuth: []
+//  *
+//  *     responses:
+//  *       200:
+//  *         description: Surge status fetched successfully
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: true
+//  *               data:
+//  *                 isSurgeActive: true
+//  *                 scenarioType: HIGH_DEMAND
+//  *                 multiplier: 1.8
+//  *                 minDemand: 50
+//  *
+//  *       401:
+//  *         description: Unauthorized
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: false
+//  *               message: Unauthorized
+//  *
+//  *       404:
+//  *         description: No active config found
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: false
+//  *               message: No active config found
+//  *
+//  *       500:
+//  *         description: Internal server error
+//  *         content:
+//  *           application/json:
+//  *             example:
+//  *               success: false
+//  *               message: Internal server error
+//  */
 
 
 /**
@@ -1274,14 +1540,21 @@ router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
  * /api/admin/payout-config/city/{configId}:
  *   put:
  *     summary: Update City Level Payout Configuration
+ *     description: |
+ *       Updates an existing city-level payout configuration.
+ *       Old config version will be incremented automatically.
+ *       Weather payout applies only when live rain condition is detected.
+ *
  *     tags: [Admin Payout Config]
+ *
  *     parameters:
  *       - in: path
  *         name: configId
  *         required: true
  *         schema:
  *           type: string
- *         example: cfg_12345
+ *         description: Existing payout config ID
+ *         example: cfg_city_001
  *
  *     requestBody:
  *       required: true
@@ -1293,16 +1566,23 @@ router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
  *               - name
  *               - scenarioType
  *               - cityId
+ *               - vehicleType
  *               - basePay
  *               - perKmRate
+ *
  *             properties:
  *               name:
  *                 type: string
- *                 example: Hyderabad Bike Peak Config Updated
+ *                 example: Hyderabad Peak Hour Bike Config
  *
  *               scenarioType:
  *                 type: string
- *                 example: NORMAL
+ *                 enum:
+ *                   - NORMAL
+ *                   - PEAK
+ *                   - SURGE
+ *                   - WEATHER
+ *                 example: PEAK
  *
  *               cityId:
  *                 type: string
@@ -1310,6 +1590,196 @@ router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
  *
  *               vehicleType:
  *                 type: string
+ *                 enum:
+ *                   - bike
+ *                   - cycle
+ *                   - ev_bike
+ *                   - mini_truck
+ *                 example: bike
+ *
+ *               basePay:
+ *                 type: number
+ *                 example: 45
+ *
+ *               perKmRate:
+ *                 type: number
+ *                 example: 8
+ *
+ *               surgeConfig:
+ *                 type: object
+ *                 properties:
+ *                   enabled:
+ *                     type: boolean
+ *                     example: true
+ *
+ *                   surgeAmount:
+ *                     type: number
+ *                     example: 20
+ *
+ *               peakConfig:
+ *                 type: object
+ *                 properties:
+ *                   enabled:
+ *                     type: boolean
+ *                     example: true
+ *
+ *                   maxOrdersPerRider:
+ *                     type: number
+ *                     example: 12
+ *
+ *                   extraPay:
+ *                     type: number
+ *                     example: 30
+ *
+ *                   multiplier:
+ *                     type: number
+ *                     example: 1.5
+ *
+ *               weatherConfig:
+ *                 type: object
+ *                 properties:
+ *                   enabled:
+ *                     type: boolean
+ *                     example: true
+ *
+ *                   rainExtraPay:
+ *                     type: number
+ *                     example: 25
+ *
+ *                   multiplier:
+ *                     type: number
+ *                     example: 1.3
+ *
+ *               notes:
+ *                 type: string
+ *                 example: Updated payout config for Hyderabad city
+ *
+ *               latitude:
+ *                 type: number
+ *                 example: 17.385044
+ *
+ *               longitude:
+ *                 type: number
+ *                 example: 78.486671
+ *
+ *     responses:
+ *       200:
+ *         description: City payout config updated successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: City payout config updated successfully
+ *               data:
+ *                 id: cfg_city_001
+ *                 name: Hyderabad Peak Hour Bike Config
+ *                 cityId: city_123
+ *                 vehicleType: bike
+ *                 basePay: 45
+ *                 perKmRate: 8
+ *                 version: 4
+ *                 isActive: true
+ *
+ *       400:
+ *         description: Validation error or duplicate config exists
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Another city config already exists
+ *
+ *       404:
+ *         description: Payout config not found
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Payout config not found
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Internal server error
+ */
+router.put(
+  "/admin/payout-config/city/:configId",
+  controller.updateCityPayoutConfig
+);
+
+
+/**
+ * @swagger
+ * /api/admin/payout-config/pincode/{configId}:
+ *   put:
+ *     summary: Update Pincode Level Payout Configuration
+ *     description: |
+ *       Updates an existing pincode-level payout configuration.
+ *       Existing active config version will be incremented automatically.
+ *       Weather payout is applied only when live rain condition is detected.
+ *
+ *     tags: [Admin Payout Config]
+ *
+ *     parameters:
+ *       - in: path
+ *         name: configId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Existing payout config ID
+ *         example: cfg_pin_001
+ *
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *
+ *             required:
+ *               - name
+ *               - scenarioType
+ *               - cityId
+ *               - pincodeIds
+ *               - vehicleType
+ *               - basePay
+ *               - perKmRate
+ *
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: Madhapur Bike Pincode Config
+ *
+ *               scenarioType:
+ *                 type: string
+ *                 enum:
+ *                   - NORMAL
+ *                   - PEAK
+ *                   - SURGE
+ *                   - WEATHER
+ *                 example: SURGE
+ *
+ *               cityId:
+ *                 type: string
+ *                 example: city_123
+ *
+ *               pincodeIds:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example:
+ *                   - "500081"
+ *                   - "500032"
+ *
+ *               vehicleType:
+ *                 type: string
+ *                 enum:
+ *                   - bike
+ *                   - cycle
+ *                   - ev_bike
+ *                   - mini_truck
  *                 example: bike
  *
  *               basePay:
@@ -1326,9 +1796,10 @@ router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
  *                   enabled:
  *                     type: boolean
  *                     example: true
+ *
  *                   surgeAmount:
  *                     type: number
- *                     example: 15
+ *                     example: 18
  *
  *               peakConfig:
  *                 type: object
@@ -1336,15 +1807,18 @@ router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
  *                   enabled:
  *                     type: boolean
  *                     example: true
+ *
  *                   maxOrdersPerRider:
  *                     type: number
  *                     example: 10
+ *
  *                   extraPay:
  *                     type: number
- *                     example: 25
+ *                     example: 20
+ *
  *                   multiplier:
  *                     type: number
- *                     example: 1.5
+ *                     example: 1.4
  *
  *               weatherConfig:
  *                 type: object
@@ -1352,235 +1826,70 @@ router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
  *                   enabled:
  *                     type: boolean
  *                     example: true
+ *
  *                   rainExtraPay:
  *                     type: number
- *                     example: 20
+ *                     example: 15
+ *
  *                   multiplier:
  *                     type: number
  *                     example: 1.2
  *
  *               notes:
  *                 type: string
- *                 example: Updated city payout config
+ *                 example: Updated pincode level payout config
  *
  *               latitude:
  *                 type: number
- *                 example: 17.385
+ *                 example: 17.385044
  *
  *               longitude:
  *                 type: number
- *                 example: 78.4867
- *
- *     responses:
- *       200:
- *         description: City payout config updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: City payout config updated successfully
- *                 data:
- *                   type: object
- *
- *       400:
- *         description: Validation or duplicate config error
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Another city config already exists
- *
- *       404:
- *         description: Config not found
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Payout config not found
- *
- *       500:
- *         description: Server error
- */
-router.put(
-  "/admin/payout-config/city/:configId",
-  controller.updateCityPayoutConfig
-);
-
-
-/**
- * @swagger
- * /api/admin/payout-config/pincode/{configId}:
- *   put:
- *     summary: Update Pincode Level Payout Configuration
- *     tags: [Admin Payout Config]
- *     parameters:
- *       - in: path
- *         name: configId
- *         required: true
- *         schema:
- *           type: string
- *         example: cfg_67890
- *
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - name
- *               - scenarioType
- *               - cityId
- *               - pincodeIds
- *               - basePay
- *               - perKmRate
- *             properties:
- *               name:
- *                 type: string
- *                 example: Hyderabad Pincode Config Updated
- *
- *               scenarioType:
- *                 type: string
- *                 example: NORMAL
- *
- *               cityId:
- *                 type: string
- *                 example: city_123
- *
- *               pincodeIds:
- *                 type: array
- *                 items:
- *                   type: string
- *                 example: ["500081", "500032"]
- *
- *               vehicleType:
- *                 type: string
- *                 example: bike
- *
- *               basePay:
- *                 type: number
- *                 example: 45
- *
- *               perKmRate:
- *                 type: number
- *                 example: 9
- *
- *               surgeConfig:
- *                 type: object
- *                 properties:
- *                   enabled:
- *                     type: boolean
- *                     example: true
- *                   surgeAmount:
- *                     type: number
- *                     example: 12
- *
- *               peakConfig:
- *                 type: object
- *                 properties:
- *                   enabled:
- *                     type: boolean
- *                     example: true
- *                   maxOrdersPerRider:
- *                     type: number
- *                     example: 9
- *                   extraPay:
- *                     type: number
- *                     example: 22
- *                   multiplier:
- *                     type: number
- *                     example: 1.3
- *
- *               weatherConfig:
- *                 type: object
- *                 properties:
- *                   enabled:
- *                     type: boolean
- *                     example: true
- *                   rainExtraPay:
- *                     type: number
- *                     example: 18
- *                   multiplier:
- *                     type: number
- *                     example: 1.15
- *
- *               notes:
- *                 type: string
- *                 example: Updated pincode payout config
- *
- *               latitude:
- *                 type: number
- *                 example: 17.385
- *
- *               longitude:
- *                 type: number
- *                 example: 78.4867
+ *                 example: 78.486671
  *
  *     responses:
  *       200:
  *         description: Pincode payout config updated successfully
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: true
- *                 message:
- *                   type: string
- *                   example: Pincode payout config updated successfully
- *                 data:
- *                   type: object
+ *             example:
+ *               success: true
+ *               message: Pincode payout config updated successfully
+ *               data:
+ *                 id: cfg_pin_001
+ *                 cityId: city_123
+ *                 pincodeIds:
+ *                   - "500081"
+ *                   - "500032"
+ *                 vehicleType: bike
+ *                 basePay: 50
+ *                 perKmRate: 10
+ *                 version: 3
+ *                 isActive: true
  *
  *       400:
- *         description: Validation or duplicate config error
+ *         description: Validation error or duplicate config exists
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Another pincode config already exists
+ *             example:
+ *               success: false
+ *               message: Another pincode config already exists
  *
  *       404:
- *         description: Config not found
+ *         description: Payout config not found
  *         content:
  *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: Payout config not found
+ *             example:
+ *               success: false
+ *               message: Payout config not found
  *
  *       500:
- *         description: Server error
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Internal server error
  */
 router.put(
   "/admin/payout-config/pincode/:configId",

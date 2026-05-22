@@ -13,7 +13,8 @@ exports.merchantPackingApi = async (req, res) => {
       vendorShopName,
       pickupAddress,
       deliveryAddress,
-      orderDetails
+      orderDetails,
+      payment
     } = req.body;
 
     if (!orderId) {
@@ -55,6 +56,12 @@ exports.merchantPackingApi = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "orderDetails is required"
+      });
+    }
+    if (!payment) {
+      return res.status(400).json({
+        success: false,
+        message: "payment is required"
       });
     }
 
@@ -113,6 +120,9 @@ exports.merchantPackingApi = async (req, res) => {
 
         estimatedWeight:
           orderDetails.estimatedWeight
+      },
+      payment :{
+        mode:payment.mode
       }
     };
 
@@ -133,7 +143,7 @@ exports.merchantPackingApi = async (req, res) => {
         ` ${process.env.RENDER_URL}/api/delivery-event`,
         deliveryId
       );
-
+      console.log("orderId : " , orderId)
     const confirmApiResponse =   await axios.patch(
         // `http://localhost:5050/api/orders/${orderId}/confirm`, 
          ` ${process.env.RENDER_URL}/api/orders/${orderId}/confirm`,

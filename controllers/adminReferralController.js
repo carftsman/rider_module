@@ -424,25 +424,19 @@ if (ruleType === "TASK") {
     });
   }
 
-  const totalProgramDays =
-    Math.ceil(
-      (
-        new Date(validTill) -
-        new Date(validFrom)
-      ) /
-      (1000 * 60 * 60 * 24)
-    ) + 1;
+const maxDayNumber =
+  Math.max(
+    ...days.map((d) => d.dayNumber)
+  );
 
-  if (
-    days.length !== totalProgramDays
-  ) {
+if (maxDayNumber <= 0) {
 
-    return res.status(400).json({
-      success: false,
-      message:
-        `Program duration is ${totalProgramDays} days, so ${totalProgramDays} task days are required`
-    });
-  }
+  return res.status(400).json({
+    success: false,
+    message:
+      "Invalid task day numbers"
+  });
+}
 const uniqueDays =
   new Set(
     days.map((d) => d.dayNumber)

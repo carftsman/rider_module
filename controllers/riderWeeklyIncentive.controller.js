@@ -838,6 +838,18 @@ else if (p.ruleType === "HYBRID" && p.targets?.[0]) {
   maxReward = p.targets[0].rewardAmount;
 }
 //////////////////////////////////////////////////
+// PER_ORDER
+//////////////////////////////////////////////////
+
+else if (
+  p.ruleType === "PER_ORDER" &&
+  p.rules?.[0]
+) {
+
+  maxReward =
+    p.rules[0].minEarnings;
+}
+//////////////////////////////////////////////////
 // TASK
 //////////////////////////////////////////////////
 
@@ -938,6 +950,24 @@ const result = {
           minEarnings: p.rules[0].minEarnings
         };
       }
+      //////////////////////////////////////////////////
+// PER_ORDER
+//////////////////////////////////////////////////
+
+if (
+  p.ruleType === "PER_ORDER" &&
+  p.rules?.[0]
+) {
+
+  result.rewardPerOrder =
+    p.rules[0].perOrderAmount;
+
+  result.maxOrders =
+    p.rules[0].minOrders;
+
+  result.maxEarning =
+    p.rules[0].minEarnings;
+}
 // TASK
 if (p.ruleType === "TASK" && p.tasks?.length) {
 

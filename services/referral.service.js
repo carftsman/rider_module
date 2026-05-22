@@ -155,7 +155,78 @@ if (!referral) {
         }
 
       });
+//////////////////////////////////////////////////
+// AUTO ENROLL ACTIVE REFERRAL PROGRAM
+//////////////////////////////////////////////////
 
+if (programs.length > 0) {
+
+  const existingEnrollment =
+    await prisma.programEnrollment.findFirst({
+
+      where: {
+
+        riderId,
+
+        program: {
+          programType: "REFERRAL"
+        }
+      }
+    });
+
+  //////////////////////////////////////////////////
+  // ONLY FIRST TIME ENROLL
+  //////////////////////////////////////////////////
+
+if (!existingEnrollment) {
+
+  //////////////////////////////////////////////////
+  // ONLY ALLOW IF RIDER JOINED
+  // DURING PROGRAM ACTIVE WINDOW
+  //////////////////////////////////////////////////
+
+  const eligibleProgram =
+    programs.find(
+      (program) =>
+
+        referral.createdAt >=
+        program.validFrom
+
+        &&
+
+        referral.createdAt <=
+        program.validTill
+    );
+
+  if (eligibleProgram) {
+
+await prisma.programEnrollment.create({
+
+  data: {
+
+    riderId,
+
+    programId:
+      eligibleProgram.id,
+
+    enrolledAt:
+  referral.createdAt,
+
+    expiresAt:
+      eligibleProgram.validTill,
+
+    status:
+      "ACTIVE"
+
+  }
+
+});
+
+  }
+
+}
+
+}
    return programs.map((program) => {
 
   //////////////////////////////////////////////////
@@ -422,6 +493,22 @@ if (!referral) {
   };
 exports.getReferralProgramsProgress =
   async (riderId) => {
+    const alreadyJoined =
+  await prisma.programEnrollment.findFirst({
+
+    where: {
+
+      riderId,
+
+      program: {
+        programType: "REFERRAL"
+      }
+    }
+  });
+
+if (!alreadyJoined) {
+  return [];
+}
 const referralExists =
   await prisma.referral.findFirst({
 
@@ -446,12 +533,12 @@ const riderLocation =
 if (!riderLocation?.pincode) {
   return [];
 }
- const referrals =
-  await prisma.referral.findMany({
+ const enrollments =
+  await prisma.programEnrollment.findMany({
 
     where: {
 
-      refereeId: riderId,
+      riderId,
 
   program: {
 
@@ -492,18 +579,18 @@ if (!riderLocation?.pincode) {
     const uniqueProgramsMap =
       new Map();
 
-    for (const ref of referrals) {
-     if (
+    for (const enrollment of enrollments){
+if (
   uniqueProgramsMap.has(
-    ref.program.id
+    enrollment.program.id
   )
-) {
+){
   continue;
 }
 
       const groupedTasks = {};
 
-      ref.program.tasks
+      enrollment.program.tasks
         .filter(
           (task) =>
             task.taskRuleType === "FIXED_TARGET"
@@ -543,8 +630,8 @@ if (!riderLocation?.pincode) {
 
                       riderId,
 
-                      programId:
-                        ref.program.id,
+                     programId:
+  enrollment.program.id,
 
                       taskId:
                         firstTask.id
@@ -572,25 +659,25 @@ if (!riderLocation?.pincode) {
         );
 
       uniqueProgramsMap.set(
-        ref.program.id,
+  enrollment.program.id,
         {
 
           programId:
-            ref.program.id,
+  enrollment.program.id,
 
           name:
-            ref.program.name,
+           enrollment.program.name,
 
           type:
-            ref.program.programType,
+  enrollment.program.programType,
 
           ruleType:
-            ref.program.ruleType,
+  enrollment.program.ruleType,
 
           status:
-            ref.isCompleted
-              ? "COMPLETED"
-              : "RUNNING",
+  enrollment.status === "COMPLETED"
+    ? "COMPLETED"
+    : "RUNNING",
 
           overallProgress: {
 
@@ -629,125 +716,213 @@ exports.getReferrerList = async (riderId) => {
         referrerId: riderId
       },
 
-      include: {
+     include: {
 
-        referee: {
-          include: {
-            profile: true
-          }
-        }
+  referee: {
+    include: {
+      profile: true
+    }
+  },
 
-      }
+  program: {
+
+    include: {
+
+      tasks: true,
+
+      slabs: true,
+
+      targets: true
+
+    }
+
+  }
+
+}
 
     });
+const referralsData =
+  await Promise.all(
 
+    referrals.map(async (ref) => {
+
+      //////////////////////////////////////////////////
+      // REAL COMPLETED ORDERS
+      //////////////////////////////////////////////////
+
+      let completedOrders =
+        ref.totalOrders || 0;
+
+      //////////////////////////////////////////////////
+      // DYNAMIC REWARD
+      //////////////////////////////////////////////////
+
+      let rewardPerOrder = 0;
+
+      ////////////////////////////////////////////////
+      // TASK
+      ////////////////////////////////////////////////
+
+      if (
+        ref.program?.ruleType ===
+        "TASK"
+      ) {
+
+        const perOrderTask =
+          ref.program.tasks?.find(
+            (t) =>
+              t.taskRuleType ===
+              "PER_ORDER"
+          );
+
+        rewardPerOrder =
+          perOrderTask
+            ?.rewardPerOrder || 0;
+      }
+
+      ////////////////////////////////////////////////
+      // FIXED TARGET
+      ////////////////////////////////////////////////
+
+      else if (
+        ref.program?.ruleType ===
+        "FIXED_TARGET"
+      ) {
+
+        rewardPerOrder =
+          (
+            ref.program.targets?.[0]
+              ?.rewardAmount || 0
+          ) /
+
+          (
+            ref.targetOrders || 1
+          );
+      }
+
+      ////////////////////////////////////////////////
+      // SLAB
+      ////////////////////////////////////////////////
+
+      else if (
+        ref.program?.ruleType ===
+        "SLAB"
+      ) {
+
+        const matchedSlab =
+          ref.program.slabs?.find(
+            (s) =>
+
+              completedOrders >=
+              s.minValue &&
+
+              completedOrders <=
+              s.maxValue
+          );
+
+        rewardPerOrder =
+          matchedSlab
+            ?.rewardAmount || 0;
+      }
+
+      //////////////////////////////////////////////////
+      // EARNINGS
+      //////////////////////////////////////////////////
+
+      const earnedAmount =
+        completedOrders *
+        rewardPerOrder;
+
+      //////////////////////////////////////////////////
+      // RESPONSE
+      //////////////////////////////////////////////////
+
+      return {
+
+        referralId:
+          ref.id,
+
+        referee: {
+
+          riderId:
+            ref.referee.id,
+
+          name:
+            ref.referee.profile
+              ?.fullName
+
+        },
+
+        status:
+          ref.isCompleted
+            ? "COMPLETED"
+            : "IN_PROGRESS",
+
+        completedOrders,
+
+        rewardPerOrder,
+
+        earnedAmount,
+
+        remainingAmount:
+          Math.max(
+            (
+              ref.maxReward || 0
+            ) - earnedAmount,
+            0
+          ),
+
+        progressPercentage:
+          ref.targetOrders
+
+            ? Math.min(
+
+              (
+                completedOrders /
+                ref.targetOrders
+              ) * 100,
+
+              100
+            )
+
+            : 0
+
+      };
+
+    })
+
+  );
   return {
 
-    summary: {
+  summary: {
 
-      totalReferrals:
-        referrals.length,
+    totalReferrals:
+      referrals.length,
 
-      completedReferrals:
-        referrals.filter(
-          (r) => r.isCompleted
-        ).length,
+    completedReferrals:
+      referrals.filter(
+        (r) => r.isCompleted
+      ).length,
 
-      activeReferrals:
-        referrals.filter(
-          (r) => !r.isCompleted
-        ).length
+    activeReferrals:
+      referrals.filter(
+        (r) => !r.isCompleted
+      ).length,
 
-    },
-
-    referrals:
-      await Promise.all(
-
-        referrals.map(async (ref) => {
-
-          //////////////////////////////////////////////////
-          // REAL COMPLETED ORDERS
-          //////////////////////////////////////////////////
-
-          let completedOrders = 0;
-
-          if (
-            ref.programId
-          ) {
-
-          
-
-                completedOrders =
-  ref.totalOrders || 0;
-
-          } else {
-
-            completedOrders =
-              ref.totalOrders || 0;
-          }
-
-          //////////////////////////////////////////////////
-          // RESPONSE
-          //////////////////////////////////////////////////
-
-          return {
-
-            referralId:
-              ref.id,
-
-            referee: {
-
-              riderId:
-                ref.referee.id,
-
-              name:
-                ref.referee.profile
-                  ?.fullName
-
-            },
-
-            status:
-              ref.isCompleted
-                ? "COMPLETED"
-                : "IN_PROGRESS",
-
-            earnedAmount:
-              completedOrders * 20,
-
-            remainingAmount:
-              Math.max(
-                1000 -
-                (
-                  completedOrders * 20
-                ),
-                0
-              ),
-
-            progressPercentage:
-              ref.targetOrders
-
-                ? Math.min(
-
-                  (
-                    completedOrders /
-                    ref.targetOrders
-                  ) * 100,
-
-                  100
-                )
-
-                : 0
-
-          };
-
-        })
-
+    totalRewards:
+      referralsData.reduce(
+        (sum, r) =>
+          sum + r.earnedAmount,
+        0
       )
 
-  };
+  },
+
+  referrals:
+    referralsData
 
 };
-
+};
 // ============================================
 // TASK RULE TYPE ENGINE
 // ============================================
@@ -769,12 +944,28 @@ function buildTaskProgress(
 
       const slabs =
         progress?.allSlabs || [task];
-      const currentSlab =
-        slabs.find(
-          (slab) =>
-            completedOrders <=
-            (slab.maxOrders || 0)
-        ) || null;
+const currentSlab =
+
+  slabs.find(
+    (slab) =>
+
+      completedOrders <
+      (slab.minOrders || 0)
+
+      ||
+
+      (
+
+        completedOrders >=
+        (slab.minOrders || 0)
+
+        &&
+
+        completedOrders <=
+        (slab.maxOrders || 0)
+
+      )
+  ) || null;
 
       const currentIndex =
         slabs.findIndex(
@@ -796,10 +987,8 @@ function buildTaskProgress(
         dayNumber:
           task.dayNumber,
 
-        dayName:
-          task.dayNumber
-            ? getDayName(task.dayNumber)
-            : null,
+        dayLabel:
+  `DAY ${task.dayNumber}`,
 
         taskRuleType:
           task.taskRuleType,
@@ -903,10 +1092,8 @@ function buildTaskProgress(
         dayNumber:
           task.dayNumber,
 
-        dayName:
-          task.dayNumber
-            ? getDayName(task.dayNumber)
-            : null,
+        dayLabel:
+          `DAY ${task.dayNumber}`,
 
         taskRuleType:
           task.taskRuleType,
@@ -976,10 +1163,8 @@ function buildTaskProgress(
         dayNumber:
           task.dayNumber,
 
-        dayName:
-          task.dayNumber
-            ? getDayName(task.dayNumber)
-            : null,
+        dayLabel:
+          `DAY ${task.dayNumber}`,
 
         taskRuleType:
           task.taskRuleType,
@@ -1040,11 +1225,8 @@ function buildTaskProgress(
         dayNumber:
           task.dayNumber,
 
-        dayName:
-          task.dayNumber
-            ? getDayName(task.dayNumber)
-            : null,
-
+        dayLabel:
+  `DAY ${task.dayNumber}`,
         taskRuleType:
           task.taskRuleType,
 
@@ -1132,21 +1314,7 @@ function getStatus(
 
 }
 
-function getDayName(day) {
 
-  const days = [
-    "MON",
-    "TUE",
-    "WED",
-    "THU",
-    "FRI",
-    "SAT",
-    "SUN"
-  ];
-
-  return days[day - 1];
-
-}
 function calculateProgramMaxReward(
   program
 ) {

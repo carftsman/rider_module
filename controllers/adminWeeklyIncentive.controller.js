@@ -69,6 +69,20 @@ if (
 ) {
   return "reward.amount required for HYBRID";
 }
+if (ruleType === "PER_ORDER") {
+
+  if (body.rewardPerOrder == null) {
+    return "rewardPerOrder required";
+  }
+
+  if (body.maxOrders == null) {
+    return "maxOrders required";
+  }
+
+  if (body.maxEarning == null) {
+    return "maxEarning required";
+  }
+}
 if (ruleType === "TASK") {
 
   if (
@@ -127,6 +141,9 @@ exports.createWeeklyIncentive = async (req, res) => {
       dateRange,
       ruleType,
       slabs,
+      rewardPerOrder,
+maxOrders,
+maxEarning,
       target,
       reward,
       conditions,
@@ -243,7 +260,6 @@ create: tasks.map((task) => ({
         programType: "WEEKLY_TARGET",
         trackingType: "WEEKLY",
         ruleType,
-
         cityId: cityId ? [cityId] : [],
         pincodeIds,
 
@@ -291,14 +307,25 @@ create: tasks.map((task) => ({
           : undefined,
 
         // HYBRID 
-        rules: conditions
-          ? {
-              create: {
-                minOrders: conditions.minOrders,
-                minEarnings: conditions.minEarnings
-              }
-            }
-          : undefined,
+  rules:
+  ruleType === "HYBRID"
+    ? {
+        create: {
+          minOrders: conditions?.minOrders,
+          minEarnings: conditions?.minEarnings
+        }
+      }
+
+    : ruleType === "PER_ORDER"
+    ? {
+        create: {
+          perOrderAmount: rewardPerOrder,
+          minOrders: maxOrders,
+          minEarnings: maxEarning
+        }
+      }
+
+    : undefined,
 
         //  CONSISTENCY 
         consistency: consistencyRule
@@ -516,23 +543,48 @@ if (slabs) {
 
 exports.getAllWeeklyIncentives = async (req, res) => {
   try {
-    const programs = await prisma.program.findMany({
-      where: {
-        programType: "WEEKLY_TARGET",
-        trackingType: "WEEKLY"
-      },
-      orderBy: {
-        createdAt: "desc"
-      }
-    });
+const programs = await prisma.program.findMany({
+  where: {
+    programType: "WEEKLY_TARGET",
+    trackingType: "WEEKLY"
+  },
 
-    const response = programs.map(p => ({
-      id: p.id,
-      name: p.name,
-      ruleType: p.ruleType,
-      isActive: p.isActive,
-      status: getProgramStatus(p) 
-    }));
+  include: {
+    rules: true
+  },
+
+  orderBy: {
+    createdAt: "desc"
+  }
+});
+
+const response = programs.map(p => ({
+
+  id: p.id,
+
+  name: p.name,
+
+  ruleType: p.ruleType,
+
+  isActive: p.isActive,
+
+  status: getProgramStatus(p),
+
+  rewardPerOrder:
+    p.ruleType === "PER_ORDER"
+      ? p.rules?.[0]?.perOrderAmount || 0
+      : null,
+
+  maxOrders:
+    p.ruleType === "PER_ORDER"
+      ? p.rules?.[0]?.minOrders || 0
+      : null,
+
+  maxReward:
+    p.ruleType === "PER_ORDER"
+      ? p.rules?.[0]?.minEarnings || 0
+      : null
+}));
 
     return res.json({
       success: true,
@@ -592,7 +644,20 @@ exports.getWeeklyIncentiveById = async (req, res) => {
         amount: program.targets[0].rewardAmount
       };
     }
+if (
+  program.ruleType === "PER_ORDER" &&
+  program.rules?.[0]
+) {
 
+  response.rewardPerOrder =
+    program.rules[0].perOrderAmount;
+
+  response.maxOrders =
+    program.rules[0].minOrders;
+
+  response.maxEarning =
+    program.rules[0].minEarnings;
+}
     if (program.ruleType === "HYBRID" && program.rules?.[0]) {
       response.conditions = {
         minOrders: program.rules[0].minOrders,

@@ -2213,7 +2213,8 @@ async function OrderDetailsStored(req, res) {
       vendorShopName,
       pickupAddress,
       deliveryAddress,
-      orderDetails
+      orderDetails,
+      payment
     } = req.body;
 
     if (!orderId) {
@@ -2256,6 +2257,21 @@ async function OrderDetailsStored(req, res) {
         success: false,
         message: "orderDetails is required"
       });
+    }
+
+    let paymentData = {
+      mode: payment.mode,
+      status: "PENDING"
+    };
+
+    if (payment.mode === "ONLINE") {
+      paymentData.transactionId = generateTxn();
+      paymentData.status = "SUCCESS";
+    }
+
+    if (payment.mode === "COD") {
+      paymentData.codPaymentType =
+        payment.codPaymentType || "CASH";
     }
 
     if (
@@ -2334,6 +2350,19 @@ async function OrderDetailsStored(req, res) {
             total: (item.price || 0) * item.quantity
           }))
         },
+        OrderPayment: {
+          create: paymentData
+        },
+
+        OrderCod:
+         payment.mode === "COD"
+            ? {
+                create: {
+                  amount: totalAmount,
+                  pendingAmount: totalAmount
+                }
+              }
+            : undefined,
 
         OrderPricing: {
           create: {
@@ -2352,6 +2381,8 @@ async function OrderDetailsStored(req, res) {
         OrderDeliveryAddress: true,
         OrderItem: true,
         OrderPricing: true,
+        OrderPayment: true,   
+        OrderCod: true,       
         OrderSettlement: true
       }
     });
