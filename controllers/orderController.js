@@ -534,25 +534,40 @@ async function confirmOrder(req, res) {
 
     ========================================================= */
 
-    let peakBonus = 0;
 
-    if (peakConfig?.enabled) {
+/* =========================================================
 
-      const currentHour =
+   PEAK BONUS
 
-        new Date().getHours();
+========================================================= */
 
-      const start = parseInt(
+let peakBonus = 0;
 
-        peakConfig.start.split(":")[0]
+if (
+  peakConfig?.enabled &&
+  peakConfig?.start &&
+  peakConfig?.end
+) {
 
-      );
+  const currentHour =
+    new Date().getHours();
 
-      const end = parseInt(
+  const start = parseInt(
+    peakConfig.start.split(":")[0]
+  );
 
-        peakConfig.end.split(":")[0]
+  const end = parseInt(
+    peakConfig.end.split(":")[0]
+  );
 
-      );
+  if (
+    currentHour >= start &&
+    currentHour <= end
+  ) {
+
+    peakBonus =
+      peakConfig.bonus || 0;
+  }
 
       if (
 

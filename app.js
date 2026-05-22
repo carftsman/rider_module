@@ -16,7 +16,7 @@ const profileRoutes = require("./routes/profileRoutes");
 const webIncentiveRoutes = require("./routes/order.routes");
 const kitRoutes = require("./routes/kitSelectionRoutes");
 const adminPayoutConfigRoutes = require("./routes/adminPayoutConfig.routes");
- 
+const referralRoutes =require("./routes/referral.routes"); 
 const riderEarningsRoutes = require("./routes/riderEarningsRoutes");
   
 const notificationRoutes = require("./routes/notificationRoutes");
@@ -123,7 +123,7 @@ app.use("/api", orderStateReady);
 app.use("/api/kit", kitRoutes);
 app.use("/api/company", companySelectionRoutes);
 app.use("/api/status", todayRiderOnlineRoutes);
-app.use("/api/refer", adminReferralRoutes);
+app.use("/api/admin", adminReferralRoutes);
 
 app.use("/api/admin/incentive", adminDailyIncentiveRoutes);
 app.use("/api", adminPayoutConfigRoutes);
@@ -132,7 +132,7 @@ app.use("/api", riderDailyIncentiveRoutes);
 app.use("/api/refer/rider", adminReferralRoutes);
 app.use("/api/refer/", riderReferralRoutes);
 //joining bonus
-
+app.use("/api/referral",referralRoutes);
 app.use("/api/admin/joining/bonus", joiningBonusRouter);
 app.use("/api/rider/joining/bonus", riderJoiningBonusRouter);
 
