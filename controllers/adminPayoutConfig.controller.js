@@ -82,36 +82,32 @@ const createCityPayoutConfig =
           : 1
       };
 
-      /**
-       * EXISTING CONFIG CHECK
-       */
+    
+      const lastConfig = await prisma.payoutConfig.findFirst({
+  where: {
+    cityId,
+    scenarioType,
+    vehicleType,
+    pincodeIds: { isEmpty: true }
+  },
+  orderBy: { version: "desc" }
+});
 
-      const existingConfig =
-        await prisma.payoutConfig.findFirst({
-          where: {
-            cityId,
-            scenarioType,
-            vehicleType,
-            isActive: true,
-            pincodeIds: {
-              isEmpty: true
-            }
-          }
-        });
+const newVersion = (lastConfig?.version || 0) + 1;
 
-      if (existingConfig) {
-        return res.status(400).json({
-          success: false,
-          message: "City config already exists",
-          data: {
-            existingConfigId: existingConfig.id
-          }
-        });
-      }
 
-      /**
-       * CREATE CONFIG
-       */
+      await prisma.payoutConfig.updateMany({
+  where: {
+    cityId,
+    scenarioType,
+    vehicleType,
+    isActive: true,
+    pincodeIds: { isEmpty: true }
+  },
+  data: {
+    isActive: false
+  }
+});
 
       const newConfig =
         await prisma.payoutConfig.create({
@@ -127,7 +123,7 @@ const createCityPayoutConfig =
             peakConfig,
             weatherConfig: finalWeatherConfig,
             notes,
-            version: 1,
+            version: newVersion,
             isActive: true,
             createdBy: "admin"
           }
@@ -155,135 +151,141 @@ const createCityPayoutConfig =
  //PINCODE LEVEL API
  
 
-const createPincodePayoutConfig =
-  async (req, res) => {
+const createPincodePayoutConfig = async (req, res) => {
+  try {
+    const {
+      name,
+      scenarioType,
+      cityId,
+      pincodeIds = [],
+      vehicleType,
+      basePay,
+      perKmRate,
+      surgeConfig,
+      peakConfig,
+      weatherConfig,
+      notes,
+      latitude,
+      longitude
+    } = req.body;
 
-    try {
+    /**
+     * VALIDATION
+     */
+    if (!cityId || !scenarioType || !vehicleType) {
+      return res.status(400).json({
+        success: false,
+        message: "cityId, scenarioType, vehicleType are required"
+      });
+    }
 
-      const {
+    if (!pincodeIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: "pincodeIds are required"
+      });
+    }
+
+    if (!basePay || basePay <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "basePay must be greater than 0"
+      });
+    }
+
+    if (perKmRate < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "perKmRate must be >= 0"
+      });
+    }
+
+    /**
+     * WEATHER LOGIC
+     */
+    let weatherResult = { isRaining: false };
+
+    if (weatherConfig?.enabled && latitude && longitude) {
+      weatherResult = await getWeather(latitude, longitude);
+    }
+
+    const isWeatherEnabled =
+      weatherConfig?.enabled && weatherResult.isRaining;
+
+    const finalWeatherConfig = {
+      enabled: isWeatherEnabled || false,
+      isRaining: weatherResult.isRaining,
+      rainExtraPay: isWeatherEnabled ? weatherConfig?.rainExtraPay || 0 : 0,
+      multiplier: isWeatherEnabled ? weatherConfig?.multiplier || 1 : 1
+    };
+
+    /**
+     * GET LAST VERSION
+     */
+    const lastConfig = await prisma.payoutConfig.findFirst({
+      where: {
+        cityId,
+        scenarioType,
+        vehicleType,
+        pincodeIds: { hasSome: pincodeIds }
+      },
+      orderBy: { version: "desc" }
+    });
+
+    const newVersion = (lastConfig?.version || 0) + 1;
+
+    /**
+     * DEACTIVATE OLD ACTIVE CONFIGS
+     */
+    await prisma.payoutConfig.updateMany({
+      where: {
+        cityId,
+        scenarioType,
+        vehicleType,
+        isActive: true,
+        pincodeIds: { hasSome: pincodeIds }
+      },
+      data: {
+        isActive: false
+      }
+    });
+
+    /**
+     * CREATE NEW CONFIG
+     */
+    const newConfig = await prisma.payoutConfig.create({
+      data: {
         name,
         scenarioType,
         cityId,
-        pincodeIds = [],
+        pincodeIds,
         vehicleType,
         basePay,
         perKmRate,
         surgeConfig,
         peakConfig,
-        weatherConfig,
+        weatherConfig: finalWeatherConfig,
         notes,
-        latitude,
-        longitude
-      } = req.body;
-
-      
-    if (!pincodeIds.length) {
-        return res.status(400).json({
-          success: false,
-          message: "pincodeIds are required"
-        });
+        version: newVersion,
+        isActive: true,
+        createdBy: "admin"
       }
+    });
 
-      /**
-       * WEATHER CHECK (ONLY INTERNAL)
-       */
+    return res.status(201).json({
+      success: true,
+      message: "Pincode config created successfully",
+      data: newConfig
+    });
 
-      let weatherResult = { isRaining: false };
-
-      if (
-        weatherConfig?.enabled &&
-        latitude &&
-        longitude
-      ) {
-        weatherResult =
-          await getWeather(latitude, longitude);
-      }
-
-      const isWeatherEnabled =
-        weatherConfig?.enabled &&
-        weatherResult.isRaining;
-
-      const finalWeatherConfig = {
-        enabled: isWeatherEnabled || false,
-        isRaining: weatherResult.isRaining,
-        rainExtraPay: isWeatherEnabled
-          ? weatherConfig?.rainExtraPay || 0
-          : 0,
-        multiplier: isWeatherEnabled
-          ? weatherConfig?.multiplier || 1
-          : 1
-      };
-
-      /**
-       * EXISTING CHECK
-       */
-
-      const existingConfig =
-        await prisma.payoutConfig.findFirst({
-          where: {
-            cityId,
-            scenarioType,
-            vehicleType,
-            isActive: true,
-            pincodeIds: {
-              hasSome: pincodeIds
-            }
-          }
-        });
-
-      if (existingConfig) {
-        return res.status(400).json({
-          success: false,
-          message: "Pincode config already exists",
-          data: {
-            existingConfigId: existingConfig.id
-          }
-        });
-      }
-
-      /**
-       * CREATE
-       */
-
-      await prisma.payoutConfig.create({
-        data: {
-          name,
-          scenarioType,
-          cityId,
-          pincodeIds,
-          vehicleType,
-          basePay,
-          perKmRate,
-          surgeConfig,
-          peakConfig,
-          weatherConfig: finalWeatherConfig,
-          notes,
-          version: 1,
-          isActive: true,
-          createdBy: "admin"
-        }
-      });
-
-      /**
-       * RESPONSE (ONLY REQUEST BODY)
-       */
-
-      return res.status(201).json({
-        success: true,
-        data: req.body
-      });
-
-    } catch (error) {
-
-      return res.status(500).json({
-        success: false,
-        message: error.message
-      });
-
-    }
-
-  };
-    const getActivePayoutConfig = async (req, res) => {
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+  const getActivePayoutConfig = async (req, res) => {
   try {
     const { cityId } = req.query;
 
@@ -734,68 +736,174 @@ const updateSurgeConfig = async (req, res) => {
 
   }
 };
+
+// const rollbackPayoutConfig = async (req, res) => {
+//   try {
+
+//     const { cityId } = req.query;
+
+//     if (!cityId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "cityId is required"
+//       });
+//     }
+
+//     /**
+//      * STEP 1: GET ALL CONFIGS (NO FILTER ON isActive)
+//      */
+
+//     const configs = await prisma.payoutConfig.findMany({
+//       where: { cityId },
+//       orderBy: {
+//         createdAt: "desc"   // IMPORTANT: use createdAt, not updatedAt
+//       }
+//     });
+//     console.log("CITY:", cityId);
+// // console.log("PINCODE:", pincodeId || "NOT PROVIDED");
+// console.log("COUNT:", configs.length);
+// console.log("CONFIG IDS:", configs.map(c => c.id));
+//     if (configs.length < 2) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Not enough configs to rollback"
+//       });
+//     }
+
+//     /**
+//      * STEP 2: FIND CURRENT ACTIVE
+//      */
+
+//     const currentConfig = configs.find(c => c.isActive);
+
+//     if (!currentConfig) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "No active config found"
+//       });
+//     }
+
+//     /**
+//      * STEP 3: FIND PREVIOUS (LAST INACTIVE BEFORE ACTIVE)
+//      */
+
+//     const previousConfig =
+//       configs.find(c => c.id !== currentConfig.id);
+
+//     if (!previousConfig) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Previous config not found"
+//       });
+//     }
+
+//     /**
+//      * STEP 4: ROLLBACK
+//      */
+
+//     const result = await prisma.$transaction(async (tx) => {
+
+//       await tx.payoutConfig.update({
+//         where: { id: currentConfig.id },
+//         data: { isActive: false }
+//       });
+
+//       return await tx.payoutConfig.update({
+//         where: { id: previousConfig.id },
+//         data: { isActive: true }
+//       });
+
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Rollback successful",
+//       data: result
+//     });
+
+//   } catch (error) {
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message
+//     });
+//   }
+// };
 const rollbackPayoutConfig = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { cityId } = req.query;
 
-    const result = await prisma.$transaction(async (tx) => {
-      //  Find target config
-      const target = await tx.payoutConfig.findUnique({
-        where: { id }
-      });
-
-      if (!target) {
-        throw new Error("NOT_FOUND");
-      }
-
-      // If already active → no rollback needed
-      if (target.isActive) {
-        throw new Error("ALREADY_ACTIVE");
-      }
-
-      // Deactivate current active configs for same city
-      await tx.payoutConfig.updateMany({
-        where: {
-          cityId: target.cityId,
-          isActive: true
-        },
-        data: { isActive: false }
-      });
-
-      //Activate this config
-      const updated = await tx.payoutConfig.update({
-        where: { id },
-        data: { isActive: true }
-      });
-
-      return updated;
-    });
-
-    return res.json({
-      success: true,
-      message: "Rollback successful",
-      data: {
-        configId: result.id,
-        version: result.version,
-        isActive: result.isActive,
-        rolledBackAt: new Date()
-      },
-      meta: {}
-    });
-
-  } catch (err) {
-    console.error(err);
-
-    if (err.message === "NOT_FOUND" || err.message === "ALREADY_ACTIVE") {
+    if (!cityId) {
       return res.status(400).json({
         success: false,
-        message: "Config not found or already active"
+        message: "cityId is required",
       });
     }
 
+    /**
+     * STEP 1: GET CURRENT ACTIVE CONFIG
+     */
+    const currentConfig = await prisma.payoutConfig.findFirst({
+      where: {
+        cityId,
+        isActive: true,
+      },
+    });
+
+    if (!currentConfig) {
+      return res.status(400).json({
+        success: false,
+        message: "No active config found",
+      });
+    }
+
+    /**
+     * STEP 2: GET PREVIOUS VERSION (IMPORTANT FIX)
+     */
+    const previousConfig = await prisma.payoutConfig.findFirst({
+  where: {
+    cityId,
+    
+    version: { lt: currentConfig.version }
+  },
+  orderBy: {
+    version: "desc"
+  }
+});
+
+    if (!previousConfig) {
+      return res.status(400).json({
+        success: false,
+        message: "No previous version found to rollback",
+      });
+    }
+
+    /**
+     * STEP 3: TRANSACTION ROLLBACK
+     */
+    const result = await prisma.$transaction(async (tx) => {
+      // deactivate current
+      await tx.payoutConfig.update({
+        where: { id: currentConfig.id },
+        data: { isActive: false },
+      });
+
+      // activate previous
+      return await tx.payoutConfig.update({
+        where: { id: previousConfig.id },
+        data: { isActive: true },
+      });
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Rollback successful",
+      data: result,
+    });
+
+  } catch (error) {
     return res.status(500).json({
       success: false,
-      message: "Rollback failed"
+      message: error.message,
     });
   }
 };
@@ -839,15 +947,18 @@ const togglePayoutConfigStatus = async (req, res) => {
 
       // If activating → deactivate others
       if (isActive === true) {
-        await tx.payoutConfig.updateMany({
-          where: {
-            AND: [
-              { cityId: config.cityId },
-              { isActive: true }
-            ]
-          },
-          data: { isActive: false }
-        });
+        await prisma.payoutConfig.updateMany({
+  where: {
+    cityId,
+    scenarioType,
+    vehicleType,
+    isActive: true,
+    pincodeIds: { isEmpty: true }
+  },
+  data: {
+    isActive: false
+  }
+});
       }
 
       // Update this config
@@ -1437,7 +1548,102 @@ const updateCityPayoutConfig = async (req, res) => {
 
 };
 
+const getPayoutConfigs =
+  async (req, res) => {
 
+    try {
+     const { cityId } = req.query;
+      let whereCondition = {};
+      if (cityId) {
+
+        whereCondition.cityId = cityId;
+
+      }
+
+      const configs =
+        await prisma.payoutConfig.findMany({
+
+          where: whereCondition,
+
+          orderBy: {
+            createdAt: "desc"
+          }
+
+        });
+
+      /**
+       * CUSTOM RESPONSE
+       */
+
+      const formattedData =
+        configs.map(config => ({
+
+          configId:
+            config.id,
+
+          scenarioType:
+            config.scenarioType,
+
+          name:
+            config.name,
+
+          cityId:
+            config.cityId,
+
+          pincodeIds:
+            config.pincodeIds,
+
+          vehicleType:
+            config.vehicleType,
+
+          basePay:
+            config.basePay,
+
+          perKmRate:
+            config.perKmRate,
+
+          surgeConfig:
+            config.surgeConfig,
+
+          peakConfig:
+            config.peakConfig,
+
+          weatherConfig:
+            config.weatherConfig,
+
+          version:
+            config.version,
+
+          isActive:
+            config.isActive,
+
+          createdAt:
+            config.createdAt
+
+        }));
+
+      return res.status(200).json({
+
+        success: true,
+
+        data: formattedData
+
+      });
+
+    } catch (error) {
+
+      return res.status(500).json({
+
+        success: false,
+
+        message:
+          error.message
+
+      });
+
+    }
+
+  };
 
 module.exports = {
   createPincodePayoutConfig,
@@ -1452,5 +1658,6 @@ module.exports = {
   getSurgeStatus,
   updateCityPayoutConfig,
   updatePincodePayoutConfig,
-  updateWeatherConfig
+  updateWeatherConfig,
+  getPayoutConfigs
 };
