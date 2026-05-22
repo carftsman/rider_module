@@ -596,22 +596,7 @@ include: {
         }
       );
     }
-//////////////////////////////////////////////////////
-// WEEKLY TASK PROGRAMS
-//////////////////////////////////////////////////////
-if (
 
-  program.programType ===
-  "REFERRAL"
-
-  &&
-
-  program.ruleType ===
-  "TASK"
-) {
-
-
-}
 if (
 
   (
@@ -717,30 +702,57 @@ taskProgress =
   });
   }
 
-  //////////////////////////////////////////////////
-  // UPDATE TASK PROGRESS
-  //////////////////////////////////////////////////
+ const updatedProgress =
+  await prisma.programTaskProgress.update({
 
-  const updatedProgress =
-    await prisma.programTaskProgress.update({
+    where: {
+      id: taskProgress.id
+    },
 
-      where: {
-        id: taskProgress.id
-      },
+    data: {
 
-      data: {
-
-        progressValue: {
-          increment: 1
-        }
+      progressValue: {
+        increment: 1
       }
-    });
+    }
+  });
 
-  //////////////////////////////////////////////////
-  // COMPLETION CHECK
-  //////////////////////////////////////////////////
+//////////////////////////////////////////////////
+// UPDATE REFERRAL LIVE ORDERS
+//////////////////////////////////////////////////
 
-  let isCompleted = false;
+if (
+  program.programType ===
+  "REFERRAL"
+) {
+
+  await prisma.referral.updateMany({
+
+    where: {
+
+      refereeId: riderId,
+
+      programId: program.id
+
+    },
+
+    data: {
+
+      totalOrders: {
+        increment: 1
+      }
+
+    }
+
+  });
+
+}
+
+//////////////////////////////////////////////////
+// COMPLETION CHECK
+//////////////////////////////////////////////////
+
+let isCompleted = false;
 
   //////////////////////////////////////////////////
   // FIXED TARGET
@@ -812,36 +824,6 @@ if (isCompleted) {
     }
   });
 
-  ////////////////////////////////////////////////
-  // UPDATE REFERRAL
-  ////////////////////////////////////////////////
-
-  if (
-    program.programType ===
-    "REFERRAL"
-  ) {
-
-    await prisma.referral.updateMany({
-
-      where: {
-
-        refereeId: riderId,
-
-        programId: program.id
-
-      },
-
-      data: {
-
-        totalOrders: {
-          increment: 1
-        }
-      }
-
-    });
-  }
-}
-
   //////////////////////////////////////////////////
   // SOCKET
   //////////////////////////////////////////////////
@@ -873,6 +855,7 @@ if (isCompleted) {
       }
     }
   );
+}
 }
     ////////////////////////////////////////////////////
     // PEAK SLOT
