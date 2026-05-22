@@ -157,6 +157,16 @@ const merchantRouter = express.Router();
  *                     type: number
  *                     example: 8.5
  *
+ *               payment:
+ *                 type: object
+ *                 properties:
+ *                   mode:
+ *                     type: string
+ *                     example: ONLINE
+ *                     enum:
+ *                       - ONLINE
+ *                       - COD
+ *
  *     responses:
  *
  *       200:

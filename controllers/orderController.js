@@ -2260,7 +2260,7 @@ async function OrderDetailsStored(req, res) {
     }
 
     let paymentData = {
-      mode: payment.mode,
+      mode: payment?.mode,
       status: "PENDING"
     };
 
