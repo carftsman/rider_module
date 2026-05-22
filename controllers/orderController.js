@@ -529,38 +529,45 @@ async function confirmOrder(req, res) {
     }
 
     /* =========================================================
-    
+
        PEAK BONUS
-    
+
     ========================================================= */
 
-    let peakBonus = 0;
 
-    if (
-      peakConfig?.enabled &&
-      peakConfig?.start &&
-      peakConfig?.end
-    ) {
+/* =========================================================
 
-      const currentHour =
-        new Date().getHours();
+   PEAK BONUS
 
-      const start = parseInt(
-        peakConfig.start.split(":")[0]
-      );
+========================================================= */
 
-      const end = parseInt(
-        peakConfig.end.split(":")[0]
-      );
+let peakBonus = 0;
 
-      if (
-        currentHour >= start &&
-        currentHour <= end
-      ) {
+if (
+  peakConfig?.enabled &&
+  peakConfig?.start &&
+  peakConfig?.end
+) {
 
-        peakBonus =
-          peakConfig.bonus || 0;
-      }
+  const currentHour =
+    new Date().getHours();
+
+  const start = parseInt(
+    peakConfig.start.split(":")[0]
+  );
+
+  const end = parseInt(
+    peakConfig.end.split(":")[0]
+  );
+
+  if (
+    currentHour >= start &&
+    currentHour <= end
+  ) {
+
+    peakBonus =
+      peakConfig.bonus || 0;
+  }
 
       if (
 
@@ -858,37 +865,37 @@ async function acceptOrder(req, res) {
     // FETCH RIDER
     //////////////////////////////////////////////////////
 
-    const rider = await prisma.rider.findUnique({
-      where: {
-        id: riderId
-      },
+const rider = await prisma.rider.findUnique({
+  where: {
+    id: riderId
+  },
 
+  select: {
+    id: true,
+    phoneNumber: true,
+    isOnline: true,
+    orderState: true,
+    isFullyRegistered: true,
+
+    profile: {
       select: {
-        id: true,
-        phoneNumber: true,
-        isOnline: true,
-        orderState: true,
-        isFullyRegistered: true,
-
-        profile: {
-          select: {
-            fullName: true
-          }
-        },
-
-        vehicle: {
-          select: {
-            type: true
-          }
-        },
-        gps: {
-          select: {
-            latitude: true,
-            longitude: true
-          }
-        }
+        fullName: true
       }
-    });
+    },
+
+    vehicle: {
+      select: {
+        type: true
+      }
+    },
+   gps: {
+      select: {
+        latitude: true,
+        longitude: true
+      }
+    }
+  }
+});
     if (!rider) {
       return res.status(404).json({
         success: false,
@@ -1010,28 +1017,28 @@ async function acceptOrder(req, res) {
         }
       });
     });
-
+    
     // CALL DELIVERY EVENT PATCH API
-
+    
 
     try {
 
       const deliveryId = order.deliveryId;
 
       await axios.patch(
-        // `http://localhost:5050/api/delivery-event/${deliveryId}`,
-        ` ${process.env.RENDER_URL}/api/delivery-event/${deliveryId}`,
-        {
-          riderId: rider.id,
-          riderName: rider.profile?.fullName,
-          riderPhone: rider.phoneNumber,
-          vehicle: rider.vehicle?.type,
-          latitude: rider.gps?.latitude,
+  // `http://localhost:5050/api/delivery-event/${deliveryId}`,
+  ` ${process.env.RENDER_URL}/api/delivery-event/${deliveryId}`,
+  {
+    riderId: rider.id,
+    riderName: rider.profile?.fullName,
+    riderPhone: rider.phoneNumber,
+    vehicle: rider.vehicle?.type,
+     latitude: rider.gps?.latitude,
 
-          longitude: rider.gps?.longitude,
-          orderStatus: "ASSIGNED"
-        }
-      );
+    longitude: rider.gps?.longitude,
+    orderStatus: "ASSIGNED"
+  }
+);
 
       console.log("Delivery event updated successfully");
 
@@ -2206,7 +2213,8 @@ async function OrderDetailsStored(req, res) {
       vendorShopName,
       pickupAddress,
       deliveryAddress,
-      orderDetails
+      orderDetails,
+      payment
     } = req.body;
 
     if (!orderId) {
@@ -2342,6 +2350,19 @@ async function OrderDetailsStored(req, res) {
             total: (item.price || 0) * item.quantity
           }))
         },
+        OrderPayment: {
+          create: paymentData
+        },
+
+        OrderCod:
+         payment.mode === "COD"
+            ? {
+                create: {
+                  amount: totalAmount,
+                  pendingAmount: totalAmount
+                }
+              }
+            : undefined,
 
         OrderPricing: {
           create: {
@@ -2360,6 +2381,8 @@ async function OrderDetailsStored(req, res) {
         OrderDeliveryAddress: true,
         OrderItem: true,
         OrderPricing: true,
+        OrderPayment: true,   
+        OrderCod: true,       
         OrderSettlement: true
       }
     });
