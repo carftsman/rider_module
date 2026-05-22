@@ -140,13 +140,13 @@ exports.merchantPackingApi = async (req, res) => {
     }
     const merchentResponse =   await axios.post(
         // `http://localhost:5050/api/delivery-event`,  
-        ` ${process.env.RENDER_URL}/api/delivery-event`,
+        `${process.env.RENDER_URL}/api/delivery-event`,
         deliveryId
       );
-      console.log("orderId : " , orderId)
+      // console.log("orderId : " , orderId)
     const confirmApiResponse =   await axios.patch(
         // `http://localhost:5050/api/orders/${orderId}/confirm`, 
-         ` ${process.env.RENDER_URL}/api/orders/${orderId}/confirm`,
+         `${process.env.RENDER_URL}/api/orders/${orderId}/confirm`,
         deliveryId
       );
 
