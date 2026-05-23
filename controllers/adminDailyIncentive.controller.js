@@ -267,15 +267,24 @@ exports.createDailyIncentive = async (req, res) => {
         });
       }
 
+      const calculatedMaxEarning =
+        reward.perOrderAmount * reward.maxOrders;
+
+      programData.maxPayoutPerDay =
+        calculatedMaxEarning;
+
       programData.rules = {
         create: {
-          perOrderAmount:
-            reward.perOrderAmount
+          perOrderAmount: reward.perOrderAmount,
+
+          minOrders: reward.maxOrders,
+
+          minEarnings: calculatedMaxEarning
         }
       };
     }
 
- 
+
     if (ruleType === "HYBRID") {
 
       programData.rules = {
@@ -319,7 +328,7 @@ exports.createDailyIncentive = async (req, res) => {
           fixedReward:
             t.reward?.amount || null,
 
-          
+
 
           rewardPerOrder:
             t.rewardPerOrder || null,
@@ -544,6 +553,19 @@ exports.getDailyIncentiveById = async (req, res) => {
 
       response.reward = {
         amount: program.targets?.[0]?.rewardAmount || null
+      };
+    }
+
+    // PER_ORDER
+
+    if (program.ruleType === "PER_ORDER") {
+
+      response.reward = {
+        perOrderAmount:
+          program.rules?.[0]?.perOrderAmount || null,
+
+        maxOrders:
+          program.rules?.[0]?.minOrders || null
       };
     }
     // TASK
