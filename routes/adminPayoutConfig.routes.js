@@ -49,7 +49,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *               vehicleType:
  *                 type: string
  *                 enum: [BIKE, SCOOTER, CYCLE, AUTO]
- *                 example: "BIKE"
+ *                 example: "bike"
  *
  *               basePay:
  *                 type: number
