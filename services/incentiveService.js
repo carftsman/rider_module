@@ -9,12 +9,19 @@ const {
 // WEEK KEY
 ////////////////////////////////////////////////////////
 
-function getWeekKey(
-  date = new Date()
-) {
+function getWeekKey() {
+
+  const now = new Date();
+
+  const istNow = new Date(
+    now.toLocaleString(
+      "en-US",
+      { timeZone: "Asia/Kolkata" }
+    )
+  );
 
   const year =
-    date.getFullYear();
+    istNow.getFullYear();
 
   const oneJan =
     new Date(year, 0, 1);
@@ -22,7 +29,7 @@ function getWeekKey(
   const week = Math.ceil(
     (
       (
-        (date - oneJan) /
+        (istNow - oneJan) /
         86400000
       ) +
       oneJan.getDay() +
@@ -233,32 +240,28 @@ include: {
     // DAILY + WEEKLY
     ////////////////////////////////////////////////////
 
-    if (
+if (
 
-      (
   (
-    program.programType === 
+    program.programType ===
     "DAILY_TARGET"
-  )&&
+    &&
 
-  program.trackingType === 
-  "DAILY"
-)
-
-      ||
-
-    (
-(
-  (
-    program.programType === "WEEKLY_TARGET"
+    program.trackingType ===
+    "DAILY"
   )
 
-  &&
+  ||
 
-  program.ruleType === "TASK"
-)
-)
-    ) {
+  (
+    program.programType ==="WEEKLY_TARGET"
+
+    &&
+
+    program.trackingType ===
+    "WEEKLY"
+  )
+) {
 
       //////////////////////////////////////////////////
       // FIND PROGRESS
@@ -463,95 +466,31 @@ include: {
         }
       }
 
-      //////////////////////////////////////////////////
-      // PAYOUT
-      //////////////////////////////////////////////////
+//////////////////////////////////////////////////
+// UPDATE PROGRESS REWARD
+//////////////////////////////////////////////////
 
-      if (
-        reward >
-        progress.rewardAmount
-      ) {
+if (
+  reward >
+  progress.rewardAmount
+) {
 
-        const extraReward =
-          reward -
-          progress.rewardAmount;
+  await prisma.programProgress
+    .update({
+      where: {
+        id: progress.id
+      },
 
-        //////////////////////////////////////////////////
-        // UPDATE PROGRESS
-        //////////////////////////////////////////////////
+      data: {
 
-        await prisma.programProgress
-          .update({
-            where: {
-              id: progress.id
-            },
+        rewardAmount:
+          reward,
 
-            data: {
-
-              rewardAmount:
-                reward,
-
-              achieved: true
-            }
-          });
-
-        //////////////////////////////////////////////////
-        // CREATE PAYOUT
-        //////////////////////////////////////////////////
-
-        await prisma.programPayout
-          .create({
-            data: {
-
-              riderId,
-
-              programId:
-                program.id,
-
-              amount:
-                extraReward,
-
-              triggerType:
-                "PROGRAM_COMPLETION"
-            }
-          });
-
-        //////////////////////////////////////////////////
-        // WALLET UPDATE
-        //////////////////////////////////////////////////
-
-        await prisma.riderWallet
-          .upsert({
-
-            where: {
-              riderId
-            },
-
-            update: {
-
-              balance: {
-                increment:
-                  extraReward
-              },
-
-              totalEarned: {
-                increment:
-                  extraReward
-              }
-            },
-
-            create: {
-
-              riderId,
-
-              balance:
-                extraReward,
-
-              totalEarned:
-                extraReward
-            }
-          });
+        achieved: false
       }
+    });
+
+}
 
       //////////////////////////////////////////////////
       // WEBSOCKET
@@ -591,7 +530,7 @@ include: {
               reward,
 
             achieved:
-              progress.achieved
+  reward > 0
           }
         }
       );
@@ -622,17 +561,46 @@ if (
   )
 ){
 
-  //////////////////////////////////////////////////
-  // CURRENT DAY NUMBER
-  //////////////////////////////////////////////////
+let currentDayNumber;
 
-  const currentDayNumber = (() => {
+if (
+  program.programType ===
+  "REFERRAL"
+) {
 
-    const jsDay = new Date().getDay();
+  const enrollment =
+    await prisma.programEnrollment.findFirst({
 
-    return jsDay === 0 ? 7 : jsDay;
+      where: {
+        riderId,
+        programId: program.id
+      }
+    });
 
-  })();
+  currentDayNumber =
+    Math.floor(
+
+      (
+        new Date() -
+        new Date(
+          enrollment.enrolledAt
+        )
+      )
+
+      /
+
+      (1000 * 60 * 60 * 24)
+
+    ) + 1;
+
+} else {
+
+  const jsDay =
+    new Date().getDay();
+
+  currentDayNumber =
+    jsDay === 0 ? 7 : jsDay;
+}
 
   //////////////////////////////////////////////////
   // FIND TODAY TASK
@@ -1011,8 +979,9 @@ await prisma.programProgress
           "PER_ORDER"
         ) {
 
-          peakReward =
-            slot.rewardPerOrder || 0;
+         peakReward =
+  slotProgress.totalOrders *
+  (slot.rewardPerOrder || 0);
         }
 
         ////////////////////////////////////////////////
@@ -1056,89 +1025,23 @@ await prisma.programProgress
           slotProgress.rewardAmount
         ) {
 
-          const extraReward =
+await prisma.programProgress
+  .update({
 
-            peakReward -
-            slotProgress.rewardAmount;
+    where: {
+      id:
+        slotProgress.id
+    },
 
-          //////////////////////////////////////////////
-          // UPDATE PROGRESS
-          //////////////////////////////////////////////
+    data: {
 
-          await prisma.programProgress
-            .update({
+      rewardAmount:
+        peakReward,
 
-              where: {
-                id:
-                  slotProgress.id
-              },
+      achieved: false
+    }
+  });
 
-              data: {
-
-                rewardAmount:
-                  peakReward,
-
-                achieved: true
-              }
-            });
-
-          //////////////////////////////////////////////
-          // PAYOUT
-          //////////////////////////////////////////////
-
-          await prisma.programPayout
-            .create({
-
-              data: {
-
-                riderId,
-
-                programId:
-                  program.id,
-
-                amount:
-                  extraReward,
-
-                triggerType:
-                  "PROGRAM_COMPLETION"
-              }
-            });
-
-          //////////////////////////////////////////////
-          // WALLET
-          //////////////////////////////////////////////
-
-          await prisma.riderWallet
-            .upsert({
-
-              where: {
-                riderId
-              },
-
-              update: {
-
-                balance: {
-                  increment:
-                    extraReward
-                },
-
-                totalEarned: {
-                  increment:
-                    extraReward
-                }
-              },
-
-              create: {
-
-                riderId,
-
-                balance:
-                  extraReward,
-
-                totalEarned:
-                  extraReward
-              }
-            });
         }
 
         ////////////////////////////////////////////////
@@ -1306,7 +1209,30 @@ await prisma.programProgress
                 reward
             }
           });
+//////////////////////////////////////////////////
+// WALLET TRANSACTION
+//////////////////////////////////////////////////
 
+await prisma.riderWalletTransaction.create({
+
+  data: {
+
+    riderId:
+      updatedReferral.referrerId,
+
+    type:
+      "REFERRAL_BONUS",
+
+    amount:
+      reward,
+
+    description:
+      "Referral bonus credited",
+
+    referenceId:
+      referral.id
+  }
+});
         //////////////////////////////////////////////////
         // PAYOUT
         //////////////////////////////////////////////////
