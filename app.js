@@ -47,7 +47,7 @@ const app = express();
 
 const peakSlot=require("./routes/peakSlotRoutes")
 const getPeakSlotProgresses=require("./routes/getPeakSlotProgressRoutes")
-
+const getRiderIncentive=require("./routes/getAllIncentives.routes")
  
 const adminZoneRoutes=require("./routes/adminZoneRoutes");
 
@@ -149,6 +149,8 @@ app.use("/api/banner",bannerRouter)
 
 app.use("/api/rider-gps",riderGpsRoutes);
 app.use("/api", deliveryEventRoutes);
+
+app.use("/api/getRider",getRiderIncentive)
 
 //merchant
 
