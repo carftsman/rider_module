@@ -648,10 +648,25 @@ if (
                 allSlabs: slabs
 
               };
+const currentDay =
+  Math.floor(
 
+    (
+      new Date() -
+      new Date(
+        enrollment.enrolledAt
+      )
+    )
+
+    /
+
+    (1000 * 60 * 60 * 24)
+
+  ) + 1;
               return buildTaskProgress(
                 firstTask,
-                progress
+                progress,
+                currentDay
               );
 
             })
@@ -929,9 +944,9 @@ const referralsData =
 
 function buildTaskProgress(
   task,
-  progress
+  progress,currentDay
 ) {
-
+  
   const completedOrders =
     progress?.progressValue || 0;
 
@@ -1061,11 +1076,13 @@ const currentSlab =
 
           status:
             getStatus(
-              completedOrders,
-              slabs[
-                slabs.length - 1
-              ]?.maxOrders
-            ),
+  completedOrders,
+  slabs[
+    slabs.length - 1
+  ]?.maxOrders,
+  currentDay,
+  task.dayNumber
+),
 
           isCompleted:
             completedOrders >=
@@ -1139,10 +1156,12 @@ const currentSlab =
             ),
 
           status:
-            getStatus(
-              completedOrders,
-              task.maxOrders
-            ),
+getStatus(
+  completedOrders,
+  task.maxOrders,
+  currentDay,
+  task.dayNumber
+),
 
           isCompleted:
             completedOrders >=
@@ -1199,10 +1218,12 @@ const currentSlab =
             ),
 
           status:
-            getStatus(
-              completedOrders,
-              task.targetOrders
-            ),
+           getStatus(
+  completedOrders,
+  task.targetOrders,
+  currentDay,
+  task.dayNumber
+),
 
           isCompleted:
             completedOrders >=
@@ -1253,10 +1274,12 @@ const currentSlab =
             ),
 
           status:
-            getStatus(
-              completedOrders,
-              task.minOrders
-            ),
+         getStatus(
+  completedOrders,
+  task.minOrders,
+  currentDay,
+  task.dayNumber
+),
 
           isCompleted:
             completedOrders >=
@@ -1298,17 +1321,51 @@ function calculatePercentage(
 
 function getStatus(
   value,
-  target
+  target,
+  currentDay,
+  taskDay
 ) {
 
-  if (!target)
-    return "NOT_STARTED";
+  ////////////////////////////////////////////
+  // FUTURE TASK
+  ////////////////////////////////////////////
 
-  if (value <= 0)
-    return "NOT_STARTED";
+  if (
+    taskDay > currentDay
+  ) {
+    return "LOCKED";
+  }
 
-  if (value >= target)
+  ////////////////////////////////////////////
+  // MISSED TASK
+  ////////////////////////////////////////////
+
+  if (
+    taskDay < currentDay &&
+    value < target
+  ) {
+    return "MISSED";
+  }
+
+  ////////////////////////////////////////////
+  // NOT STARTED
+  ////////////////////////////////////////////
+
+  if (value <= 0) {
+    return "NOT_STARTED";
+  }
+
+  ////////////////////////////////////////////
+  // COMPLETED
+  ////////////////////////////////////////////
+
+  if (value >= target) {
     return "COMPLETED";
+  }
+
+  ////////////////////////////////////////////
+  // RUNNING
+  ////////////////////////////////////////////
 
   return "RUNNING";
 

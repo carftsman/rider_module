@@ -452,17 +452,22 @@ if (
       "Duplicate day numbers are not allowed"
   });
 }
-  days.forEach((day) => {
-if (
-  !day.dayNumber ||
-  day.dayNumber < 1 ||
-  day.dayNumber > totalProgramDays
-) {
 
-  throw new Error(
-    `Invalid dayNumber ${day.dayNumber}`
-  );
-}
+const totalProgramDays =
+  days.length;
+
+days.forEach((day) => {
+
+  if (
+    !day.dayNumber ||
+    day.dayNumber < 1 ||
+    day.dayNumber > totalProgramDays
+  ) {
+
+    throw new Error(
+      `Invalid dayNumber ${day.dayNumber}`
+    );
+  }
     // SLAB
     if (day.taskRuleType === "SLAB") {
 
