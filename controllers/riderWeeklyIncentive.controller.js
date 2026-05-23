@@ -114,22 +114,22 @@ exports.getWeeklyIncentives = async (req, res) => {
     // TASK PROGRESSES
     //////////////////////////////////////////////////
 
-const weekStart = new Date();
-weekStart.setHours(0,0,0,0);
-weekStart.setDate(
-  weekStart.getDate() - weekStart.getDay() + 1
-);
+    const weekStart = new Date();
+    weekStart.setHours(0, 0, 0, 0);
+    weekStart.setDate(
+      weekStart.getDate() - weekStart.getDay() + 1
+    );
 
-const taskProgresses =
-  await prisma.programTaskProgress.findMany({
-    where: {
-      riderId,
-      programId: {
-        in: programs.map((p) => p.id)
-      },
-      week
-    }
-  });
+    const taskProgresses =
+      await prisma.programTaskProgress.findMany({
+        where: {
+          riderId,
+          programId: {
+            in: programs.map((p) => p.id)
+          },
+          week
+        }
+      });
 
     //////////////////////////////////////////////////
     // RESPONSE
@@ -173,10 +173,10 @@ const taskProgresses =
             progProgress?.achieved
               ? "ACHIEVED"
               : (
-                  (progProgress?.totalOrders || 0) > 0
-                )
-              ? "IN_PROGRESS"
-              : "NOT_STARTED"
+                (progProgress?.totalOrders || 0) > 0
+              )
+                ? "IN_PROGRESS"
+                : "NOT_STARTED"
         });
 
         continue;
@@ -204,22 +204,22 @@ const taskProgresses =
         sortedTasks.map(
           async (task, index) => {
 
-const currentDayNumber = (() => {
+            const currentDayNumber = (() => {
 
-  const istNow = new Date(
-    new Date().toLocaleString(
-      "en-US",
-      { timeZone: "Asia/Kolkata" }
-    )
-  );
+              const istNow = new Date(
+                new Date().toLocaleString(
+                  "en-US",
+                  { timeZone: "Asia/Kolkata" }
+                )
+              );
 
-  const jsDay = istNow.getDay();
+              const jsDay = istNow.getDay();
 
-  if (jsDay === 0) return 7;
+              if (jsDay === 0) return 7;
 
-  return jsDay;
+              return jsDay;
 
-})();
+            })();
             let progress =
               taskProgresses.find(
                 (p) => p.taskId === task.id
@@ -228,52 +228,52 @@ const currentDayNumber = (() => {
             //////////////////////////////////////////////////
             // CREATE INITIAL ROW
             //////////////////////////////////////////////////
-if (
-  !progress &&
-  task.dayNumber <= currentDayNumber
-) {
+            if (
+              !progress &&
+              task.dayNumber <= currentDayNumber
+            ) {
 
-progress =
-  await prisma.programTaskProgress.upsert({
+              progress =
+                await prisma.programTaskProgress.upsert({
 
-where: {
-  riderId_taskId_programId_week: {
-    riderId,
-    taskId: task.id,
-    programId: program.id,
-    week
-  }
-},
+                  where: {
+                    riderId_taskId_programId_week: {
+                      riderId,
+                      taskId: task.id,
+                      programId: program.id,
+                      week
+                    }
+                  },
 
-    update: {},
+                  update: {},
 
-    create: {
-      riderId,
-      programId: program.id,
-      taskId: task.id,
-      dayNumber: task.dayNumber,
+                  create: {
+                    riderId,
+                    programId: program.id,
+                    taskId: task.id,
+                    dayNumber: task.dayNumber,
 
-      date: new Date(),
+                    date: new Date(),
 
-      progressValue: 0,
-      
-      isCompleted: false
-    }
-  });
-}
+                    progressValue: 0,
+
+                    isCompleted: false
+                  }
+                });
+            }
 
             //////////////////////////////////////////////////
             // VALUES
             //////////////////////////////////////////////////
 
-const progressValue =
-  progress?.progressValue || 0;
+            const progressValue =
+              progress?.progressValue || 0;
 
-const isCompleted =
-  progress?.isCompleted || false;
+            const isCompleted =
+              progress?.isCompleted || false;
 
-          const completedAt =
-  progress?.updatedAt || null;
+            const completedAt =
+              progress?.updatedAt || null;
 
             let rewardEarned = 0;
 
@@ -281,75 +281,75 @@ const isCompleted =
             // TASK STATUS
             //////////////////////////////////////////////////
 
-//////////////////////////////////////////////////
-// TASK STATUS
-//////////////////////////////////////////////////
+            //////////////////////////////////////////////////
+            // TASK STATUS
+            //////////////////////////////////////////////////
 
-let taskStatus = "PENDING";
+            let taskStatus = "PENDING";
 
-//////////////////////////////////////////////////
-// LOCK FUTURE DAYS
-//////////////////////////////////////////////////
+            //////////////////////////////////////////////////
+            // LOCK FUTURE DAYS
+            //////////////////////////////////////////////////
 
-if (task.dayNumber > currentDayNumber) {
+            if (task.dayNumber > currentDayNumber) {
 
-  taskStatus = "LOCKED";
-}
+              taskStatus = "LOCKED";
+            }
 
-const isLocked =
-  taskStatus === "LOCKED";
+            const isLocked =
+              taskStatus === "LOCKED";
 
-const safeProgressValue =
-  isLocked ? 0 : progressValue;
+            const safeProgressValue =
+              isLocked ? 0 : progressValue;
 
-const safeCompleted =
-  isLocked ? false : isCompleted;
+            const safeCompleted =
+              isLocked ? false : isCompleted;
 
-//////////////////////////////////////////////////
-// FINAL STATUS LOGIC
-//////////////////////////////////////////////////
+            //////////////////////////////////////////////////
+            // FINAL STATUS LOGIC
+            //////////////////////////////////////////////////
 
-//////////////////////////////////////////////////
-// FINAL STATUS LOGIC
-//////////////////////////////////////////////////
+            //////////////////////////////////////////////////
+            // FINAL STATUS LOGIC
+            //////////////////////////////////////////////////
 
-if (isLocked) {
+            if (isLocked) {
 
-  taskStatus = "LOCKED";
+              taskStatus = "LOCKED";
 
-} else if (safeCompleted) {
+            } else if (safeCompleted) {
 
-  taskStatus = "COMPLETED";
+              taskStatus = "COMPLETED";
 
-} else if (
-  task.dayNumber === currentDayNumber
-) {
+            } else if (
+              task.dayNumber === currentDayNumber
+            ) {
 
-  // Current active day
-  taskStatus = "RUNNING";
+              // Current active day
+              taskStatus = "RUNNING";
 
-} else {
+            } else {
 
-  // Previous incomplete days
-  taskStatus = "PENDING";
-}
+              // Previous incomplete days
+              taskStatus = "PENDING";
+            }
 
             //////////////////////////////////////////////////
             // TASK RESPONSE
             //////////////////////////////////////////////////
 
-          const taskResponse = {
+            const taskResponse = {
 
-  dayNumber:
-    task.dayNumber,
+              dayNumber:
+                task.dayNumber,
 
-dayName:
-  dayMap[task.dayNumber],
-  taskRuleType:
-    task.taskRuleType,
+              dayName:
+                dayMap[task.dayNumber],
+              taskRuleType:
+                task.taskRuleType,
 
-  progress: {}
-};
+              progress: {}
+            };
 
             //////////////////////////////////////////////////
             // FIXED TARGET
@@ -361,14 +361,14 @@ dayName:
             ) {
 
               rewardEarned =
-  safeCompleted
+                safeCompleted
                   ? task.fixedReward || 0
                   : 0;
 
               taskResponse.progress = {
 
                 completedOrders:
-  safeProgressValue,
+                  safeProgressValue,
 
                 targetOrders:
                   task.targetOrders,
@@ -386,8 +386,8 @@ dayName:
                 status:
                   taskStatus,
 
-isCompleted:
-  safeCompleted,
+                isCompleted:
+                  safeCompleted,
                 completedAt
               };
             }
@@ -402,16 +402,16 @@ isCompleted:
             ) {
 
               rewardEarned =
-  Math.min(
-    safeProgressValue,
-    task.maxOrders || 0
-  ) *
+                Math.min(
+                  safeProgressValue,
+                  task.maxOrders || 0
+                ) *
                 (task.rewardPerOrder || 0);
 
               taskResponse.progress = {
 
-              completedOrders:
-  safeProgressValue,
+                completedOrders:
+                  safeProgressValue,
 
                 earnedAmount:
                   rewardEarned,
@@ -433,19 +433,19 @@ isCompleted:
                 status:
                   taskStatus,
 
-isCompleted:
-  safeCompleted,
+                isCompleted:
+                  safeCompleted,
                 progressPercentage:
                   task.maxOrders
                     ? Math.min(
-                        Math.round(
-                          (
-                            safeProgressValue
-                            / task.maxOrders
-                          ) * 100
-                        ),
-                        100
-                      )
+                      Math.round(
+                        (
+                          safeProgressValue
+                          / task.maxOrders
+                        ) * 100
+                      ),
+                      100
+                    )
                     : 0
               };
             }
@@ -460,57 +460,58 @@ isCompleted:
             ) {
 
               rewardEarned =
-  safeCompleted
+                safeCompleted
                   ? task.rewardAmount || 0
                   : 0;
 
               const currentAcceptanceRate =
-  progress?.acceptanceRate || 0;
+                progress?.acceptanceRate || 0;
 
-             const currentEarnings =
-  progress?.earnings || 0;
-taskResponse.progress = {
+              const currentEarnings =
+                progress?.earnings || 0;
+              taskResponse.progress = {
 
-  completedOrders:
-    safeProgressValue,
+                completedOrders:
+                  safeProgressValue,
 
-  currentAcceptanceRate,
+                currentAcceptanceRate,
 
-  currentEarnings,
+                currentEarnings,
 
-  remainingOrders:
-    Math.max(
-      (task.minOrders || 0)
-      - safeProgressValue,
-      0
-    ),
+                remainingOrders:
+                  Math.max(
+                    (task.minOrders || 0)
+                    - safeProgressValue,
+                    0
+                  ),
 
-  remainingEarnings:
-    Math.max(
-      (task.minEarnings || 0)
-      - currentEarnings,
-      0
-    ),
+                remainingEarnings:
+                  Math.max(
+                    (task.minEarnings || 0)
+                    - currentEarnings,
+                    0
+                  ),
 
-  progressPercentage:
-    task.minOrders
-      ? Math.min(
-          Math.round(
-            (
-              safeProgressValue /
-              task.minOrders
-            ) * 100
-          ),
-          100
-        )
-      : 0,
+                progressPercentage:
+                  task.minOrders
+                    ? Math.min(
+                      Math.round(
+                        (
+                          safeProgressValue /
+                          task.minOrders
+                        ) * 100
+                      ),
+                      100
+                    )
+                    : 0,
 
-  status:
-    taskStatus,
+                status:
+                  taskStatus,
 
-  isCompleted:
-    safeCompleted
-};      }
+                isCompleted:
+                  safeCompleted
+              };
+            }
 
             //////////////////////////////////////////////////
             // SLAB
@@ -542,57 +543,57 @@ taskResponse.progress = {
                 program.slabs.find(
                   (s) =>
                     safeProgressValue >= s.minValue &&
-safeProgressValue <= s.maxValue
+                    safeProgressValue <= s.maxValue
                 );
 
               rewardEarned =
                 matchedSlab?.rewardAmount || 0;
 
-             taskResponse.progress = {
+              taskResponse.progress = {
 
-  completedOrders:
-    safeProgressValue,
+                completedOrders:
+                  safeProgressValue,
 
-  currentSlabReward:
-    rewardEarned,
+                currentSlabReward:
+                  rewardEarned,
 
-  remainingOrders:
-    Math.max(
-      (
-        Math.max(
-          ...program.slabs.map(
-            s => s.maxValue
-          )
-        )
-      ) - safeProgressValue,
-      0
-    ),
+                remainingOrders:
+                  Math.max(
+                    (
+                      Math.max(
+                        ...program.slabs.map(
+                          s => s.maxValue
+                        )
+                      )
+                    ) - safeProgressValue,
+                    0
+                  ),
 
-  progressPercentage:
-    program.slabs?.length
-      ? Math.min(
-          Math.round(
-            (
-              safeProgressValue /
-              Math.max(
-                ...program.slabs.map(
-                  s => s.maxValue
-                )
-              )
-            ) * 100
-          ),
-          100
-        )
-      : 0,
+                progressPercentage:
+                  program.slabs?.length
+                    ? Math.min(
+                      Math.round(
+                        (
+                          safeProgressValue /
+                          Math.max(
+                            ...program.slabs.map(
+                              s => s.maxValue
+                            )
+                          )
+                        ) * 100
+                      ),
+                      100
+                    )
+                    : 0,
 
-  status:
-    taskStatus,
+                status:
+                  taskStatus,
 
-  isCompleted:
-    safeCompleted,
+                isCompleted:
+                  safeCompleted,
 
-  completedAt
-};
+                completedAt
+              };
 
             }
 
@@ -602,8 +603,8 @@ safeProgressValue <= s.maxValue
 
             totalRewardEarned += rewardEarned;
 
-if (safeCompleted) {
-                completedDays++;
+            if (safeCompleted) {
+              completedDays++;
             }
 
             return taskResponse;
@@ -621,76 +622,76 @@ if (safeCompleted) {
           ? "COMPLETED"
 
           : completedDays > 0
-          ? "RUNNING"
+            ? "RUNNING"
 
-          : "NOT_STARTED";
+            : "NOT_STARTED";
 
       //////////////////////////////////////////////////
       // MAX REWARD
       //////////////////////////////////////////////////
 
-const maxReward =
-  program.maxPayoutPerWeek ||
+      const maxReward =
+        program.maxPayoutPerWeek ||
 
-  sortedTasks.reduce((sum, task) => {
+        sortedTasks.reduce((sum, task) => {
 
-    //////////////////////////////////////////////////
-    // FIXED_TARGET
-    //////////////////////////////////////////////////
+          //////////////////////////////////////////////////
+          // FIXED_TARGET
+          //////////////////////////////////////////////////
 
-    if (
-      task.taskRuleType ===
-      "FIXED_TARGET"
-    ) {
-      return sum + (task.fixedReward || 0);
-    }
+          if (
+            task.taskRuleType ===
+            "FIXED_TARGET"
+          ) {
+            return sum + (task.fixedReward || 0);
+          }
 
-    //////////////////////////////////////////////////
-    // HYBRID
-    //////////////////////////////////////////////////
+          //////////////////////////////////////////////////
+          // HYBRID
+          //////////////////////////////////////////////////
 
-    if (
-      task.taskRuleType ===
-      "HYBRID"
-    ) {
-      return sum + (task.rewardAmount || 0);
-    }
+          if (
+            task.taskRuleType ===
+            "HYBRID"
+          ) {
+            return sum + (task.rewardAmount || 0);
+          }
 
-    //////////////////////////////////////////////////
-    // PER_ORDER
-    //////////////////////////////////////////////////
+          //////////////////////////////////////////////////
+          // PER_ORDER
+          //////////////////////////////////////////////////
 
-    if (
-      task.taskRuleType ===
-      "PER_ORDER"
-    ) {
-      return sum + (task.maxEarning || 0);
-    }
+          if (
+            task.taskRuleType ===
+            "PER_ORDER"
+          ) {
+            return sum + (task.maxEarning || 0);
+          }
 
-    //////////////////////////////////////////////////
-    // SLAB
-    //////////////////////////////////////////////////
+          //////////////////////////////////////////////////
+          // SLAB
+          //////////////////////////////////////////////////
 
-    if (
-      task.taskRuleType ===
-      "SLAB"
-    ) {
+          if (
+            task.taskRuleType ===
+            "SLAB"
+          ) {
 
-      const highest =
-        program.slabs?.length
-          ? Math.max(
-              ...program.slabs.map(
-                (s) => s.rewardAmount
-              )
-            )
-          : 0;
+            const highest =
+              program.slabs?.length
+                ? Math.max(
+                  ...program.slabs.map(
+                    (s) => s.rewardAmount
+                  )
+                )
+                : 0;
 
-      return sum + highest;
-    }
+            return sum + highest;
+          }
 
-    return sum;
+          return sum;
 
-  }, 0);
+        }, 0);
 
       //////////////////////////////////////////////////
       // FINAL PUSH
@@ -768,6 +769,7 @@ const maxReward =
     });
   }
 };
+
 exports.getRiderWeeklyPrograms = async (req, res) => {
   try {
     const riderId = req.rider.id;
@@ -781,12 +783,12 @@ exports.getRiderWeeklyPrograms = async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-const today = new Date(
-  new Date().toLocaleString(
-    "en-US",
-    { timeZone: "Asia/Kolkata" }
-  )
-);
+    const today = new Date(
+      new Date().toLocaleString(
+        "en-US",
+        { timeZone: "Asia/Kolkata" }
+      )
+    );
     //  Fetch programs WITH FULL DETAILS
     const programs = await prisma.program.findMany({
       where: {
@@ -810,6 +812,30 @@ const today = new Date(
         createdAt: "desc"
       }
     });
+    // collect all city ids
+    const allCityIds = [
+      ...new Set(programs.flatMap(p => p.cityId || []))
+    ];
+
+    // fetch cities once
+    const cities = await prisma.city.findMany({
+      where: {
+        id: {
+          in: allCityIds
+        }
+      },
+      select: {
+        id: true,
+        name: true
+      }
+    });
+
+    // city map
+    const cityMap = {};
+
+    cities.forEach(city => {
+      cityMap[city.id] = city.name;
+    });
 
     //  Format response
     const response = programs.map((p) => {
@@ -817,115 +843,119 @@ const today = new Date(
       //  STATUS CALCULATION
       const status =
         today < p.validFrom ? "UPCOMING" :
-        today > p.validTill ? "EXPIRED" :
-        "RUNNING";
+          today > p.validTill ? "EXPIRED" :
+            "RUNNING";
 
-//  MAX REWARD FIRST
-let maxReward = null;
+      //  MAX REWARD FIRST
+      let maxReward = null;
 
-//  SLAB
-if (p.ruleType === "SLAB" && p.slabs?.length) {
-  maxReward = Math.max(...p.slabs.map(s => s.rewardAmount));
-}
+      //  SLAB
+      if (p.ruleType === "SLAB" && p.slabs?.length) {
+        maxReward = Math.max(...p.slabs.map(s => s.rewardAmount));
+      }
 
-//  FIXED TARGET
-else if (p.ruleType === "FIXED_TARGET" && p.targets?.[0]) {
-  maxReward = p.targets[0].rewardAmount;
-}
+      //  FIXED TARGET
+      else if (p.ruleType === "FIXED_TARGET" && p.targets?.[0]) {
+        maxReward = p.targets[0].rewardAmount;
+      }
 
-//  HYBRID
-else if (p.ruleType === "HYBRID" && p.targets?.[0]) {
-  maxReward = p.targets[0].rewardAmount;
-}
-//////////////////////////////////////////////////
-// PER_ORDER
-//////////////////////////////////////////////////
+      //  HYBRID
+      else if (p.ruleType === "HYBRID" && p.targets?.[0]) {
+        maxReward = p.targets[0].rewardAmount;
+      }
+      //////////////////////////////////////////////////
+      // PER_ORDER
+      //////////////////////////////////////////////////
 
-else if (
-  p.ruleType === "PER_ORDER" &&
-  p.rules?.[0]
-) {
+      else if (
+        p.ruleType === "PER_ORDER" &&
+        p.rules?.[0]
+      ) {
 
-  maxReward =
-    p.rules[0].minEarnings;
-}
-//////////////////////////////////////////////////
-// TASK
-//////////////////////////////////////////////////
+        maxReward =
+          p.rules[0].minEarnings;
+      }
+      //////////////////////////////////////////////////
+      // TASK
+      //////////////////////////////////////////////////
 
-else if (
-  p.ruleType === "TASK"
-  && p.tasks?.length
-) {
+      else if (
+        p.ruleType === "TASK"
+        && p.tasks?.length
+      ) {
 
-  const taskRewards = p.tasks.map((t) => {
+        const taskRewards = p.tasks.map((t) => {
 
-    ////////////////////////////////////////////////
-    // FIXED_TARGET
-    ////////////////////////////////////////////////
+          ////////////////////////////////////////////////
+          // FIXED_TARGET
+          ////////////////////////////////////////////////
 
-    if (t.taskRuleType === "FIXED_TARGET") {
-      return t.fixedReward || 0;
-    }
+          if (t.taskRuleType === "FIXED_TARGET") {
+            return t.fixedReward || 0;
+          }
 
-    ////////////////////////////////////////////////
-    // HYBRID
-    ////////////////////////////////////////////////
+          ////////////////////////////////////////////////
+          // HYBRID
+          ////////////////////////////////////////////////
 
-    if (t.taskRuleType === "HYBRID") {
-      return t.rewardAmount || 0;
-    }
+          if (t.taskRuleType === "HYBRID") {
+            return t.rewardAmount || 0;
+          }
 
-    ////////////////////////////////////////////////
-    // PER_ORDER
-    ////////////////////////////////////////////////
+          ////////////////////////////////////////////////
+          // PER_ORDER
+          ////////////////////////////////////////////////
 
-    if (t.taskRuleType === "PER_ORDER") {
-      return t.maxEarning || 0;
-    }
+          if (t.taskRuleType === "PER_ORDER") {
+            return t.maxEarning || 0;
+          }
 
-    ////////////////////////////////////////////////
-    // SLAB
-    ////////////////////////////////////////////////
+          ////////////////////////////////////////////////
+          // SLAB
+          ////////////////////////////////////////////////
 
-    if (
-      t.taskRuleType === "SLAB"
-      && p.slabs?.length
-    ) {
-      return Math.max(
-        ...p.slabs.map((s) => s.rewardAmount)
-      );
-    }
+          if (
+            t.taskRuleType === "SLAB"
+            && p.slabs?.length
+          ) {
+            return Math.max(
+              ...p.slabs.map((s) => s.rewardAmount)
+            );
+          }
 
-    return 0;
-  });
+          return 0;
+        });
 
-maxReward = taskRewards.reduce(
-  (sum, reward) => sum + reward,
-  0
-);
-}
-//  fallback
-if (maxReward === null) {
-  maxReward = p.maxPayoutPerWeek ?? null;
-}
+        maxReward = taskRewards.reduce(
+          (sum, reward) => sum + reward,
+          0
+        );
+      }
+      //  fallback
+      if (maxReward === null) {
+        maxReward = p.maxPayoutPerWeek ?? null;
+      }
 
-const result = {
-  programId: p.id,
-  name: p.name,
-  type: "WEEKLY",
-  ruleType: p.ruleType,
-  status,
-  validFrom: p.validFrom,
-  validTill: p.validTill,
-  weekStartDay: p.weekStartDay,
-  maxReward
-};
+      const result = {
+        programId: p.id,
+
+        cityId: p.cityId?.[0] || null,
+        cityName: cityMap[p.cityId?.[0]] || null,
+
+        name: p.name,
+        type: "WEEKLY",
+        ruleType: p.ruleType,
+        status,
+        validFrom: p.validFrom,
+        validTill: p.validTill,
+        weekStartDay: p.weekStartDay,
+        maxReward
+      };
 
       //SLAB
       if (p.ruleType === "SLAB" && p.slabs?.length) {
         result.slabs = p.slabs
-          .sort((a, b) => a.minValue - b.minValue) 
+          .sort((a, b) => a.minValue - b.minValue)
           .map(s => ({
             minOrders: s.minValue,
             maxOrders: s.maxValue,
@@ -951,96 +981,96 @@ const result = {
         };
       }
       //////////////////////////////////////////////////
-// PER_ORDER
-//////////////////////////////////////////////////
+      // PER_ORDER
+      //////////////////////////////////////////////////
 
-if (
-  p.ruleType === "PER_ORDER" &&
-  p.rules?.[0]
-) {
+      if (
+        p.ruleType === "PER_ORDER" &&
+        p.rules?.[0]
+      ) {
 
-  result.rewardPerOrder =
-    p.rules[0].perOrderAmount;
+        result.rewardPerOrder =
+          p.rules[0].perOrderAmount;
 
-  result.maxOrders =
-    p.rules[0].minOrders;
+        result.maxOrders =
+          p.rules[0].minOrders;
 
-  result.maxEarning =
-    p.rules[0].minEarnings;
-}
-// TASK
-if (p.ruleType === "TASK" && p.tasks?.length) {
+        result.maxEarning =
+          p.rules[0].minEarnings;
+      }
+      // TASK
+      if (p.ruleType === "TASK" && p.tasks?.length) {
 
-  result.tasks = p.tasks.map((t) => {
+        result.tasks = p.tasks.map((t) => {
 
-    const task = {
-      dayNumber: t.dayNumber,
-      taskRuleType: t.taskRuleType
-    };
+          const task = {
+            dayNumber: t.dayNumber,
+            taskRuleType: t.taskRuleType
+          };
 
-    //////////////////////////////////////////////////
-    // FIXED TARGET
-    //////////////////////////////////////////////////
+          //////////////////////////////////////////////////
+          // FIXED TARGET
+          //////////////////////////////////////////////////
 
-    if (t.taskRuleType === "FIXED_TARGET") {
+          if (t.taskRuleType === "FIXED_TARGET") {
 
-      task.target = {
-        orders: t.targetOrders
-      };
+            task.target = {
+              orders: t.targetOrders
+            };
 
-      task.reward = {
-        amount: t.fixedReward
-      };
-    }
+            task.reward = {
+              amount: t.fixedReward
+            };
+          }
 
-    //////////////////////////////////////////////////
-    // PER ORDER
-    //////////////////////////////////////////////////
+          //////////////////////////////////////////////////
+          // PER ORDER
+          //////////////////////////////////////////////////
 
-    else if (t.taskRuleType === "PER_ORDER") {
+          else if (t.taskRuleType === "PER_ORDER") {
 
-      task.rewardPerOrder = t.rewardPerOrder;
+            task.rewardPerOrder = t.rewardPerOrder;
 
-      task.maxOrders = t.maxOrders;
+            task.maxOrders = t.maxOrders;
 
-      task.maxEarning = t.maxEarning;
-    }
+            task.maxEarning = t.maxEarning;
+          }
 
-    //////////////////////////////////////////////////
-    // HYBRID
-    //////////////////////////////////////////////////
+          //////////////////////////////////////////////////
+          // HYBRID
+          //////////////////////////////////////////////////
 
-    else if (t.taskRuleType === "HYBRID") {
+          else if (t.taskRuleType === "HYBRID") {
 
-      task.conditions = {
-        minOrders: t.minOrders,
-        minAcceptanceRate: t.minAcceptanceRate,
-        minEarnings: t.minEarnings
-      };
+            task.conditions = {
+              minOrders: t.minOrders,
+              minAcceptanceRate: t.minAcceptanceRate,
+              minEarnings: t.minEarnings
+            };
 
-      task.reward = {
-        amount: t.rewardAmount
-      };
-    }
+            task.reward = {
+              amount: t.rewardAmount
+            };
+          }
 
-    //////////////////////////////////////////////////
-    // SLAB
-    //////////////////////////////////////////////////
+          //////////////////////////////////////////////////
+          // SLAB
+          //////////////////////////////////////////////////
 
-else if (t.taskRuleType === "SLAB") {
+          else if (t.taskRuleType === "SLAB") {
 
-  task.slabs = p.slabs
-    .sort((a, b) => a.minValue - b.minValue)
-    .map((s) => ({
-      minOrders: s.minValue,
-      maxOrders: s.maxValue,
-      rewardAmount: s.rewardAmount
-    }));
-}
+            task.slabs = p.slabs
+              .sort((a, b) => a.minValue - b.minValue)
+              .map((s) => ({
+                minOrders: s.minValue,
+                maxOrders: s.maxValue,
+                rewardAmount: s.rewardAmount
+              }));
+          }
 
-    return task;
-  });
-}
+          return task;
+        });
+      }
       // CONSISTENCY
       if (p.consistency) {
         result.consistencyRule = {

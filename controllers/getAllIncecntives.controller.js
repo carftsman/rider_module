@@ -9,8 +9,11 @@ exports.getAllIncentives = async (req, res) => {
   try {
     const { type, status } = req.query;
 
-    const now = new Date();
-    const riderId = req.rider.id;
+const now = new Date(
+  new Date().toLocaleString("en-US", {
+    timeZone: "Asia/Kolkata"
+  })
+);    const riderId = req.rider.id;
 
     const riderLocation = await prisma.riderLocation.findUnique({
       where: { riderId }
@@ -146,8 +149,13 @@ exports.getAllIncentives = async (req, res) => {
 // FLAT SLOT RESPONSE
 
 const formatted = programs.flatMap((p) => {
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
+const now = new Date(
+  new Date().toLocaleString("en-US", {
+    timeZone: "Asia/Kolkata"
+  })
+);
+const currentMinutes =
+  now.getHours() * 60 + now.getMinutes();
   const daysMap = {
     PEAK_SLOT: 2,
     DAILY_TARGET: 7,
