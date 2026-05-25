@@ -10,7 +10,8 @@ const{createAsset,
     requestJoiningKit, 
     uploadIssueImage,
     verifyIssue,
-    completePaymentAndReadyForDispatch
+    completePaymentAndReadyForDispatch,
+    getIssueDetails
 
 }=require('../controllers/kitSelectionController');
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
@@ -465,7 +466,7 @@ router.post('/rider/request',riderAuthMiddleWare, requestAsset)
 router.post(
   "/asset-issues/:issueId/upload-image",
   riderAuthMiddleWare ,
-  upload.single("image"),
+  upload.array("images", 5),
   uploadIssueImage
 );
 
@@ -992,5 +993,10 @@ router.patch(
   completePaymentAndReadyForDispatch
 );
 
+router.get(
+  "/issue-details/:issueId",
+  riderAuthMiddleWare,
+  getIssueDetails
+);
 
 module.exports = router

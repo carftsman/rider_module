@@ -250,16 +250,17 @@ model AssetMaster {
 }
 
 model AssetRequest {
-  id               String        @id @default(uuid())
+  id               String               @id @default(uuid())
   riderId          String
   assetType        AssetType
   quantity         Int
-  status           RequestStatus @default(PENDING)
-  createdAt        DateTime      @default(now())
+  status           RequestStatus        @default(PENDING)
+  createdAt        DateTime             @default(now())
   deliveryMode     DeliveryMode?
   pickupLocationId String?
   Payment          Payment?
   Shipment         Shipment?
+  riderAssetIssues rider_asset_issues[]
 }
 
 model EMIPlan {
@@ -301,18 +302,20 @@ model Shipment {
 }
 
 model rider_asset_issues {
-  id            String           @id @default(uuid())
+  id            String @id @default(uuid())
   riderAssetsId String
-  assetType     AssetType
-  assetName     String?
-  issueType     AssetIssueType   @default(OTHER)
-  description   String?
-  imageUrl      String?
-  status        AssetIssueStatus @default(OPEN)
-  raisedAt      DateTime         @default(now())
-  resolvedAt    DateTime?
-  requestId     String?
-  rider_assets  rider_assets     @relation(fields: [riderAssetsId], references: [id], onDelete: Cascade)
+  adminRemark   String?
+  assetType    AssetType
+  assetName    String?
+  issueType    AssetIssueType             @default(OTHER)
+  description  String?
+  status       AssetIssueStatus           @default(OPEN)
+  raisedAt     DateTime                   @default(now())
+  resolvedAt   DateTime?
+  requestId    String?
+  rider_assets rider_assets               @relation(fields: [riderAssetsId], references: [id], onDelete: Cascade)
+  images       rider_asset_issue_images[]
+  AssetRequest AssetRequest?              @relation(fields: [requestId], references: [id])
 
   @@index([status])
 }
@@ -1368,8 +1371,13 @@ enum AssetIssueType {
 
 enum AssetStatus {
   ISSUED
-  RETURNED
-  LOST
+  ISSUE_RAISED
+  ADMIN_VERIFICATION_PENDING
+  ADMIN_VERIFIED
+  READY_FOR_DISPATCH
+  DISPATCHED
+  DELIVERED
+  RESOLVED
 }
 
 enum AssetType {
@@ -1707,4 +1715,15 @@ model PincodeMetrics {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   areas     Area[]
+}
+
+model rider_asset_issue_images {
+  id        String   @id @default(uuid())
+  issueId   String
+  imageUrl  String
+  createdAt DateTime @default(now())
+
+  issue rider_asset_issues @relation(fields: [issueId], references: [id], onDelete: Cascade)
+
+  @@index([issueId])
 }

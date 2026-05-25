@@ -530,17 +530,48 @@ const updateBasePay = async (req, res) => {
         basePay: Number(basePay),
       },
     });
+let responseData;
 
-    return res.status(200).json({
-      success: true,
-      message: "Base pay updated successfully",
-      data: {
-        id: updated.id,
-        cityId: updated.cityId,
-        pincodeIds: updated.pincodeIds,
-        basePay: updated.basePay,
+// IF PINCODE PASSED
+if (pincodeId) {
+
+  responseData = {
+    id: updated.id,
+    cityId: updated.cityId,
+    pincodeIds: [String(pincodeId)],
+    basePay: updated.basePay,
+  };
+
+} else {
+
+  // GET ALL PINCODES OF CITY
+  const pincodeList = await prisma.payoutConfig.findMany({
+    where: {
+      cityId: String(cityId),
+      isActive: true,
+      NOT: {
+        pincodeIds: {
+          equals: [],
+        },
       },
-    });
+    },
+    select: {
+      pincodeIds: true,
+    },
+  });
+
+  responseData = {
+    id: updated.id,
+    cityId: updated.cityId,
+    pincodeIds: pincodeList.flatMap(item => item.pincodeIds),
+    basePay: updated.basePay,
+  };
+}    
+return res.status(200).json({
+  success: true,
+  message: "Base pay updated successfully",
+  data: responseData,
+});
   } catch (error) {
     console.log("UPDATE BASE PAY ERROR:", error);
 
@@ -660,17 +691,48 @@ const updateDistancePay = async (req, res) => {
         perKmRate: Number(perKmRate),
       },
     });
+    let responseData;
 
-    return res.status(200).json({
-      success: true,
-      message: "Per KM rate updated successfully",
-      data: {
-        id: updated.id,
-        cityId: updated.cityId,
-        pincodeIds: updated.pincodeIds,
-        perKmRate: updated.perKmRate,
+// IF PINCODE PASSED
+if (pincodeId) {
+
+  responseData = {
+    id: updated.id,
+    cityId: updated.cityId,
+    pincodeIds: [String(pincodeId)],
+    perKmRate: updated.perKmRate,
+  };
+
+} else {
+
+  // GET ALL PINCODES OF CITY
+  const pincodeList = await prisma.payoutConfig.findMany({
+    where: {
+      cityId: String(cityId),
+      isActive: true,
+      NOT: {
+        pincodeIds: {
+          equals: [],
+        },
       },
-    });
+    },
+    select: {
+      pincodeIds: true,
+    },
+  });
+
+  responseData = {
+    id: updated.id,
+    cityId: updated.cityId,
+    pincodeIds: pincodeList.flatMap(item => item.pincodeIds),
+    perKmRate: updated.perKmRate,
+  };
+}
+return res.status(200).json({
+  success: true,
+  message: "Per KM rate updated successfully",
+  data: responseData,
+});
   } catch (error) {
     console.log("UPDATE PER KM RATE ERROR:", error);
 
@@ -867,45 +929,85 @@ const updateSurgeConfig = async (req, res) => {
       });
     }
 
-    const finalSurgeConfig = {
-      ...oldSurgeConfig,
+const finalSurgeConfig = {
+  enabled:
+    surgeConfig.enabled !== undefined
+      ? surgeConfig.enabled
+      : oldSurgeConfig.enabled,
 
-      ...(surgeConfig.enabled !== undefined && {
-        enabled: surgeConfig.enabled,
-      }),
+  multiplier:
+    surgeConfig.multiplier !== undefined
+      ? Number(surgeConfig.multiplier)
+      : oldSurgeConfig.multiplier,
 
-      ...(surgeConfig.multiplier !== undefined && {
-        multiplier: Number(surgeConfig.multiplier),
-      }),
+  minLiveOrders:
+    surgeConfig.minLiveOrders !== undefined
+      ? Number(surgeConfig.minLiveOrders)
+      : oldSurgeConfig.minLiveOrders,
 
-      ...(surgeConfig.minLiveOrders !== undefined && {
-        minLiveOrders: Number(surgeConfig.minLiveOrders),
-      }),
+  extraPay:
+    surgeConfig.extraPay !== undefined
+      ? Number(surgeConfig.extraPay)
+      : oldSurgeConfig.extraPay,
+};
 
-      ...(surgeConfig.extraPay !== undefined && {
-        extraPay: Number(surgeConfig.extraPay),
-      }),
-    };
 
-    const updated = await prisma.payoutConfig.update({
-      where: {
-        id: existingConfig.id,
+/**
+ * UPDATE QUERY
+ */
+
+const updated = await prisma.payoutConfig.update({
+  where: {
+    id: existingConfig.id,
+  },
+  data: {
+    surgeConfig: finalSurgeConfig,
+  },
+});
+
+
+let responseData;
+
+// IF PINCODE PASSED
+if (pincodeId) {
+
+  responseData = {
+    id: updated.id,
+    cityId: updated.cityId,
+    pincodeIds: [String(pincodeId)],
+    surgeConfig: updated.surgeConfig,
+  };
+
+} else {
+
+  // GET ALL PINCODES OF CITY
+  const pincodeList = await prisma.payoutConfig.findMany({
+    where: {
+      cityId: String(cityId),
+      isActive: true,
+      NOT: {
+        pincodeIds: {
+          equals: [],
+        },
       },
-      data: {
-        surgeConfig: finalSurgeConfig,
-      },
-    });
+    },
+    select: {
+      pincodeIds: true,
+    },
+  });
 
-    return res.status(200).json({
-      success: true,
-      message: "Surge config updated successfully",
-      data: {
-        id: updated.id,
-        cityId: updated.cityId,
-        pincodeIds: updated.pincodeIds,
-        surgeConfig: updated.surgeConfig,
-      },
-    });
+  responseData = {
+    id: updated.id,
+    cityId: updated.cityId,
+    pincodeIds: pincodeList.flatMap(item => item.pincodeIds),
+    surgeConfig: updated.surgeConfig,
+  };
+}
+   return res.status(200).json({
+  success: true,
+  message: "Surge config updated successfully",
+  data: responseData,
+});
   } catch (error) {
     console.log("UPDATE SURGE CONFIG ERROR:", error);
 
@@ -1377,49 +1479,83 @@ const updateWeatherConfig = async (req, res) => {
       });
     }
 
-    const finalWeatherConfig = {
-      ...oldWeatherConfig,
+const finalWeatherConfig = {
+  enabled:
+    weatherConfig.enabled !== undefined
+      ? weatherConfig.enabled
+      : oldWeatherConfig.enabled,
 
-      ...(weatherConfig.enabled !== undefined && {
-        enabled: weatherConfig.enabled,
-      }),
+  multiplier:
+    weatherConfig.multiplier !== undefined
+      ? Number(weatherConfig.multiplier)
+      : oldWeatherConfig.multiplier,
 
-      ...(weatherConfig.isRaining !== undefined && {
-        isRaining: weatherConfig.isRaining,
-      }),
+  rainExtraPay:
+    weatherConfig.rainExtraPay !== undefined
+      ? Number(weatherConfig.rainExtraPay)
+      : oldWeatherConfig.rainExtraPay,
+};
+    await prisma.payoutConfig.updateMany({
+  where: {
+    cityId: String(cityId),
+    isActive: true,
+  },
+  data: {
+    weatherConfig: finalWeatherConfig,
+  },
+});
 
-      ...(weatherConfig.multiplier !== undefined && {
-        multiplier: Number(weatherConfig.multiplier),
-      }),
+const updated = await prisma.payoutConfig.findFirst({
+  where: {
+    cityId: String(cityId),
+    isActive: true,
+    pincodeIds: {
+      isEmpty: true,
+    },
+  },
+});
+    let responseData;
 
-      ...(weatherConfig.rainExtraPay !== undefined && {
-        rainExtraPay: Number(weatherConfig.rainExtraPay),
-      }),
-    };
+// IF PINCODE PASSED
+if (pincodeId) {
 
-    if (!finalWeatherConfig.isRaining) {
-      finalWeatherConfig.enabled = false;
-    }
+  responseData = {
+    id: updated.id,
+    cityId: updated.cityId,
+    pincodeIds: [String(pincodeId)],
+    weatherConfig: updated.weatherConfig,
+  };
 
-    const updated = await prisma.payoutConfig.update({
-      where: {
-        id: existingConfig.id,
+} else {
+
+  // GET ALL PINCODES OF CITY
+  const pincodeList = await prisma.payoutConfig.findMany({
+    where: {
+      cityId: String(cityId),
+      isActive: true,
+      NOT: {
+        pincodeIds: {
+          equals: [],
+        },
       },
-      data: {
-        weatherConfig: finalWeatherConfig,
-      },
-    });
+    },
+    select: {
+      pincodeIds: true,
+    },
+  });
 
+  responseData = {
+    id: updated.id,
+    cityId: updated.cityId,
+    pincodeIds: pincodeList.flatMap(item => item.pincodeIds),
+    weatherConfig: updated.weatherConfig,
+  };
+}
     return res.status(200).json({
-      success: true,
-      message: "Weather config updated successfully",
-      data: {
-        id: updated.id,
-        cityId: updated.cityId,
-        pincodeIds: updated.pincodeIds,
-        weatherConfig: updated.weatherConfig,
-      },
-    });
+  success: true,
+  message: "Weather config updated successfully",
+  data: responseData,
+});
   } catch (error) {
     console.log("UPDATE WEATHER CONFIG ERROR:", error);
 
