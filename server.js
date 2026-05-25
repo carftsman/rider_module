@@ -2,7 +2,7 @@ const dotenv = require("dotenv");
 dotenv.config();
 const cron = require("node-cron");
 // const swaggerSetup = require("./config/swagger");
-
+require("./cron/incentiveSettlement");
 
 const http = require("http");
 
