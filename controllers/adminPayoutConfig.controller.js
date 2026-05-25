@@ -730,7 +730,7 @@ if (pincodeId) {
 }
 return res.status(200).json({
   success: true,
-  message: "Per KM rate updated successfully",
+  message: "Distance pay Per KM rate updated successfully",
   data: responseData,
 });
   } catch (error) {

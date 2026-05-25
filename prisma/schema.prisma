@@ -302,20 +302,20 @@ model Shipment {
 }
 
 model rider_asset_issues {
-  id            String @id @default(uuid())
+  id            String                     @id @default(uuid())
   riderAssetsId String
   adminRemark   String?
-  assetType    AssetType
-  assetName    String?
-  issueType    AssetIssueType             @default(OTHER)
-  description  String?
-  status       AssetIssueStatus           @default(OPEN)
-  raisedAt     DateTime                   @default(now())
-  resolvedAt   DateTime?
-  requestId    String?
-  rider_assets rider_assets               @relation(fields: [riderAssetsId], references: [id], onDelete: Cascade)
-  images       rider_asset_issue_images[]
-  AssetRequest AssetRequest?              @relation(fields: [requestId], references: [id])
+  assetType     AssetType
+  assetName     String?
+  issueType     AssetIssueType             @default(OTHER)
+  description   String?
+  status        AssetIssueStatus           @default(OPEN)
+  raisedAt      DateTime                   @default(now())
+  resolvedAt    DateTime?
+  requestId     String?
+  rider_assets  rider_assets               @relation(fields: [riderAssetsId], references: [id], onDelete: Cascade)
+  images        rider_asset_issue_images[]
+  AssetRequest  AssetRequest?              @relation(fields: [requestId], references: [id])
 
   @@index([status])
 }
@@ -1726,4 +1726,20 @@ model rider_asset_issue_images {
   issue rider_asset_issues @relation(fields: [issueId], references: [id], onDelete: Cascade)
 
   @@index([issueId])
+}
+
+model Admin {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  password     String
+  role         AdminRole @default(ADMIN)
+  refreshToken String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+enum AdminRole {
+  SUPER_ADMIN
+  ADMIN
 }

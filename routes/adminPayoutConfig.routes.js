@@ -861,7 +861,7 @@ router.patch("/admin/payout-config/base-pay",controller.updateBasePay)
  *
  *     responses:
  *       200:
- *         description: Per KM rate updated successfully
+ *         description: Distance Pay Per KM rate updated successfully
  *         content:
  *           application/json:
  *             schema:
