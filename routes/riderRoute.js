@@ -25,6 +25,8 @@ const {
 } = require("../controllers/riderRegisterController");
 
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
+const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const {allowRoles}=require("../middleware/allowRolesMiddleware");
 const {upload} = require("../utils/azureUpload");
 // const uploadDriving=require('../utils/multerDL')
 
@@ -341,6 +343,9 @@ riderRouter.post("/rider/location", riderAuthMiddleWare, updateLocation);
  *       - Creates or updates rider location
  *       - Marks onboarding citySelected as true
  *
+ *     security:
+ *       - bearerAuth: []
+ * 
  *     requestBody:
  *       required: true
  *       content:
@@ -462,7 +467,8 @@ riderRouter.post("/rider/location", riderAuthMiddleWare, updateLocation);
  */
 
 
-riderRouter.post("/admin/company-rider/location", updateCompanyEmployeeLocation );
+riderRouter.post("/admin/company-rider/location",adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"), updateCompanyEmployeeLocation );
 
 // ============================================================
 //   VEHICLE
