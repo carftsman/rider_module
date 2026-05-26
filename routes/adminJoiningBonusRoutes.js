@@ -1,5 +1,7 @@
 const express = require("express");
 const joiningBonusRouter = express.Router();
+const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const {allowRoles}=require("../middleware/allowRolesMiddleware");
 
 const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getProgramById, updateProgram, toggleProgramStatus, getTasks, updateTask, deleteTask, getProgramRiders, getRiderProgress} = require("../controllers/adminJoiningBonusController");
 
@@ -251,7 +253,8 @@ const { createProgram ,createProgramTask,getProgramTasks, getAllPrograms, getPro
  *                   example: Internal server error
  */
 
-joiningBonusRouter.post("/program", createProgram);
+joiningBonusRouter.post("/program",adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"), createProgram);
 
 
 /**
@@ -461,7 +464,8 @@ joiningBonusRouter.post("/program", createProgram);
  *                   example: Server error
  */
 
-joiningBonusRouter.post("/programTask", createProgramTask);
+joiningBonusRouter.post("/programTask", adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"),createProgramTask);
 
 
 /**
@@ -474,7 +478,8 @@ joiningBonusRouter.post("/programTask", createProgramTask);
  *     description: >
  *       Fetches all tasks for a given programId.
  *       Tasks are returned in ascending order of dayNumber.
- *
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: query
@@ -582,7 +587,8 @@ joiningBonusRouter.post("/programTask", createProgramTask);
  *                   example: Server error
  */
 
-joiningBonusRouter.get("/program", getProgramTasks);
+joiningBonusRouter.get("/program", adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"),getProgramTasks);
 
 
 /**
@@ -596,7 +602,8 @@ joiningBonusRouter.get("/program", getProgramTasks);
  *       Fetches all programs based on filters.
  *       Supports filtering by isActive and programType.
  *       Results are sorted by latest created programs first.
- *
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: query
@@ -727,7 +734,8 @@ joiningBonusRouter.get("/program", getProgramTasks);
  *                   example: Server error
  */
 
-joiningBonusRouter.get("/programs", getAllPrograms);
+joiningBonusRouter.get("/programs",adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"), getAllPrograms);
 
 /**
  * @swagger
@@ -739,7 +747,8 @@ joiningBonusRouter.get("/programs", getAllPrograms);
  *     description: >
  *       Fetches a program by its ID along with related data including:
  *       tasks, slabs, and rules.
- *
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -911,7 +920,8 @@ joiningBonusRouter.get("/programs", getAllPrograms);
  *                   example: Server error
  */
 
-joiningBonusRouter.get("/programs/:programId", getProgramById);
+joiningBonusRouter.get("/programs/:programId",adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"), getProgramById);
 
 /**
  * @swagger
@@ -926,6 +936,8 @@ joiningBonusRouter.get("/programs/:programId", getProgramById);
  *       Also validates date ranges, prevents overlapping programs for same city/pincode,
  *       and ensures existing tasks do not exceed validityDays.
  *
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: programId
@@ -1070,7 +1082,8 @@ joiningBonusRouter.get("/programs/:programId", getProgramById);
  *                   example: Server error
  */
 
-joiningBonusRouter.put("/programs/:programId", updateProgram);
+joiningBonusRouter.put("/programs/:programId", adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"),updateProgram);
 
 /**
  * @swagger
@@ -1091,6 +1104,9 @@ joiningBonusRouter.put("/programs/:programId", updateProgram);
  *
  *       Deactivation rules:
  *       - Cannot deactivate a currently running program
+ * 
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -1202,7 +1218,8 @@ joiningBonusRouter.put("/programs/:programId", updateProgram);
  *                   example: Server error
  */
 
-joiningBonusRouter.patch("/programs/:programId/status", toggleProgramStatus);
+joiningBonusRouter.patch("/programs/:programId/status",adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"), toggleProgramStatus);
 
 /**
  * @swagger
@@ -1219,7 +1236,10 @@ joiningBonusRouter.patch("/programs/:programId/status", toggleProgramStatus);
  *       - Returns empty list if no tasks exist
  *       - Logs warning if tasks exceed validityDays
  *       - Logs warning if duplicate dayNumber exists
- *
+ * 
+ *     security:
+ *       - bearerAuth: []
+ * 
  *     parameters:
  *       - in: path
  *         name: programId
@@ -1350,7 +1370,8 @@ joiningBonusRouter.patch("/programs/:programId/status", toggleProgramStatus);
  *                   example: Server error
  */
 
-joiningBonusRouter.get("/programs/:programId/tasks", getTasks);
+joiningBonusRouter.get("/programs/:programId/tasks", adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"),getTasks);
 
 
 /**
@@ -1370,6 +1391,9 @@ joiningBonusRouter.get("/programs/:programId/tasks", getTasks);
  *       - rewardAmount must be greater than 0
  *       - taskType must be valid
  *       - At least one condition field must be provided
+ * 
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -1524,7 +1548,8 @@ joiningBonusRouter.get("/programs/:programId/tasks", getTasks);
  *                   example: Server error
  */
 
-joiningBonusRouter.put("/tasks/:taskId", updateTask);
+joiningBonusRouter.put("/tasks/:taskId", adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"),updateTask);
 
 /**
  * @swagger
@@ -1541,6 +1566,9 @@ joiningBonusRouter.put("/tasks/:taskId", updateTask);
  *       - Cannot delete if any rider has started task progress
  *       - Cannot delete if program progress already exists
  *
+ *     security:
+ *       - bearerAuth: []
+ * 
  *     parameters:
  *       - in: path
  *         name: taskId
@@ -1617,7 +1645,8 @@ joiningBonusRouter.put("/tasks/:taskId", updateTask);
  *                   example: Server error
  */
 
-joiningBonusRouter.delete("/tasks/:taskId", deleteTask);
+joiningBonusRouter.delete("/tasks/:taskId", adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"),deleteTask);
 
 /**
  * @swagger
@@ -1630,6 +1659,9 @@ joiningBonusRouter.delete("/tasks/:taskId", deleteTask);
  *       Fetch paginated list of riders enrolled in a program.
  *       Supports filtering by enrollment status.
  *
+ *     security:
+ *       - bearerAuth: []
+ * 
  *     parameters:
  *       - in: path
  *         name: programId
@@ -1744,7 +1776,8 @@ joiningBonusRouter.delete("/tasks/:taskId", deleteTask);
  */
 
 
-joiningBonusRouter.get("/programs/:programId/riders", getProgramRiders);
+joiningBonusRouter.get("/programs/:programId/riders", adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"),getProgramRiders);
 
 /**
  * @swagger
@@ -1759,6 +1792,8 @@ joiningBonusRouter.get("/programs/:programId/riders", getProgramRiders);
  *       - Completion status
  *       - Rewards earned
  *       - Overall program progress
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -1899,6 +1934,7 @@ joiningBonusRouter.get("/programs/:programId/riders", getProgramRiders);
  *         description: Server error
  */
 
-joiningBonusRouter.get("/programs/:programId/riders/:riderId", getRiderProgress);
+joiningBonusRouter.get("/programs/:programId/riders/:riderId",adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"), getRiderProgress);
 
 module.exports = joiningBonusRouter;
