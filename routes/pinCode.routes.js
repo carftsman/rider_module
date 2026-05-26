@@ -19,7 +19,6 @@ const pinCodeRouter = express.Router()
  *       - Admin Pincode
  *     security:
  *       - bearerAuth: []
- 
  *     summary: Create or Update City with Pincodes and Areas
  *     description: |
  *       Creates a new city if it does not exist.
@@ -136,7 +135,6 @@ pinCodeRouter.post('/admin/city/create',adminAuthMiddleware,allowRoles("SUPER_AD
  *       - Admin Pincode
  *     security:
  *       - bearerAuth: []
- 
  *     summary: Enable/Disable a pincode
  *     description: Updates the active status of a pincode under a city.
  *     requestBody:
@@ -188,10 +186,9 @@ pinCodeRouter.patch('/admin/pincode/status',adminAuthMiddleware,allowRoles("SUPE
  * /api/pincode/admin/area/status:
  *   patch:
  *     tags:
- *       - Admin Pincode
- *      security:
+ *         - Admin Pincode
+ *     security:
  *       - bearerAuth: []
- 
  *     summary: Enable/Disable an area
  *     description: Updates the active status of an area inside a pincode.
  *     requestBody:
@@ -250,7 +247,6 @@ pinCodeRouter.patch('/admin/area/status',adminAuthMiddleware,allowRoles("SUPER_A
  *       - Admin Pincode
  *     security:
  *       - bearerAuth: []
- 
  *     summary: Get full city details
  *     description: Fetch city along with pincodes and areas.
  *     parameters:

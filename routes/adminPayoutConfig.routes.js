@@ -22,7 +22,6 @@ const { allowRoles } = require("../middleware/allowRolesMiddleware");
  *       - Admin Payout Config
  *     security:
  *       - bearerAuth: []
- 
  *
  *     requestBody:
  *       required: true
@@ -190,6 +189,8 @@ const { allowRoles } = require("../middleware/allowRolesMiddleware");
  *                   example: "Internal server error"
  */
  router.post("/admin/payout-config/city",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), controller.createCityPayoutConfig);
+
+
   /**
  * @swagger
  * /api/admin/payout-config/pincode:
@@ -333,7 +334,8 @@ const { allowRoles } = require("../middleware/allowRolesMiddleware");
  *       500:
  *         description: Internal server error
  */
-router.post("/admin/payout-config/pincode",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), controller.createPincodePayoutConfig);
+
+  router.post("/admin/payout-config/pincode",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), controller.createPincodePayoutConfig);
 
 // /**
 //  * @swagger
@@ -405,6 +407,7 @@ router.post("/admin/payout-config/pincode",adminAuthMiddleware,allowRoles("SUPER
 //  *               success: false
 //  *               message: Internal server error
 //  */
+
 router.get("/admin/payout-config/active",adminAuthMiddleware,allowRoles("ADMIN","SUPER_ADMIN"), controller.getActivePayoutConfig);
 /**
  * @swagger
@@ -416,8 +419,6 @@ router.get("/admin/payout-config/active",adminAuthMiddleware,allowRoles("ADMIN",
  *       - Admin Payout Config
  *     security:
  *       - bearerAuth: []
- 
- *
  *     parameters:
  *       - in: query
  *         name: cityId
@@ -534,6 +535,7 @@ router.get("/admin/payout-config/active",adminAuthMiddleware,allowRoles("ADMIN",
  *                   type: string
  *                   example: "Internal server error"
  */
+
 router.get(
   "/admin/all/payout-config",
   adminAuthMiddleware,allowRoles("ADMIN","SUPER_ADMIN"),
@@ -545,10 +547,8 @@ router.get(
  *   get:
  *     summary: Get Payout Config History (City Level + Pincode Level)
  *     tags: [Admin Payout Config]
- *   security:
+ *     security:
  *       - bearerAuth: []
- 
- *
  *     parameters:
  *       - in: query
  *         name: cityId
@@ -721,7 +721,6 @@ router.get(
  *       - Admin Payout Config
  *     security:
  *       - bearerAuth: []
- 
  *     parameters:
  *       - in: query
  *         name: cityId
@@ -848,8 +847,6 @@ router.patch("/admin/payout-config/base-pay",adminAuthMiddleware,allowRoles("SUP
  *       - Admin Payout Config
  *     security:
  *       - bearerAuth: []
- 
- *
  *     parameters:
  *       - in: query
  *         name: cityId
@@ -975,8 +972,6 @@ router.patch("/admin/distance-pay",adminAuthMiddleware,allowRoles("SUPER_ADMIN")
  *       - Admin Payout Config
  *     security:
  *       - bearerAuth: []
- 
- *
  *     parameters:
  *       - in: query
  *         name: cityId
@@ -1131,8 +1126,6 @@ router.patch("/admin/surge-config",adminAuthMiddleware,allowRoles("SUPER_ADMIN")
  *       - Admin Payout Config
  *     security:
  *       - bearerAuth: []
- 
- *
  *     parameters:
  *       - in: query
  *         name: cityId
@@ -1279,8 +1272,6 @@ router.patch("/admin/weather-config",adminAuthMiddleware,allowRoles("SUPER_ADMIN
  *       - Admin Payout Config
  *     security:
  *       - bearerAuth: []
- 
- *
  *     parameters:
  *       - in: query
  *         name: cityId
@@ -1438,8 +1429,6 @@ router.patch("/admin/:id/status",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), 
  *       - Admin Payout Config
  *     security:
  *       - bearerAuth: []
- 
- *
  *     parameters:
  *       - in: query
  *         name: cityId
@@ -1584,8 +1573,6 @@ router.put(
  *       - Admin Payout Config
  *     security:
  *       - bearerAuth: []
- 
- *
  *     parameters:
  *       - in: query
  *         name: cityId
