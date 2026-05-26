@@ -39,6 +39,7 @@ const cityExists = await prisma.city.findUnique({
     id: cityId
   }
 });
+console.log("cityExists:", cityExists);
 
 if (!cityExists) {
   return res.status(400).json({
@@ -48,12 +49,12 @@ if (!cityExists) {
 }
 
 // Validate name with city
-if (name.trim().toLowerCase() !== cityExists.name.trim().toLowerCase()) {
-  return res.status(400).json({
-    success: false,
-    message: `Name must match city name '${cityExists.name}'`
-  });
-}
+// if (name.trim().toLowerCase() !== cityExists.name.trim().toLowerCase()) {
+//   return res.status(400).json({
+//     success: false,
+//     message: `Name must match city name '${cityExists.name}'`
+//   });
+// }
 
     if (!basePay || basePay <= 0) {
       return res.status(400).json({

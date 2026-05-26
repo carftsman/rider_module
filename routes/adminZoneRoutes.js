@@ -1,6 +1,7 @@
 const express = require("express");
 const adminZoneRoutes = express.Router();
-
+const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const { allowRoles } = require("../middleware/allowRolesMiddleware");
 const {
   createZone,
   createZonePoint,
@@ -19,6 +20,9 @@ const {
  *     summary: Create a new Zone
  *     description: Admin can create a zone using name, city, and state
  *     tags: [Admin Zone Points]
+ *     security:
+ *       - bearerAuth: []
+ 
  *     requestBody:
  *       required: true
  *       content:
@@ -70,7 +74,7 @@ const {
  *               success: false
  *               message: Something went wrong
  */
-adminZoneRoutes.post("/create/zone-point", createZone);
+adminZoneRoutes.post("/create/zone-point",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), createZone);
 
 
 // ADMIN APIs
@@ -82,6 +86,9 @@ adminZoneRoutes.post("/create/zone-point", createZone);
  *     summary: Create a new zone pickup point
  *     description: Admin can create a pickup address for a zone. Latitude and longitude are automatically generated from the address using Google Geocoding API.
  *     tags: [Admin Zone Points]
+ *     security:
+ *       - bearerAuth: []
+ 
  *     requestBody:
  *       required: true
  *       content:
@@ -161,7 +168,7 @@ adminZoneRoutes.post("/create/zone-point", createZone);
  *               success: false
  *               message: Internal server error
  */
-adminZoneRoutes.post("/zone-point", createZonePoint);
+adminZoneRoutes.post("/zone-point",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), createZonePoint);
 
 /**
  * @swagger
@@ -169,6 +176,9 @@ adminZoneRoutes.post("/zone-point", createZonePoint);
  *   get:
  *     summary: Get all addresses
  *     tags: [Admin Zone Points]
+ *     security:
+ *       - bearerAuth: []
+ 
  *     parameters:
  *       - in: query
  *         name: zoneId
@@ -183,39 +193,8 @@ adminZoneRoutes.post("/zone-point", createZonePoint);
  *         description: List of addresses
  */
 
-adminZoneRoutes.get("/zone-point", getZonePoints);
+adminZoneRoutes.get("/zone-point",adminAuthMiddleware,allowRoles("ADMIN","SUPER_ADMIN"), getZonePoints);
 
-// /**
-//  * @swagger
-//  * /admin/zone-point/{id}:
-//  *   put:
-//  *     summary: Update address
-//  *     tags: [Admin Zone Points]
-//  *     parameters:
-//  *       - in: path
-//  *         name: id
-//  *         required: true
-//  *     responses:
-//  *       200:
-//  *         description: Updated successfully
-//  */
-// adminZoneRoutes.put("/zone-point/:id", updateZonePoint);
-
-// /**
-//  * @swagger
-//  * /admin/zone-point/{id}:
-//  *   delete:
-//  *     summary: Delete address
-//  *     tags: [Admin Zone Points]
-//  *     parameters:
-//  *       - in: path
-//  *         name: id
-//  *         required: true
-//  *     responses:
-//  *       200:
-//  *         description: Deleted successfully
-//  */
-// adminZoneRoutes.delete("/zone-point/:id", deleteZonePoint);
 
 
 /**
@@ -226,6 +205,9 @@ adminZoneRoutes.get("/zone-point", getZonePoints);
  *     description: Fetch all active cities along with their active pincodes
  *     tags:
  *       - Admin Zone Points
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     responses:
  *       200:
@@ -296,7 +278,7 @@ adminZoneRoutes.get("/zone-point", getZonePoints);
  *                   type: string
  *                   example: Internal server error
  */
-adminZoneRoutes.get("/getCities", getAllCities);
+adminZoneRoutes.get("/getCities",adminAuthMiddleware,allowRoles("ADMIN","SUPER_ADMIN"), getAllCities);
 
 
 module.exports = adminZoneRoutes;
