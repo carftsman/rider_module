@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
  
 const controller = require("../controllers/adminDailyIncentive.controller");
+const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const { allowRoles } = require("../middleware/allowRolesMiddleware");
  
 /**
 * @swagger
@@ -267,7 +269,10 @@ const controller = require("../controllers/adminDailyIncentive.controller");
 *                   data:
 *                     id: daily_004
 */
-router.post("/daily", controller.createDailyIncentive);
+router.post("/daily",  
+  adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"),
+  controller.createDailyIncentive);
  
 /**
 * @swagger
@@ -309,7 +314,10 @@ router.post("/daily", controller.createDailyIncentive);
 *       200:
 *         description: Daily incentive updated
 */
-router.put("/daily/:id", controller.updateDailyIncentive);
+router.put("/daily/:id",  
+  adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"), 
+  controller.updateDailyIncentive);
  
 /**
 * @swagger
@@ -322,7 +330,10 @@ router.put("/daily/:id", controller.updateDailyIncentive);
 *       200:
 *         description: Daily incentives fetched successfully
 */
-router.get("/daily", controller.getAllDailyIncentives);
+router.get("/daily",  
+  adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"), 
+  controller.getAllDailyIncentives);
  
 /**
 * @swagger
@@ -342,7 +353,10 @@ router.get("/daily", controller.getAllDailyIncentives);
 *       200:
 *         description: Daily incentive details
 */
-router.get("/daily/:id", controller.getDailyIncentiveById);
+router.get("/daily/:id",
+     adminAuthMiddleware,
+     allowRoles("ADMIN", "SUPER_ADMIN"), 
+     controller.getDailyIncentiveById);
  
 /**
 * @swagger
@@ -362,6 +376,9 @@ router.get("/daily/:id", controller.getDailyIncentiveById);
 *       200:
 *         description: Daily incentive deleted successfully
 */
-router.delete("/daily/:id", controller.deleteDailyIncentive);
+router.delete("/daily/:id",
+     adminAuthMiddleware,
+     allowRoles("SUPER_ADMIN"), 
+     controller.deleteDailyIncentive);
  
 module.exports = router;
