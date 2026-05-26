@@ -26,12 +26,35 @@ const createCityPayoutConfig = async (req, res) => {
       });
     }
 
-    if (!cityId) {
-      return res.status(400).json({
-        success: false,
-        message: "cityId is required",
-      });
-    }
+  if (!cityId) {
+  return res.status(400).json({
+    success: false,
+    message: "cityId is required",
+  });
+}
+
+// Check whether city exists
+const cityExists = await prisma.city.findUnique({
+  where: {
+    id: cityId
+  }
+});
+console.log("cityExists:", cityExists);
+
+if (!cityExists) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid cityId. City does not exist"
+  });
+}
+
+// Validate name with city
+// if (name.trim().toLowerCase() !== cityExists.name.trim().toLowerCase()) {
+//   return res.status(400).json({
+//     success: false,
+//     message: `Name must match city name '${cityExists.name}'`
+//   });
+// }
 
     if (!basePay || basePay <= 0) {
       return res.status(400).json({
@@ -474,6 +497,8 @@ const getPayoutConfigHistory = async (req, res) => {
 
 //   }
 // };
+
+
 const updateBasePay = async (req, res) => {
   try {
     const { cityId, pincodeId } = req.query;
@@ -730,7 +755,7 @@ if (pincodeId) {
 }
 return res.status(200).json({
   success: true,
-  message: "Per KM rate updated successfully",
+  message: "Distance pay Per KM rate updated successfully",
   data: responseData,
 });
   } catch (error) {

@@ -14,6 +14,8 @@ const {
   updateReferralConfig,
   getReferralProgramByRiderPincode
 } = require("../controllers/adminReferralController");
+const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const { allowRoles } = require("../middleware/allowRolesMiddleware");
 
 /**
  * @swagger
@@ -32,6 +34,8 @@ const {
  *   post:
  *     summary: Create referral incentive program
  *     tags: [Admin Referral Programs]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -116,6 +120,8 @@ const {
  */
 router.post(
   "/referral-programs",
+  adminAuthMiddleware,
+  allowRoles( "SUPER_ADMIN"), 
   createReferralProgram
 );
 
@@ -126,6 +132,8 @@ router.post(
  *   get:
  *     summary: Get all referral programs
  *     tags: [Admin Referral Programs]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: Referral programs fetched successfully
@@ -135,6 +143,8 @@ router.post(
  */
 router.get(
   "/referral-programs",
+  adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"), 
   getAllReferralConfigs
 );
 
@@ -145,6 +155,8 @@ router.get(
  *   put:
  *     summary: Update referral incentive program
  *     tags: [Admin Referral Programs]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: programId
@@ -172,6 +184,8 @@ router.get(
  */
 router.put(
   "/referral-programs/:programId",
+  adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"), 
   updateReferralConfig
 );
 
@@ -182,6 +196,8 @@ router.put(
  *   patch:
  *     summary: Update referral program active status
  *     tags: [Admin Referral Programs]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -214,6 +230,8 @@ router.put(
  */
 router.patch(
   "/referral-programs/:id/status",
+  adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"), 
   updateReferralConfigStatus
 );
 
@@ -224,6 +242,8 @@ router.patch(
  *   get:
  *     summary: Get referral programs by rider pincode
  *     tags: [Admin Referral Programs]
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -245,6 +265,8 @@ router.patch(
  */
 router.get(
   "/referral-programs/rider/:riderId",
+  adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"), 
   getReferralProgramByRiderPincode
 );
 
@@ -255,6 +277,8 @@ router.get(
  *   get:
  *     summary: Get all referrals
  *     tags: [Admin Referrals]
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: query
@@ -284,6 +308,8 @@ router.get(
  */
 router.get(
   "/referrals",
+  adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"), 
   getAllReferrals
 );
 
@@ -294,6 +320,8 @@ router.get(
  *   post:
  *     summary: Credit referral reward
  *     tags: [Admin Referrals]
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -315,6 +343,8 @@ router.get(
  */
 router.post(
   "/referrals/:id/credit",
+  adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"), 
   creditReferralReward
 );
 

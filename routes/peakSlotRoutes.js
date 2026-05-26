@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const controller = require("../controllers/peakSlotController");
+const controller = require("../controllers/peakSlotController");const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const {allowRoles}=require("../middleware/allowRolesMiddleware");
+
 const prisma = require("../config/prisma");
  
 /**
@@ -11,6 +13,9 @@ const prisma = require("../config/prisma");
  *     tags: [Peak Slot Incentives]
  *     description: Create slab-based peak slot incentive
  *
+ *     security:
+ *       - bearerAuth: []
+ * 
  *     requestBody:
  *       required: true
  *       content:
@@ -63,7 +68,8 @@ const prisma = require("../config/prisma");
  */
 
 
-router.post("/peak-slot",controller.createPeakSlot)
+router.post("/peak-slot",adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"),controller.createPeakSlot)
  
  
  
@@ -73,6 +79,9 @@ router.post("/peak-slot",controller.createPeakSlot)
  *   put:
  *     summary: Update Peak Slot Incentive
  *     tags: [Peak Slot Incentives]
+ * 
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -116,7 +125,8 @@ router.post("/peak-slot",controller.createPeakSlot)
  *         description: Server error
  */
  
-router.put("/peak-slot/:id", controller.updatePeakSlot);
+router.put("/peak-slot/:id", adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"),controller.updatePeakSlot);
  
 /**
  * @swagger
@@ -124,6 +134,9 @@ router.put("/peak-slot/:id", controller.updatePeakSlot);
  *   get:
  *     summary: Get all Peak Slot Incentives
  *     tags: [Peak Slot Incentives]
+ * 
+ *     security:
+ *       - bearerAuth: []
  *
  *     responses:
  *       200:
@@ -274,7 +287,8 @@ router.put("/peak-slot/:id", controller.updatePeakSlot);
  *       500:
  *         description: Server error
  */
-router.get("/peak-slot",controller.getAllPeakSlots)
+router.get("/peak-slot",adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"),controller.getAllPeakSlots)
  
  
 /**
@@ -283,6 +297,9 @@ router.get("/peak-slot",controller.getAllPeakSlots)
  *   get:
  *     summary: Get single Peak Slot Incentive details
  *     tags: [Peak Slot Incentives]
+ * 
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -354,7 +371,8 @@ router.get("/peak-slot",controller.getAllPeakSlots)
  *       500:
  *         description: Server error
  */
-router.get("/peak-slot/:id", controller.getPeakSlotById);
+router.get("/peak-slot/:id",adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"), controller.getPeakSlotById);
 
 
 /**
@@ -371,6 +389,9 @@ router.get("/peak-slot/:id", controller.getPeakSlotById);
  *
  *     tags:
  *       - Peak Slot Incentives
+ * 
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -440,7 +461,8 @@ router.get("/peak-slot/:id", controller.getPeakSlotById);
  */
  
 
-router.delete("/peak-slot/:id", controller.deletePeakSlot);
+router.delete("/peak-slot/:id", adminAuthMiddleware,
+  allowRoles("SUPER_ADMIN"),controller.deletePeakSlot);
 
 module.exports = router;
  

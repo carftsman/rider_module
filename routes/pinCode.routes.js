@@ -1,5 +1,6 @@
 const express = require('express')
-
+const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const { allowRoles } = require("../middleware/allowRolesMiddleware");
 const {
   createCity,
   updatePincodeStatus,
@@ -16,6 +17,8 @@ const pinCodeRouter = express.Router()
  *   post:
  *     tags:
  *       - Admin Pincode
+ *     security:
+ *       - bearerAuth: []
  *     summary: Create or Update City with Pincodes and Areas
  *     description: |
  *       Creates a new city if it does not exist.
@@ -122,7 +125,7 @@ const pinCodeRouter = express.Router()
  *         description: Internal server error
  */
 
-pinCodeRouter.post('/admin/city/create', createCity)
+pinCodeRouter.post('/admin/city/create',adminAuthMiddleware,allowRoles("SUPER_ADMIN"), createCity)
 
 /**
  * @swagger
@@ -130,6 +133,8 @@ pinCodeRouter.post('/admin/city/create', createCity)
  *   patch:
  *     tags:
  *       - Admin Pincode
+ *     security:
+ *       - bearerAuth: []
  *     summary: Enable/Disable a pincode
  *     description: Updates the active status of a pincode under a city.
  *     requestBody:
@@ -174,14 +179,16 @@ pinCodeRouter.post('/admin/city/create', createCity)
  *         description: Internal server error
  */
 
-pinCodeRouter.patch('/admin/pincode/status', updatePincodeStatus)
+pinCodeRouter.patch('/admin/pincode/status',adminAuthMiddleware,allowRoles("SUPER_ADMIN"), updatePincodeStatus)
 
 /**
  * @swagger
  * /api/pincode/admin/area/status:
  *   patch:
  *     tags:
- *       - Admin Pincode
+ *         - Admin Pincode
+ *     security:
+ *       - bearerAuth: []
  *     summary: Enable/Disable an area
  *     description: Updates the active status of an area inside a pincode.
  *     requestBody:
@@ -230,7 +237,7 @@ pinCodeRouter.patch('/admin/pincode/status', updatePincodeStatus)
  *         description: Internal server error
  */
 
-pinCodeRouter.patch('/admin/area/status', updateAreaStatus)
+pinCodeRouter.patch('/admin/area/status',adminAuthMiddleware,allowRoles("SUPER_ADMIN"), updateAreaStatus)
 
 /**
  * @swagger
@@ -238,6 +245,8 @@ pinCodeRouter.patch('/admin/area/status', updateAreaStatus)
  *   get:
  *     tags:
  *       - Admin Pincode
+ *     security:
+ *       - bearerAuth: []
  *     summary: Get full city details
  *     description: Fetch city along with pincodes and areas.
  *     parameters:
@@ -279,6 +288,6 @@ pinCodeRouter.patch('/admin/area/status', updateAreaStatus)
  *         description: Internal server error
  */
 
-pinCodeRouter.get('/admin/city/:cityId', getCityDetails)
+pinCodeRouter.get('/admin/city/:cityId',adminAuthMiddleware,allowRoles("ADMIN","SUPER_ADMIN"), getCityDetails)
 
 module.exports = pinCodeRouter

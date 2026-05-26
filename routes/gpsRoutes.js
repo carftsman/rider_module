@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const { getBestRoute, getRiderLiveLocation, getOrderLiveTracking } = require("../controllers/gpsController");
+const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const { allowRoles } = require("../middleware/allowRolesMiddleware");
  
 router.post("/best", getBestRoute);
 
@@ -9,7 +11,9 @@ router.post("/best", getBestRoute);
  * /api/aerial/rider-live-location/{deliveryId}:
  *   get:
  *     tags:
- *       - Rider Live Location
+ *       - Rider Live 
+ *     security:
+ *       - bearerAuth: []
  *
  *     summary: Get rider live GPS location using deliveryId
  *
@@ -127,6 +131,8 @@ router.post("/best", getBestRoute);
 
 router.get(
   "/rider-live-location/:deliveryId",
+  adminAuthMiddleware,
+  allowRoles("ADMIN", "SUPER_ADMIN"),
   getRiderLiveLocation
 );
 
@@ -136,6 +142,8 @@ router.get(
  *   get:
  *     tags:
  *       - Order Live Tracking
+ *     security:
+ *       - bearerAuth: []
  *
  *     summary: Get rider live tracking using orderId
  *
@@ -330,6 +338,8 @@ router.get(
 
 router.get(
   "/orders/:orderId/live-tracking",
+  adminAuthMiddleware,
+  allowRoles("ADMIN","SUPER_ADMIN"),
   getOrderLiveTracking
 );
  
