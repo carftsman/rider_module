@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 
 const controller = require("../controllers/adminWeeklyIncentive.controller");
+const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const { allowRoles } = require("../middleware/allowRolesMiddleware");
 
 /**
  * @swagger
@@ -16,6 +18,8 @@ const controller = require("../controllers/adminWeeklyIncentive.controller");
  *   post:
  *     summary: Create Weekly Incentive (SLAB / FIXED_TARGET / HYBRID / TASK)
  *     tags: [Admin Weekly Incentives]
+ *     security:
+ *       - bearerAuth: []
  *     requestBody:
  *       required: true
  *       content:
@@ -245,7 +249,10 @@ const controller = require("../controllers/adminWeeklyIncentive.controller");
  *                 name: Weekly Superstar Bonus
  *                 ruleType: SLAB
  */
-router.post("/weekly", controller.createWeeklyIncentive);
+router.post("/weekly", 
+    adminAuthMiddleware,
+    allowRoles("SUPER_ADMIN"), 
+    controller.createWeeklyIncentive);
 
 /**
  * @swagger
@@ -253,6 +260,8 @@ router.post("/weekly", controller.createWeeklyIncentive);
  *   put:
  *     summary: Update Weekly Incentive
  *     tags: [Admin Weekly Incentives]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -289,7 +298,10 @@ router.post("/weekly", controller.createWeeklyIncentive);
  *               success: true
  *               message: Weekly incentive updated
  */
-router.put("/weekly/:id", controller.updateWeeklyIncentive);
+router.put("/weekly/:id",
+    adminAuthMiddleware,
+    allowRoles( "SUPER_ADMIN"),  
+    controller.updateWeeklyIncentive);
 
 /**
  * @swagger
@@ -297,6 +309,8 @@ router.put("/weekly/:id", controller.updateWeeklyIncentive);
  *   get:
  *     summary: Get all weekly incentives
  *     tags: [Admin Weekly Incentives]
+ *     security:
+ *       - bearerAuth: []
  *     responses:
  *       200:
  *         description: List of weekly incentives
@@ -310,7 +324,10 @@ router.put("/weekly/:id", controller.updateWeeklyIncentive);
  *                   ruleType: "SLAB"
  *                   isActive: true
  */
-router.get("/weekly", controller.getAllWeeklyIncentives);
+router.get("/weekly",
+     adminAuthMiddleware,
+     allowRoles("ADMIN", "SUPER_ADMIN"), 
+     controller.getAllWeeklyIncentives);
 
 /**
  * @swagger
@@ -318,6 +335,8 @@ router.get("/weekly", controller.getAllWeeklyIncentives);
  *   get:
  *     summary: Get weekly incentive details
  *     tags: [Admin Weekly Incentives]
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
@@ -342,7 +361,10 @@ router.get("/weekly", controller.getAllWeeklyIncentives);
  *                 constraints:
  *                   minAcceptanceRate: 85
  */
-router.get("/weekly/:id", controller.getWeeklyIncentiveById);
+router.get("/weekly/:id",
+     adminAuthMiddleware,
+     allowRoles("ADMIN", "SUPER_ADMIN"), 
+     controller.getWeeklyIncentiveById);
 /**
  * @swagger
  * /api/admin/programs/weekly/{id}:
@@ -350,6 +372,8 @@ router.get("/weekly/:id", controller.getWeeklyIncentiveById);
  *     summary: Delete Weekly Incentive
  *     description: Deletes a weekly incentive ONLY if it is UPCOMING
  *     tags: [Admin Weekly Incentives]
+ *     security:
+ *       - bearerAuth: []
  *
  *     parameters:
  *       - in: path
@@ -382,5 +406,8 @@ router.get("/weekly/:id", controller.getWeeklyIncentiveById);
  *       500:
  *         description: Internal server error
  */
-router.delete("/weekly/:id", controller.deleteWeeklyIncentive);
+router.delete("/weekly/:id",
+     adminAuthMiddleware,
+     allowRoles("SUPER_ADMIN"), 
+     controller.deleteWeeklyIncentive);
 module.exports = router;

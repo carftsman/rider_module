@@ -18,6 +18,8 @@ const { allowRoles } = require("../middleware/allowRolesMiddleware");
 *   post:
 *     summary: Create Daily Incentive (SLAB / FIXED / HYBRID / TASK)
 *     tags: [Admin Daily Incentives]
+*     security:
+*       - bearerAuth: []
 *
 *     requestBody:
 *       required: true
@@ -280,6 +282,8 @@ router.post("/daily",
 *   put:
 *     summary: Update Daily Incentive
 *     tags: [Admin Daily Incentives]
+*     security:
+*       - bearerAuth: []
 *
 *     parameters:
 *       - in: path
@@ -325,6 +329,8 @@ router.put("/daily/:id",
 *   get:
 *     summary: Get all daily incentives
 *     tags: [Admin Daily Incentives]
+*     security:
+*       - bearerAuth: []
 *
 *     responses:
 *       200:
@@ -341,6 +347,8 @@ router.get("/daily",
 *   get:
 *     summary: Get single daily incentive
 *     tags: [Admin Daily Incentives]
+*     security:
+*       - bearerAuth: []
 *
 *     parameters:
 *       - in: path
@@ -364,6 +372,8 @@ router.get("/daily/:id",
 *   delete:
 *     summary: Delete Daily Incentive
 *     tags: [Admin Daily Incentives]
+*     security:
+*       - bearerAuth: []
 *
 *     parameters:
 *       - in: path
