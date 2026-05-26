@@ -326,6 +326,26 @@ console.log("NORMALIZED PINCODES:", pincodeIds);
  
     const start = new Date(body.dateRange.startDate);
     const end = new Date(body.dateRange.endDate);
+
+    const now = new Date(
+  new Date().toLocaleString(
+    "en-US",
+    { timeZone: "Asia/Kolkata" }
+  )
+);
+
+// REMOVE TIME
+now.setHours(0, 0, 0, 0);
+
+start.setHours(0, 0, 0, 0);
+
+if (start < now) {
+  return res.status(400).json({
+    success: false,
+    message:
+      "Cannot create incentive for past dates"
+  });
+}
  
     const existingPrograms = await prisma.program.findMany({
   where: {
@@ -531,6 +551,25 @@ const createFixedTargetIncentive = async (req, res) => {
     const start = new Date(body.dateRange.startDate);
 
     const end = new Date(body.dateRange.endDate);
+    const now = new Date(
+  new Date().toLocaleString(
+    "en-US",
+    { timeZone: "Asia/Kolkata" }
+  )
+);
+
+// REMOVE TIME
+now.setHours(0, 0, 0, 0);
+
+start.setHours(0, 0, 0, 0);
+
+if (start < now) {
+  return res.status(400).json({
+    success: false,
+    message:
+      "Cannot create incentive for past dates"
+  });
+}
 
     if (start > end) {
       return res.status(400).json({
@@ -828,6 +867,27 @@ const createHybridDailyIncentive = async (req, res) => {
 
     const end =
       new Date(body.dateRange.endDate);
+
+
+      const now = new Date(
+  new Date().toLocaleString(
+    "en-US",
+    { timeZone: "Asia/Kolkata" }
+  )
+);
+
+// REMOVE TIME
+now.setHours(0, 0, 0, 0);
+
+start.setHours(0, 0, 0, 0);
+
+if (start < now) {
+  return res.status(400).json({
+    success: false,
+    message:
+      "Cannot create incentive for past dates"
+  });
+}
 
     if (start > end) {
       return res.status(400).json({
