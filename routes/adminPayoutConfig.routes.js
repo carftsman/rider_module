@@ -4,7 +4,8 @@ const express = require("express");
 const router = express.Router();
 const controller = require("../controllers/adminPayoutConfig.controller");
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
-
+const { adminAuthMiddleware } = require("../middleware/adminAuthMiddleware");
+const { allowRoles } = require("../middleware/allowRolesMiddleware");
 
 
 /**
@@ -19,6 +20,9 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     requestBody:
  *       required: true
@@ -185,7 +189,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *                   type: string
  *                   example: "Internal server error"
  */
- router.post("/admin/payout-config/city", controller.createCityPayoutConfig);
+ router.post("/admin/payout-config/city",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), controller.createCityPayoutConfig);
   /**
  * @swagger
  * /api/admin/payout-config/pincode:
@@ -193,6 +197,9 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *     summary: Create pincode level payout config
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     requestBody:
  *       required: true
@@ -326,7 +333,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *       500:
  *         description: Internal server error
  */
-router.post("/admin/payout-config/pincode", controller.createPincodePayoutConfig);
+router.post("/admin/payout-config/pincode",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), controller.createPincodePayoutConfig);
 
 // /**
 //  * @swagger
@@ -398,7 +405,7 @@ router.post("/admin/payout-config/pincode", controller.createPincodePayoutConfig
 //  *               success: false
 //  *               message: Internal server error
 //  */
-router.get("/admin/payout-config/active", controller.getActivePayoutConfig);
+router.get("/admin/payout-config/active",adminAuthMiddleware,allowRoles("ADMIN","SUPER_ADMIN"), controller.getActivePayoutConfig);
 /**
  * @swagger
  * /api/admin/all/payout-config:
@@ -407,6 +414,9 @@ router.get("/admin/payout-config/active", controller.getActivePayoutConfig);
  *     description: Fetches all payout configurations, optionally filtered by cityId, sorted by latest created first.
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     parameters:
  *       - in: query
@@ -526,6 +536,7 @@ router.get("/admin/payout-config/active", controller.getActivePayoutConfig);
  */
 router.get(
   "/admin/all/payout-config",
+  adminAuthMiddleware,allowRoles("ADMIN","SUPER_ADMIN"),
   controller.getPayoutConfigs
 );
 /**
@@ -534,6 +545,9 @@ router.get(
  *   get:
  *     summary: Get Payout Config History (City Level + Pincode Level)
  *     tags: [Admin Payout Config]
+ *   security:
+ *       - bearerAuth: []
+ 
  *
  *     parameters:
  *       - in: query
@@ -693,6 +707,7 @@ router.get(
  */
 router.get(
   "/admin/payout-config/history",
+  adminAuthMiddleware,allowRoles("ADMIN","SUPER_ADMIN"),
   controller.getPayoutConfigHistory
 );
 
@@ -704,6 +719,9 @@ router.get(
  *     summary: Update base pay for city or pincode level payout config
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *     parameters:
  *       - in: query
  *         name: cityId
@@ -818,7 +836,7 @@ router.get(
  *                   type: string
  *                   example: Internal server error
  */
-router.patch("/admin/payout-config/base-pay",controller.updateBasePay)
+router.patch("/admin/payout-config/base-pay",adminAuthMiddleware,allowRoles("SUPER_ADMIN"),controller.updateBasePay)
 
 
 /**
@@ -828,6 +846,9 @@ router.patch("/admin/payout-config/base-pay",controller.updateBasePay)
  *     summary: Update per KM distance pay for city or pincode level payout config
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     parameters:
  *       - in: query
@@ -943,7 +964,7 @@ router.patch("/admin/payout-config/base-pay",controller.updateBasePay)
  *                   type: string
  *                   example: Internal server error
  */
-router.patch("/admin/distance-pay",controller.updateDistancePay)
+router.patch("/admin/distance-pay",adminAuthMiddleware,allowRoles("SUPER_ADMIN"),controller.updateDistancePay)
 
 /**
  * @swagger
@@ -952,6 +973,9 @@ router.patch("/admin/distance-pay",controller.updateDistancePay)
  *     summary: Update surge configuration for city or pincode level payout config
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     parameters:
  *       - in: query
@@ -1097,7 +1121,7 @@ router.patch("/admin/distance-pay",controller.updateDistancePay)
  *                   type: string
  *                   example: Internal server error
  */
-router.patch("/admin/surge-config",controller.updateSurgeConfig)
+router.patch("/admin/surge-config",adminAuthMiddleware,allowRoles("SUPER_ADMIN"),controller.updateSurgeConfig)
 /**
  * @swagger
  * /api/admin/weather-config:
@@ -1105,6 +1129,9 @@ router.patch("/admin/surge-config",controller.updateSurgeConfig)
  *     summary: Update weather configuration for city or pincode level payout config
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     parameters:
  *       - in: query
@@ -1242,7 +1269,7 @@ router.patch("/admin/surge-config",controller.updateSurgeConfig)
  *                   type: string
  *                   example: Internal server error
  */
-router.patch("/admin/weather-config", controller.updateWeatherConfig);
+router.patch("/admin/weather-config",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), controller.updateWeatherConfig);
 /**
  * @swagger
  * /api/admin/rollback:
@@ -1250,6 +1277,9 @@ router.patch("/admin/weather-config", controller.updateWeatherConfig);
  *     summary: Rollback payout config by city or pincode
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     parameters:
  *       - in: query
@@ -1316,7 +1346,7 @@ router.patch("/admin/weather-config", controller.updateWeatherConfig);
  *       500:
  *         description: Internal server error
  */
-router.post("/admin/rollback", controller.rollbackPayoutConfig);
+router.post("/admin/rollback",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), controller.rollbackPayoutConfig);
 
 // /**
 //  * @swagger
@@ -1347,7 +1377,7 @@ router.post("/admin/rollback", controller.rollbackPayoutConfig);
 //  *       400:
 //  *         description: Cannot deactivate only active config
 //  */
-router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
+router.patch("/admin/:id/status",adminAuthMiddleware,allowRoles("SUPER_ADMIN"), controller.togglePayoutConfigStatus);
 
 // /**
 //  * @swagger
@@ -1406,6 +1436,9 @@ router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
  *     summary: Update city payout config
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     parameters:
  *       - in: query
@@ -1537,6 +1570,7 @@ router.patch("/admin/:id/status", controller.togglePayoutConfigStatus);
  */
 router.put(
   "/admin/update/payout-config/city",
+  adminAuthMiddleware,allowRoles("SUPER_ADMIN"),
   controller.updateCityPayoutConfig
 );
 
@@ -1548,6 +1582,9 @@ router.put(
  *     summary: Update pincode payout config
  *     tags:
  *       - Admin Payout Config
+ *     security:
+ *       - bearerAuth: []
+ 
  *
  *     parameters:
  *       - in: query
@@ -1687,6 +1724,7 @@ router.put(
  */
 router.put(
   "/admin/update/payout-config/pincode",
+  adminAuthMiddleware,allowRoles("SUPER_ADMIN"),
   controller.updatePincodePayoutConfig
 );
 
