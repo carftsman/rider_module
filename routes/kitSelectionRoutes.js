@@ -11,7 +11,8 @@ const{createAsset,
     uploadIssueImage,
     verifyIssue,
     completePaymentAndReadyForDispatch,
-    getIssueDetails
+    getIssueDetails,
+    manageJoiningKitAddress
 
 }=require('../controllers/kitSelectionController');
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
@@ -28,7 +29,7 @@ const { upload } = require("../utils/azureUpload");
  *       for one or multiple asset requests. Accepts comma-separated requestIds.
  *       Creates or updates payment records and EMI plan if applicable.
  *     tags:
- *       - Joining Kit
+ *       - Kit
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -144,8 +145,132 @@ const { upload } = require("../utils/azureUpload");
  *               error: Internal server error
  */
 router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
-
-
+/**
+ * @swagger
+ * /api/kit/joining-kit/address:
+ *   put:
+ *     summary: Create or update joining kit address and delivery mode
+ *     description: |
+ *       This API handles:
+ *       - Create new HOME_DELIVERY address
+ *       - Update address with same pincode
+ *       - Update address with new pincode
+ *       - Change delivery mode to PICKUP
+ *       - Change delivery mode to HOME_DELIVERY
+ *     tags:
+ *       - Kit
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               deliveryMode:
+ *                 type: string
+ *                 enum:
+ *                   - HOME_DELIVERY
+ *                   - PICKUP
+ *                 example: HOME_DELIVERY
+ *
+ *               pickupLocationId:
+ *                 type: string
+ *                 example: pickup_123
+ *
+ *               name:
+ *                 type: string
+ *                 example: Vaishnavi
+ *
+ *               completeAddress:
+ *                 type: string
+ *                 example: Madhapur Hyderabad
+ *
+ *               landmark:
+ *                 type: string
+ *                 example: Near Metro Station
+ *
+ *               pincode:
+ *                 type: string
+ *                 example: "500081"
+ *
+ *               updatePincode:
+ *                 type: boolean
+ *                 example: true
+ *
+ *     responses:
+ *       200:
+ *         description: Address or delivery mode updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Address updated successfully with same pincode
+ *
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: string
+ *                       example: addr_123
+ *
+ *                     riderId:
+ *                       type: string
+ *                       example: rider_123
+ *
+ *                     name:
+ *                       type: string
+ *                       example: Vaishnavi
+ *
+ *                     completeAddress:
+ *                       type: string
+ *                       example: Madhapur Hyderabad
+ *
+ *                     landmark:
+ *                       type: string
+ *                       example: Near Metro
+ *
+ *                     pincode:
+ *                       type: string
+ *                       example: "500081"
+ *
+ *       201:
+ *         description: Address created successfully
+ *
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *
+ *                 message:
+ *                   type: string
+ *                   example: Invalid deliveryMode
+ *
+ *       401:
+ *         description: Unauthorized
+ *
+ *       500:
+ *         description: Internal server error
+ */
+router.put(
+  "/joining-kit/address",
+  riderAuthMiddleWare,
+  manageJoiningKitAddress
+);
 
 /**
  * @swagger
@@ -153,7 +278,7 @@ router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
  *   post:
  *     summary: Request joining kit
  *     tags:
- *       - Joining Kit
+ *       - Kit
  *     security:
  *       - bearerAuth: []
  *     description: Rider can request joining kit using HOME_DELIVERY or PICKUP. If kit is already pending/in progress, request will be blocked.
@@ -212,7 +337,7 @@ router.post('/admin/assets', createAsset)
  * /api/kit/rider/assets:
  *   get:
  *     tags:
- *       - Rider Assets
+ *       - Kit
  *     summary: Get all assets issued to the logged-in rider
  *     description: Returns the rider's assets along with quantity, free/paid status, issued and returned dates, and condition.
  *     security:
@@ -338,7 +463,7 @@ router.get('/rider/assets',riderAuthMiddleWare, viewAssets)
  * api/kit/rider/request:
  *   post:
  *     tags:
- *       - Rider Assets
+ *       - Kit
  *     summary: Request an asset
  *     description: Rider can request an asset. If the asset is within the free limit, status will be READY_FOR_DISPATCH; otherwise, PAYMENT_PENDING.
  *     security:
@@ -463,6 +588,85 @@ router.get('/rider/assets',riderAuthMiddleWare, viewAssets)
  */
 router.post('/rider/request',riderAuthMiddleWare, requestAsset)
 // router.post('/admin/approve', approveRequest)
+/**
+ * @swagger
+ * /api/kit/asset-issues/{issueId}/upload-image:
+ *   post:
+ *     summary: Upload issue images for rider asset issue
+ *     tags:
+ *       - Kit
+ *     security:
+ *       - bearerAuth: []
+ *     consumes:
+ *       - multipart/form-data
+ *     parameters:
+ *       - in: path
+ *         name: issueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Rider asset issue ID
+ *
+ *       - in: formData
+ *         name: files
+ *         type: file
+ *         required: true
+ *         description: Upload one or multiple issue images
+ *
+ *     responses:
+ *       200:
+ *         description: Images uploaded successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Images uploaded successfully
+ *               data:
+ *                 - id: "img_123"
+ *                   issueId: "issue_123"
+ *                   imageUrl: "https://storage.azure.com/asset-issues/image1.jpg"
+ *                   createdAt: "2026-05-26T10:00:00.000Z"
+ *
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: At least one image is required
+ *
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Unauthorized
+ *
+ *       403:
+ *         description: Access denied
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Access denied
+ *
+ *       404:
+ *         description: Issue not found
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Issue not found
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Something went wrong
+ */
 router.post(
   "/asset-issues/:issueId/upload-image",
   riderAuthMiddleWare ,
@@ -479,7 +683,7 @@ router.post(
  *       Allows a rider to raise an issue (damage, missing, etc.) for a delivered asset.
  *       Issue can only be raised after the asset request status is COMPLETED.
  *     tags:
- *       - Rider Asset Issues
+ *       - Kit
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -857,7 +1061,7 @@ router.post("/issues/:issueId/verify",  verifyIssue);
  *       The request IDs should belong to the logged-in rider.
  *       Multiple request IDs can be passed as comma-separated values.
  *     tags:
- *       - Rider Assets
+ *       - Kit
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -992,7 +1196,80 @@ router.patch(
   riderAuthMiddleWare,
   completePaymentAndReadyForDispatch
 );
-
+/**
+ * @swagger
+ * /api/kit/issue-details/{issueId}:
+ *   get:
+ *     summary: Get rider asset issue details
+ *     tags:
+ *       - Kit
+ *     security:
+ *       - bearerAuth: []
+ *
+ *     parameters:
+ *       - in: path
+ *         name: issueId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Rider asset issue ID
+ *
+ *     responses:
+ *       200:
+ *         description: Issue details fetched successfully
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: true
+ *               message: Issue details fetched successfully
+ *               data:
+ *                 assetName: "HELMET"
+ *                 assetType: "HELMET"
+ *                 status: "ISSUE_RAISED"
+ *                 condition: "BAD"
+ *                 issueStatus: "OPEN"
+ *                 issueType: "DAMAGED"
+ *                 images:
+ *                   - "https://storage.azure.com/asset-issues/image1.jpg"
+ *                   - "https://storage.azure.com/asset-issues/image2.jpg"
+ *                 conditionReason: "Helmet glass broken"
+ *                 address:
+ *                   completeAddress: "Madhapur, Hyderabad"
+ *                   landmark: "Near Metro Station"
+ *                   pincode: "500081"
+ *
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Unauthorized
+ *
+ *       403:
+ *         description: Access denied
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Access denied
+ *
+ *       404:
+ *         description: Issue not found
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Issue not found
+ *
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             example:
+ *               success: false
+ *               message: Something went wrong
+ */
 router.get(
   "/issue-details/:issueId",
   riderAuthMiddleWare,
