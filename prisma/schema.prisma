@@ -213,15 +213,16 @@ model RiderCashInHand {
 }
 
 model RiderKitAddress {
-  id                  String  @id @default(uuid())
-  riderId             String  @unique
+  id                  String    @id @default(uuid())
+  riderId             String    @unique
   name                String?
   mobileNumber        String?
   completeAddress     String?
   landmark            String?
   pincode             String?
-  onboardingKitStatus Boolean @default(false)
-  rider               Rider   @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  updatedAt           DateTime? @updatedAt
+  onboardingKitStatus Boolean   @default(false)
+  rider               Rider     @relation(fields: [riderId], references: [id], onDelete: Cascade)
 }
 
 model RiderDeliveryStatus {
@@ -309,6 +310,7 @@ model rider_asset_issues {
   assetName     String?
   issueType     AssetIssueType             @default(OTHER)
   description   String?
+  otherReason   String?
   status        AssetIssueStatus           @default(OPEN)
   raisedAt      DateTime                   @default(now())
   resolvedAt    DateTime?
