@@ -332,14 +332,17 @@ router.put(
  */
 router.post("/rider/joining-kit", riderAuthMiddleWare, requestJoiningKit);
 router.post('/admin/assets', createAsset)
-/**
+ /**
  * @swagger
  * /api/kit/rider/assets:
  *   get:
+ *     summary: View rider assets
+ *     description: |
+ *       Fetches all assets assigned to a rider.  
+ *       Returns only the latest asset per assetType and excludes RESOLVED items.  
+ *       Also calculates whether an asset is free based on issue history (replacement logic).
  *     tags:
- *       - Kit
- *     summary: Get all assets issued to the logged-in rider
- *     description: Returns the rider's assets along with quantity, free/paid status, issued and returned dates, and condition.
+ *       - Rider Assets
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -358,10 +361,10 @@ router.post('/admin/assets', createAsset)
  *                   example: Rider assets fetched successfully
  *                 totalAssets:
  *                   type: integer
- *                   example: 3
+ *                   example: 2
  *                 freeAssetsCount:
  *                   type: integer
- *                   example: 2
+ *                   example: 1
  *                 paidAssetsCount:
  *                   type: integer
  *                   example: 1
@@ -372,90 +375,38 @@ router.post('/admin/assets', createAsset)
  *                     properties:
  *                       id:
  *                         type: string
- *                         format: uuid
- *                         example: "item-uuid-1234"
  *                       riderAssetsId:
  *                         type: string
- *                         format: uuid
- *                         example: "rider-assets-uuid"
  *                       assetType:
  *                         type: string
- *                         enum: [T_SHIRT, BAG, HELMET, JACKET, ID_CARD, OTHER]
- *                         example: "BAG"
+ *                         enum: [HELMET, BAG, T_SHIRT]
  *                       assetName:
  *                         type: string
- *                         example: "Delivery Bag"
  *                       issuedDate:
  *                         type: string
  *                         format: date-time
- *                         example: "2026-02-23T10:23:00.000Z"
  *                       returnedDate:
  *                         type: string
- *                         format: date-time
  *                         nullable: true
- *                         example: null
  *                       status:
  *                         type: string
- *                         enum: [ISSUED, RETURNED, LOST]
- *                         example: "ISSUED"
+ *                         enum: [ISSUED, DELIVERED, DISPATCHED, ISSUE_RAISED, RESOLVED]
  *                       condition:
  *                         type: string
  *                         enum: [GOOD, BAD]
- *                         example: "GOOD"
  *                       isFree:
  *                         type: boolean
- *                         example: true
  *                       quantity:
  *                         type: integer
- *                         example: 1
+ *                       requestId:
+ *                         type: string
+ *                         nullable: true
  *       401:
- *         description: Unauthorized - rider token missing or invalid
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "Unauthorized"
+ *         description: Unauthorized
  *       404:
- *         description: No assets issued to this rider
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "No assets issued to this rider"
- *                 totalAssets:
- *                   type: integer
- *                   example: 0
- *                 data:
- *                   type: array
- *                   items: {}
+ *         description: No assets found
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 success:
- *                   type: boolean
- *                   example: false
- *                 message:
- *                   type: string
- *                   example: "Something went wrong while fetching rider assets"
- *                 error:
- *                   type: string
- *                   example: "Database connection error"
  */
 router.get('/rider/assets',riderAuthMiddleWare, viewAssets)
 /**
@@ -676,24 +627,31 @@ router.post(
 
 /**
  * @swagger
- * /api/kit/rider/issue/{requestId}:
+ * /api/kit/rider/issue{itemId}:
  *   post:
- *     summary: Raise issue for delivered asset
- *     description: >
- *       Allows a rider to raise an issue (damage, missing, etc.) for a delivered asset.
- *       Issue can only be raised after the asset request status is COMPLETED.
+ *     summary: Raise issue for rider asset
+ *     description: |
+ *       Allows rider to raise an issue for a delivered asset item.
+ *       Rider can upload issue images, select issue type,
+ *       and provide custom reason when issue type is OTHER.
+ *
+ *       Issue can only be raised:
+ *       - By asset owner
+ *       - Within 4 days after delivery
+ *       - After asset request status becomes COMPLETED
  *     tags:
- *       - Kit
+ *       - Rider Assets
  *     security:
  *       - bearerAuth: []
+ *
  *     parameters:
  *       - in: path
- *         name: requestId
+ *         name: itemId
  *         required: true
- *         description: Asset request ID
  *         schema:
  *           type: string
- *           example: eb311c97-8da7-4805-8952-8f920fca96a2
+ *         description: Rider asset item ID
+ *
  *     requestBody:
  *       required: true
  *       content:
@@ -706,19 +664,38 @@ router.post(
  *             properties:
  *               assetType:
  *                 type: string
- *                 enum: [T_SHIRT, BAG, HELMET, JACKET, ID_CARD]
+ *                 enum:
+ *                   - HELMET
+ *                   - BAG
+ *                   - T_SHIRT
  *                 example: HELMET
+ *
  *               description:
  *                 type: string
- *                 example: Helmet visor is broken
+ *                 example: Helmet is damaged near strap
+ *
  *               issueType:
  *                 type: string
- *                 enum: [DAMAGED, MISSING, WRONG_ITEM, OTHER]
+ *                 enum:
+ *                   - DAMAGED
+ *                   - MISSING
+ *                   - SIZE_ISSUE
+ *                   - OTHER
  *                 example: DAMAGED
- *               imageUrl:
+ *
+ *               otherReason:
  *                 type: string
- *                 format: uri
- *                 example: https://example.com/image.jpg
+ *                 nullable: true
+ *                 example: Stitching issue on back side
+ *
+ *               imageUrls:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example:
+ *                   - https://cdn.example.com/image1.jpg
+ *                   - https://cdn.example.com/image2.jpg
+ *
  *     responses:
  *       201:
  *         description: Issue raised successfully
@@ -730,99 +707,74 @@ router.post(
  *                 success:
  *                   type: boolean
  *                   example: true
+ *
  *                 message:
  *                   type: string
  *                   example: Issue raised successfully
+ *
  *                 data:
  *                   type: object
  *                   properties:
  *                     id:
  *                       type: string
- *                       example: issue_123
+ *
  *                     requestId:
  *                       type: string
- *                       example: eb311c97-8da7-4805-8952-8f920fca96a2
+ *
  *                     riderAssetsId:
  *                       type: string
- *                       example: ra_123
+ *
  *                     assetType:
  *                       type: string
- *                       example: HELMET
+ *
  *                     assetName:
  *                       type: string
- *                       example: Helmet
+ *
  *                     issueType:
  *                       type: string
- *                       example: DAMAGED
+ *
  *                     description:
  *                       type: string
- *                       example: Helmet visor is broken
- *                     imageUrl:
+ *
+ *                     otherReason:
  *                       type: string
  *                       nullable: true
- *                       example: https://example.com/image.jpg
+ *
  *                     status:
  *                       type: string
- *                       enum: [OPEN, IN_PROGRESS, RESOLVED, REJECTED]
  *                       example: OPEN
- *                     createdAt:
+ *
+ *                     raisedAt:
  *                       type: string
  *                       format: date-time
- *                       example: 2026-05-05T10:30:00.000Z
+ *
+ *                     images:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *
+ *                           imageUrl:
+ *                             type: string
+ *
  *       400:
- *         description: Bad request / validation error
- *         content:
- *           application/json:
- *             examples:
- *               missingFields:
- *                 summary: Missing required fields
- *                 value:
- *                   success: false
- *                   message: assetType and description are required
- *               notDelivered:
- *                 summary: Asset not delivered yet
- *                 value:
- *                   success: false
- *                   message: You can raise issue only after asset is delivered
+ *         description: Validation error
+ *
  *       401:
- *         description: Unauthorized rider
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Unauthorized
+ *         description: Unauthorized
+ *
  *       403:
- *         description: Forbidden - not owner of asset request
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: You are not allowed to raise issue for this request
+ *         description: Access denied
+ *
  *       404:
- *         description: Resource not found
- *         content:
- *           application/json:
- *             examples:
- *               requestNotFound:
- *                 summary: Asset request not found
- *                 value:
- *                   success: false
- *                   message: Asset request not found
- *               assetNotAssigned:
- *                 summary: Asset not assigned to rider
- *                 value:
- *                   success: false
- *                   message: This asset type is not assigned to the rider
+ *         description: Asset item or request not found
+ *
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Something went wrong
- *               error: Internal server error
  */
-router.post('/rider/issue/:requestId', riderAuthMiddleWare ,
+router.post('/rider/issue/:itemId', riderAuthMiddleWare ,
      raiseIssue)
 /**
  * @swagger
