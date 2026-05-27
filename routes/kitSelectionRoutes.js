@@ -342,7 +342,7 @@ router.post('/admin/assets', createAsset)
  *       Returns only the latest asset per assetType and excludes RESOLVED items.  
  *       Also calculates whether an asset is free based on issue history (replacement logic).
  *     tags:
- *       - Rider Assets
+ *       - Kit
  *     security:
  *       - bearerAuth: []
  *     responses:
@@ -627,7 +627,7 @@ router.post(
 
 /**
  * @swagger
- * /api/kit/rider/issue{itemId}:
+ * /api/kit/rider/issue/{itemId}:
  *   post:
  *     summary: Raise issue for rider asset
  *     description: |
@@ -640,7 +640,7 @@ router.post(
  *       - Within 4 days after delivery
  *       - After asset request status becomes COMPLETED
  *     tags:
- *       - Rider Assets
+ *       - Kit
  *     security:
  *       - bearerAuth: []
  *
