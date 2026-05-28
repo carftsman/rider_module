@@ -611,10 +611,12 @@ model City {
   id           String        @id @default(cuid())
   name         String        @unique
   state        String
+  tier        CityTier
   isActive     Boolean       @default(true)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   pincodes     Pincode[]
+  payoutConfigs PayoutConfig[]
   slotBookings SlotBooking[]
   weeklySlots  WeeklySlot[]
 }
@@ -1006,7 +1008,8 @@ model PayoutConfig {
   cityId         String?
   pincodeIds     String[]
   vehicleType    VehicleType?
-  basePay        Float
+  cityTier       CityTier?
+   basePay        Float
   perKmRate      Float
   surgeConfig    Json
   weatherConfig  Json?
@@ -1021,8 +1024,10 @@ model PayoutConfig {
   meta           Json?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+   city           City?        @relation(fields: [cityId], references: [id])
 
   @@index([cityId, isActive])
+  @@index([cityTier, isActive])
   @@index([scenarioType])
 }
 
@@ -1744,4 +1749,9 @@ model Admin {
 enum AdminRole {
   SUPER_ADMIN
   ADMIN
+}
+enum CityTier {
+  TIER_1
+  TIER_2
+  TIER_3
 }

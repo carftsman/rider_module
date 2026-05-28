@@ -21,25 +21,22 @@ const { upload } = require("../utils/azureUpload");
 
 /**
  * @swagger
- * /api/kit/payment/{requestIds}:
+ * /api/kit/payment:
  *   post:
- *     summary: Select payment for joining kit requests
- *     description: >
- *       Allows an authenticated rider to select a payment option (FULL / EMI)
- *       for one or multiple asset requests. Accepts comma-separated requestIds.
- *       Creates or updates payment records and EMI plan if applicable.
+ *     summary: Make payment for asset requests
+ *     description: Make payment for one or multiple asset requests using query params.
  *     tags:
  *       - Kit
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
+ *       - in: query
  *         name: requestIds
  *         required: true
- *         description: Comma-separated asset request IDs
  *         schema:
  *           type: string
- *           example: eb311c97-8da7-4805-8952-8f920fca96a2,2d8748ad-d134-420b-a88b-1284e83d437b
+ *         description: Comma separated request IDs
+ *         example: req_123,req_456,req_789
  *     requestBody:
  *       required: true
  *       content:
@@ -52,7 +49,7 @@ const { upload } = require("../utils/azureUpload");
  *             properties:
  *               paymentMode:
  *                 type: string
- *                 enum: [ONLINE, CASH, UPI, CARD]
+ *                 enum: [ONLINE, CASH]
  *                 example: ONLINE
  *               paymentType:
  *                 type: string
@@ -60,11 +57,11 @@ const { upload } = require("../utils/azureUpload");
  *                 example: EMI
  *               emiMonths:
  *                 type: integer
+ *                 example: 6
  *                 description: Required only if paymentType is EMI
- *                 example: 3
  *     responses:
  *       200:
- *         description: Payment option selected successfully
+ *         description: Payment selected successfully
  *         content:
  *           application/json:
  *             schema:
@@ -78,73 +75,35 @@ const { upload } = require("../utils/azureUpload");
  *                   example: Payment selected successfully
  *                 totalAmount:
  *                   type: number
- *                   example: 1500
+ *                   example: 2500
  *                 totalRequests:
  *                   type: integer
- *                   example: 2
+ *                   example: 3
  *                 data:
  *                   type: array
  *                   items:
  *                     type: object
- *                     properties:
- *                       id:
- *                         type: string
- *                         example: pay_12345
- *                       assetRequestId:
- *                         type: string
- *                         example: eb311c97-8da7-4805-8952-8f920fca96a2
- *                       amount:
- *                         type: number
- *                         example: 750
- *                       paymentMode:
- *                         type: string
- *                         example: ONLINE
- *                       paymentType:
- *                         type: string
- *                         example: EMI
- *                       status:
- *                         type: string
- *                         enum: [PENDING, SUCCESS, FAILED]
- *                         example: PENDING
  *       400:
- *         description: Bad request / validation error
+ *         description: Validation error
  *         content:
  *           application/json:
- *             examples:
- *               missingRequestIds:
- *                 summary: requestIds missing
- *                 value:
- *                   success: false
- *                   message: requestIds are required
- *               invalidEmi:
- *                 summary: EMI months missing
- *                 value:
- *                   success: false
- *                   message: emiMonths required for EMI
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: requestIds are required
  *       401:
- *         description: Unauthorized rider
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Unauthorized
+ *         description: Unauthorized
  *       404:
  *         description: Some requests not found
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Some requests not found
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Something went wrong
- *               error: Internal server error
  */
-router.post('/payment/:requestIds', riderAuthMiddleWare, makePayment);
+router.post('/payment', riderAuthMiddleWare, makePayment);
 /**
  * @swagger
  * /api/kit/joining-kit/address:
@@ -543,13 +502,12 @@ router.post('/rider/request',riderAuthMiddleWare, requestAsset)
  * @swagger
  * /api/kit/asset-issues/{issueId}/upload-image:
  *   post:
- *     summary: Upload issue images for rider asset issue
+ *     summary: Upload issue images
+ *     description: Upload one or multiple images for a rider asset issue.
  *     tags:
  *       - Kit
  *     security:
  *       - bearerAuth: []
- *     consumes:
- *       - multipart/form-data
  *     parameters:
  *       - in: path
  *         name: issueId
@@ -557,66 +515,70 @@ router.post('/rider/request',riderAuthMiddleWare, requestAsset)
  *         schema:
  *           type: string
  *         description: Rider asset issue ID
- *
- *       - in: formData
- *         name: files
- *         type: file
- *         required: true
- *         description: Upload one or multiple issue images
- *
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - images
+ *             properties:
+ *               images:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
+ *                 description: Upload one or multiple issue images
  *     responses:
  *       200:
  *         description: Images uploaded successfully
  *         content:
  *           application/json:
- *             example:
- *               success: true
- *               message: Images uploaded successfully
- *               data:
- *                 - id: "img_123"
- *                   issueId: "issue_123"
- *                   imageUrl: "https://storage.azure.com/asset-issues/image1.jpg"
- *                   createdAt: "2026-05-26T10:00:00.000Z"
- *
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 message:
+ *                   type: string
+ *                   example: Images uploaded successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: "img_123"
+ *                       issueId:
+ *                         type: string
+ *                         example: "issue_123"
+ *                       imageUrl:
+ *                         type: string
+ *                         example: https://example.com/image.jpg
  *       400:
  *         description: Validation error
  *         content:
  *           application/json:
- *             example:
- *               success: false
- *               message: At least one image is required
- *
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: At least one image is required
  *       401:
  *         description: Unauthorized
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Unauthorized
- *
  *       403:
  *         description: Access denied
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Access denied
- *
  *       404:
  *         description: Issue not found
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Issue not found
- *
  *       500:
  *         description: Internal server error
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: Something went wrong
  */
 router.post(
   "/asset-issues/:issueId/upload-image",
@@ -629,21 +591,12 @@ router.post(
  * @swagger
  * /api/kit/rider/issue/{itemId}:
  *   post:
- *     summary: Raise issue for rider asset
- *     description: |
- *       Allows rider to raise an issue for a delivered asset item.
- *       Rider can upload issue images, select issue type,
- *       and provide custom reason when issue type is OTHER.
- *
- *       Issue can only be raised:
- *       - By asset owner
- *       - Within 4 days after delivery
- *       - After asset request status becomes COMPLETED
+ *     summary: Raise issue for rider asset item
+ *     description: Rider can raise an issue for a delivered asset item within 4 days after delivery.
  *     tags:
  *       - Kit
  *     security:
  *       - bearerAuth: []
- *
  *     parameters:
  *       - in: path
  *         name: itemId
@@ -651,7 +604,6 @@ router.post(
  *         schema:
  *           type: string
  *         description: Rider asset item ID
- *
  *     requestBody:
  *       required: true
  *       content:
@@ -660,42 +612,26 @@ router.post(
  *             type: object
  *             required:
  *               - assetType
- *               - description
  *             properties:
  *               assetType:
  *                 type: string
- *                 enum:
- *                   - HELMET
- *                   - BAG
- *                   - T_SHIRT
  *                 example: HELMET
- *
- *               description:
- *                 type: string
- *                 example: Helmet is damaged near strap
- *
  *               issueType:
  *                 type: string
  *                 enum:
  *                   - DAMAGED
  *                   - MISSING
- *                   - SIZE_ISSUE
+ *                   - DEFECTIVE
  *                   - OTHER
  *                 example: DAMAGED
- *
+ *               description:
+ *                 type: string
+ *                 example: Helmet strap is damaged
+ *                 description: Required only when issueType is OTHER
  *               otherReason:
  *                 type: string
- *                 nullable: true
- *                 example: Stitching issue on back side
- *
- *               imageUrls:
- *                 type: array
- *                 items:
- *                   type: string
- *                 example:
- *                   - https://cdn.example.com/image1.jpg
- *                   - https://cdn.example.com/image2.jpg
- *
+ *                 example: Custom issue reason
+ *                 description: Required only when issueType is OTHER
  *     responses:
  *       201:
  *         description: Issue raised successfully
@@ -707,70 +643,42 @@ router.post(
  *                 success:
  *                   type: boolean
  *                   example: true
- *
  *                 message:
  *                   type: string
  *                   example: Issue raised successfully
- *
  *                 data:
  *                   type: object
- *                   properties:
- *                     id:
- *                       type: string
- *
- *                     requestId:
- *                       type: string
- *
- *                     riderAssetsId:
- *                       type: string
- *
- *                     assetType:
- *                       type: string
- *
- *                     assetName:
- *                       type: string
- *
- *                     issueType:
- *                       type: string
- *
- *                     description:
- *                       type: string
- *
- *                     otherReason:
- *                       type: string
- *                       nullable: true
- *
- *                     status:
- *                       type: string
- *                       example: OPEN
- *
- *                     raisedAt:
- *                       type: string
- *                       format: date-time
- *
- *                     images:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: string
- *
- *                           imageUrl:
- *                             type: string
- *
  *       400:
- *         description: Validation error
- *
+ *         description: Validation or business logic error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   examples:
+ *                     assetTypeRequired:
+ *                       value: assetType is required
+ *                     descriptionRequired:
+ *                       value: Description is required when issue type is OTHER
+ *                     otherReason:
+ *                       value: Please provide reason for OTHER issue type
+ *                     notDelivered:
+ *                       value: You can raise issue only after asset is delivered
+ *                     expired:
+ *                       value: Issue can only be raised within 4 days after delivery
+ *                     alreadyRaised:
+ *                       value: Issue already raised once for this asset
  *       401:
  *         description: Unauthorized
- *
  *       403:
  *         description: Access denied
- *
  *       404:
- *         description: Asset item or request not found
- *
+ *         description: Asset item or asset request not found
  *       500:
  *         description: Internal server error
  */
@@ -778,7 +686,7 @@ router.post('/rider/issue/:itemId', riderAuthMiddleWare ,
      raiseIssue)
 /**
  * @swagger
- * /api/kit/asset/mark-delivered/{requestIds}:
+ * /api/kit/asset/mark-delivered:
  *   post:
  *     summary: Mark assets as delivered (Admin)
  *     description: >
@@ -791,7 +699,7 @@ router.post('/rider/issue/:itemId', riderAuthMiddleWare ,
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
+ *       - in: query
  *         name: requestIds
  *         required: true
  *         description: Comma-separated asset request IDs
@@ -861,10 +769,10 @@ router.post('/rider/issue/:itemId', riderAuthMiddleWare ,
  *               message: Something went wrong
  *               error: Internal server error
  */
-router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
+router.post('/asset/mark-delivered', markAsDelivered)
 /**
  * @swagger
- * /api/kit/admin/dispatch/{assetRequestIds}:
+ * /api/kit/admin/dispatch:
  *   post:
  *     summary: Dispatch assets (Admin)
  *     description: >
@@ -876,7 +784,7 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
+ *       - in: query
  *         name: assetRequestIds
  *         required: true
  *         description: Comma-separated asset request IDs
@@ -1000,11 +908,11 @@ router.post('/asset/mark-delivered/:requestIds', markAsDelivered)
  *               message: Something went wrong while dispatching asset
  *               error: Internal server error
  */
-router.post('/admin/dispatch/:assetRequestIds', dispatchAsset)
+router.post('/admin/dispatch', dispatchAsset)
 router.post("/issues/:issueId/verify",  verifyIssue);
 /**
  * @swagger
- * /api/kit/payments/complete/{requestIds}:
+ * /api/kit/payments/complete:
  *   patch:
  *     summary: Complete payment and move asset requests to ready for dispatch
  *     description: >
@@ -1017,7 +925,7 @@ router.post("/issues/:issueId/verify",  verifyIssue);
  *     security:
  *       - bearerAuth: []
  *     parameters:
- *       - in: path
+ *       - in: query
  *         name: requestIds
  *         required: true
  *         schema:
@@ -1144,7 +1052,7 @@ router.post("/issues/:issueId/verify",  verifyIssue);
  *                       value: Something went wrong
  */
 router.patch(
-  "/payments/complete/:requestIds",
+  "/payments/complete",
   riderAuthMiddleWare,
   completePaymentAndReadyForDispatch
 );
