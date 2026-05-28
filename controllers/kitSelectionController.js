@@ -608,7 +608,6 @@ exports.raiseIssue = async (req, res) => {
   try {
     const riderId = req.rider?.id;
 
-    // now taking asset item id from params
     const { itemId } = req.params;
 
     const {
@@ -616,7 +615,6 @@ exports.raiseIssue = async (req, res) => {
       description,
       issueType,
       otherReason,
-      imageUrls,
     } = req.body;
 
     if (!riderId) {
@@ -626,18 +624,29 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    if (!assetType || !description) {
+    // assetType mandatory
+    if (!assetType) {
       return res.status(400).json({
         success: false,
-        message: "assetType and description are required",
+        message: "assetType is required",
       });
     }
 
-    // If OTHER selected, custom reason is mandatory
+    // Description mandatory only for OTHER
+    if (issueType === "OTHER" && !description) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Description is required when issue type is OTHER",
+      });
+    }
+
+    // otherReason mandatory only for OTHER
     if (issueType === "OTHER" && !otherReason) {
       return res.status(400).json({
         success: false,
-        message: "Please provide reason for OTHER issue type",
+        message:
+          "Please provide reason for OTHER issue type",
       });
     }
 
@@ -668,7 +677,6 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-   
     const assetRequest =
       await prisma.assetRequest.findFirst({
         where: {
@@ -688,7 +696,6 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-   
     if (assetRequest.status !== "COMPLETED") {
       return res.status(400).json({
         success: false,
@@ -697,7 +704,6 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    
     const completedDate =
       assetRequest.completedAt ||
       assetRequest.updatedAt;
@@ -717,25 +723,26 @@ exports.raiseIssue = async (req, res) => {
           "Issue can only be raised within 4 days after delivery",
       });
     }
+
     const alreadyRaisedIssue =
-  await prisma.rider_asset_issues.findFirst({
-    where: {
-      rider_assets: {
-        riderId,
-      },
+      await prisma.rider_asset_issues.findFirst({
+        where: {
+          rider_assets: {
+            riderId,
+          },
 
-      assetType: riderAssetItem.assetType,
-    },
-  });
+          assetType: riderAssetItem.assetType,
+        },
+      });
 
-if (alreadyRaisedIssue) {
-  return res.status(400).json({
-    success: false,
-    message:
-      "Issue already raised once for this asset",
-  });
-}
-   
+    if (alreadyRaisedIssue) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Issue already raised once for this asset",
+      });
+    }
+
     const issue =
       await prisma.rider_asset_issues.create({
         data: {
@@ -757,24 +764,9 @@ if (alreadyRaisedIssue) {
           otherReason,
 
           status: "OPEN",
-
-          images:
-            imageUrls &&
-            imageUrls.length > 0
-              ? {
-                  create: imageUrls.map((url) => ({
-                    imageUrl: url,
-                  })),
-                }
-              : undefined,
-        },
-
-        include: {
-          images: true,
         },
       });
 
-   
     await prisma.rider_asset_items.update({
       where: {
         id: itemId,

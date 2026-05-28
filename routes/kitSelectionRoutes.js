@@ -594,7 +594,7 @@ router.post(
  *     summary: Raise issue for rider asset item
  *     description: Rider can raise an issue for a delivered asset item within 4 days after delivery.
  *     tags:
- *       - Kit
+ *       - Rider Asset Issues
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -612,14 +612,10 @@ router.post(
  *             type: object
  *             required:
  *               - assetType
- *               - description
  *             properties:
  *               assetType:
  *                 type: string
  *                 example: HELMET
- *               description:
- *                 type: string
- *                 example: Helmet strap is damaged
  *               issueType:
  *                 type: string
  *                 enum:
@@ -628,17 +624,14 @@ router.post(
  *                   - DEFECTIVE
  *                   - OTHER
  *                 example: DAMAGED
+ *               description:
+ *                 type: string
+ *                 example: Helmet strap is damaged
+ *                 description: Required only when issueType is OTHER
  *               otherReason:
  *                 type: string
  *                 example: Custom issue reason
- *                 description: Required when issueType is OTHER
- *               imageUrls:
- *                 type: array
- *                 items:
- *                   type: string
- *                 example:
- *                   - https://example.com/image1.jpg
- *                   - https://example.com/image2.jpg
+ *                 description: Required only when issueType is OTHER
  *     responses:
  *       201:
  *         description: Issue raised successfully
@@ -668,8 +661,10 @@ router.post(
  *                 message:
  *                   type: string
  *                   examples:
- *                     missingFields:
- *                       value: assetType and description are required
+ *                     assetTypeRequired:
+ *                       value: assetType is required
+ *                     descriptionRequired:
+ *                       value: Description is required when issue type is OTHER
  *                     otherReason:
  *                       value: Please provide reason for OTHER issue type
  *                     notDelivered:
