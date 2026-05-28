@@ -594,7 +594,7 @@ router.post(
  *     summary: Raise issue for rider asset item
  *     description: Rider can raise an issue for a delivered asset item within 4 days after delivery.
  *     tags:
- *       - Rider Asset Issues
+ *       - Kit
  *     security:
  *       - bearerAuth: []
  *     parameters:
