@@ -67,9 +67,7 @@ exports.viewAssets = async (req, res) => {
     for (const rAssets of riderAssets) {
       const items = rAssets.rider_asset_items;
 
-      /**
-       * ✅ STEP 1: KEEP ONLY LATEST ITEM PER ASSET TYPE
-       */
+     
       const latestMap = new Map();
 
       for (const item of items) {
@@ -88,16 +86,11 @@ exports.viewAssets = async (req, res) => {
 
       const latestItems = Array.from(latestMap.values());
 
-      /**
-       * ❌ STEP 2: REMOVE RESOLVED ITEMS
-       */
       const activeItems = latestItems.filter(
         (item) => item.status !== "RESOLVED"
       );
 
-      /**
-       * ✅ STEP 3: BUILD RESPONSE
-       */
+      
       for (const item of activeItems) {
         const hadIssue = rAssets.rider_asset_issues.some(
           (issue) =>
@@ -111,7 +104,7 @@ exports.viewAssets = async (req, res) => {
 
         response.push({
           id: item.id,
-          requestId: rAssets.requestId || null,
+          // requestId: rAssets.requestId || null,
           riderAssetsId: rAssets.id,
           assetType: item.assetType,
           assetName: item.assetName,
@@ -210,7 +203,7 @@ exports.makePayment = async (req, res) => {
   try {
     const riderId = req.rider?.id;
 
-    const { requestIds } = req.params;
+    const { requestIds } = req.query;
     const { paymentMode, paymentType, emiMonths } = req.body;
 
     if (!riderId) {
@@ -330,7 +323,7 @@ exports.makePayment = async (req, res) => {
 };
 exports.dispatchAsset = async (req, res) => {
   try {
-    const { assetRequestIds } = req.params;
+    const { assetRequestIds } = req.query;
     const { courierName, trackingId } = req.body;
 
     if (!assetRequestIds || !courierName || !trackingId) {
@@ -648,9 +641,6 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    /**
-     * FETCH ASSET ITEM
-     */
     const riderAssetItem =
       await prisma.rider_asset_items.findUnique({
         where: {
@@ -669,9 +659,6 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    /**
-     * CHECK OWNER
-     */
     if (
       riderAssetItem.rider_assets.riderId !== riderId
     ) {
@@ -681,9 +668,7 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    /**
-     * FIND ASSET REQUEST USING ASSET TYPE
-     */
+   
     const assetRequest =
       await prisma.assetRequest.findFirst({
         where: {
@@ -703,9 +688,7 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    /**
-     * CHECK DELIVERY STATUS
-     */
+   
     if (assetRequest.status !== "COMPLETED") {
       return res.status(400).json({
         success: false,
@@ -714,9 +697,7 @@ exports.raiseIssue = async (req, res) => {
       });
     }
 
-    /**
-     * CHECK 4 DAYS VALIDATION
-     */
+    
     const completedDate =
       assetRequest.completedAt ||
       assetRequest.updatedAt;
@@ -736,10 +717,25 @@ exports.raiseIssue = async (req, res) => {
           "Issue can only be raised within 4 days after delivery",
       });
     }
+    const alreadyRaisedIssue =
+  await prisma.rider_asset_issues.findFirst({
+    where: {
+      rider_assets: {
+        riderId,
+      },
 
-    /**
-     * CREATE ISSUE
-     */
+      assetType: riderAssetItem.assetType,
+    },
+  });
+
+if (alreadyRaisedIssue) {
+  return res.status(400).json({
+    success: false,
+    message:
+      "Issue already raised once for this asset",
+  });
+}
+   
     const issue =
       await prisma.rider_asset_issues.create({
         data: {
@@ -778,9 +774,7 @@ exports.raiseIssue = async (req, res) => {
         },
       });
 
-    /**
-     * UPDATE ASSET ITEM STATUS
-     */
+   
     await prisma.rider_asset_items.update({
       where: {
         id: itemId,
@@ -806,7 +800,8 @@ exports.raiseIssue = async (req, res) => {
       error: error.message,
     });
   }
-};exports.uploadIssueImage = async (req, res) => {
+};
+exports.uploadIssueImage = async (req, res) => {
   try {
     const riderId = req.rider?.id;
     const { issueId } = req.params;
@@ -877,7 +872,7 @@ exports.raiseIssue = async (req, res) => {
 };
 exports.markAsDelivered = async (req, res) => {
   try {
-    const { requestIds } = req.params;
+    const { requestIds } = req.query;
 
     if (!requestIds) {
       return res.status(400).json({
@@ -1503,7 +1498,7 @@ await tx.rider_asset_items.updateMany({
 exports.completePaymentAndReadyForDispatch = async (req, res) => {
   try {
     const riderId = req.rider?.id;
-    const { requestIds } = req.params;
+    const { requestIds } = req.query;
 
     if (!riderId) {
       return res.status(401).json({
