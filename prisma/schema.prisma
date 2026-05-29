@@ -608,17 +608,17 @@ model AssetInventory {
 }
 
 model City {
-  id           String        @id @default(cuid())
-  name         String        @unique
-  state        String
-  tier        CityTier
-  isActive     Boolean       @default(true)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  pincodes     Pincode[]
+  id            String         @id @default(cuid())
+  name          String         @unique
+  state         String
+  tier          CityTier?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  pincodes      Pincode[]
   payoutConfigs PayoutConfig[]
-  slotBookings SlotBooking[]
-  weeklySlots  WeeklySlot[]
+  slotBookings  SlotBooking[]
+  weeklySlots   WeeklySlot[]
 }
 
 model Pincode {
@@ -1009,7 +1009,7 @@ model PayoutConfig {
   pincodeIds     String[]
   vehicleType    VehicleType?
   cityTier       CityTier?
-   basePay        Float
+  basePay        Float
   perKmRate      Float
   surgeConfig    Json
   weatherConfig  Json?
@@ -1024,7 +1024,7 @@ model PayoutConfig {
   meta           Json?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-   city           City?        @relation(fields: [cityId], references: [id])
+  city           City?        @relation(fields: [cityId], references: [id])
 
   @@index([cityId, isActive])
   @@index([cityTier, isActive])
@@ -1750,6 +1750,7 @@ enum AdminRole {
   SUPER_ADMIN
   ADMIN
 }
+
 enum CityTier {
   TIER_1
   TIER_2
