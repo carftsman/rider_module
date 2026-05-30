@@ -8,6 +8,7 @@ const createCityPayoutConfig = async (req, res) => {
       name,
       scenarioType,
       cityId,
+      
       vehicleType,
       basePay,
       perKmRate,
@@ -47,14 +48,22 @@ if (!cityExists) {
     message: "Invalid cityId. City does not exist"
   });
 }
+if (!cityExists.tier) {
+  return res.status(400).json({
+    success: false,
+    message: "Selected city does not have tier configured",
+  });
+}
 
-// Validate name with city
-// if (name.trim().toLowerCase() !== cityExists.name.trim().toLowerCase()) {
-//   return res.status(400).json({
-//     success: false,
-//     message: `Name must match city name '${cityExists.name}'`
-//   });
-// }
+
+const normalizedTier = cityExists.tier;
+if (!normalizedTier) {
+  return res.status(400).json({
+    success: false,
+    message: "tier must be one of tier1, tier2, tier3",
+  });
+}
+
 
     if (!basePay || basePay <= 0) {
       return res.status(400).json({
@@ -117,6 +126,7 @@ if (!cityExists) {
         name,
         scenarioType,
         cityId,
+          cityTier: normalizedTier,
         pincodeIds: [],
         vehicleType,
         basePay,
@@ -150,6 +160,7 @@ const createPincodePayoutConfig = async (req, res) => {
       name,
       scenarioType,
       cityId,
+      
       pincodeIds = [],
       vehicleType,
       basePay,
@@ -161,7 +172,50 @@ const createPincodePayoutConfig = async (req, res) => {
       latitude,
       longitude,
     } = req.body;
+   const cityExists = await prisma.city.findUnique({
+  where: {
+    id: cityId,
+  },
+  include: {
+    pincodes: true,
+  },
+});
 
+if (!cityExists) {
+  return res.status(400).json({
+    success: false,
+    message: "Invalid cityId. City does not exist",
+  });
+}
+if (!cityExists.tier) {
+  return res.status(400).json({
+    success: false,
+    message: "Selected city does not have tier configured",
+  });
+}
+const cityPincodeValues = cityExists.pincodes.map((p) =>
+  String(p.code).trim()
+);
+
+console.log("DB pincodes:", cityPincodeValues);
+console.log("Request pincodes:", pincodeIds);
+
+const normalizedRequestPincodes = pincodeIds.map((p) =>
+  String(p).trim()
+);
+
+const invalidPincodes = normalizedRequestPincodes.filter(
+  (pincode) => !cityPincodeValues.includes(pincode)
+);
+
+if (invalidPincodes.length > 0) {
+  return res.status(400).json({
+    success: false,
+    message: `These pincodes do not belong to selected city: ${invalidPincodes.join(", ")}`,
+  });
+}
+
+const normalizedTier = cityExists.tier;
     if (!cityId || !scenarioType || !vehicleType) {
       return res.status(400).json({
         success: false,
@@ -234,6 +288,7 @@ const createPincodePayoutConfig = async (req, res) => {
         data: {
           name,
           scenarioType,
+          cityTier: normalizedTier,
           cityId,
           pincodeIds: [String(pincodeId)],
           vehicleType,
@@ -251,12 +306,24 @@ const createPincodePayoutConfig = async (req, res) => {
 
       createdConfigs.push(newConfig);
     }
-
-    return res.status(201).json({
-      success: true,
-      message: "Pincode configs created successfully",
-      data: createdConfigs,
-    });
+return res.status(201).json({
+  success: true,
+  message: "Pincode configs created successfully",
+  data: {
+    cityId,
+    cityTier: normalizedTier,
+    scenarioType,
+    vehicleType,
+    pincodeIds,
+    basePay,
+    perKmRate,
+    surgeConfig,
+    peakConfig,
+    weatherConfig: finalWeatherConfig,
+    notes,
+    createdCount: createdConfigs.length,
+  },
+});
   } catch (error) {
     return res.status(500).json({
       success: false,
@@ -441,63 +508,6 @@ const getPayoutConfigHistory = async (req, res) => {
   }
 };
 
-// const updateBasePay = async (req, res) => {
-//   try {
-
-//     const { id } = req.params;
-//     const { basePay } = req.body;
-
-//     // VALIDATION
-//     if (!basePay || Number(basePay) <= 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "basePay must be greater than 0"
-//       });
-//     }
-
-//     // CHECK EXISTING CONFIG
-//     const existingConfig =
-//       await prisma.payoutConfig.findUnique({
-//         where: { id }
-//       });
-
-//     if (!existingConfig) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Payout config not found"
-//       });
-//     }
-
-//     // UPDATE
-//     const updated =
-//       await prisma.payoutConfig.update({
-//         where: { id },
-//         data: {
-//           basePay: Number(basePay)
-//         }
-//       });
-
-//    return res.status(200).json({
-//   success: true,
-//   message: "Base pay updated successfully",
-//   data: {
-//     id: updated.id,
-//     basePay: updated.basePay
-//   }
-// });
-
-//   } catch (error) {
-
-//     console.log("UPDATE BASE PAY ERROR:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message
-//     });
-
-//   }
-// };
-
 
 const updateBasePay = async (req, res) => {
   try {
@@ -606,62 +616,6 @@ return res.status(200).json({
     });
   }
 };
-// const updateDistancePay = async (req, res) => {
-//   try {
-
-//     const { id } = req.params;
-//     const { perKmRate } = req.body;
-
-//     // VALIDATION
-//     if (perKmRate === undefined || Number(perKmRate) < 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "perKmRate must be greater than or equal to 0"
-//       });
-//     }
-
-//     // CHECK CONFIG EXISTS
-//     const existingConfig =
-//       await prisma.payoutConfig.findUnique({
-//         where: { id }
-//       });
-
-//     if (!existingConfig) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Payout config not found"
-//       });
-//     }
-
-//     // UPDATE
-//     const updated =
-//       await prisma.payoutConfig.update({
-//         where: { id },
-//         data: {
-//           perKmRate: Number(perKmRate)
-//         }
-//       });
-
-//     return res.status(200).json({
-//   success: true,
-//   message: "Per KM rate updated successfully",
-//   data: {
-//     id: updated.id,
-//     perKmRate: updated.perKmRate
-//   }
-// });
-
-//   } catch (error) {
-
-//     console.log("UPDATE PER KM RATE ERROR:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message
-//     });
-
-//   }
-// };
 const updateDistancePay = async (req, res) => {
   try {
     const { cityId, pincodeId } = req.query;
@@ -767,116 +721,6 @@ return res.status(200).json({
     });
   }
 };
-// const updateSurgeConfig = async (req, res) => {
-//   try {
-
-//     const { id } = req.params;
-//     const { surgeConfig } = req.body;
-
-//     // CHECK CONFIG EXISTS
-//     const existingConfig =
-//       await prisma.payoutConfig.findUnique({
-//         where: { id }
-//       });
-
-//     if (!existingConfig) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Payout config not found"
-//       });
-//     }
-
-//     if (!surgeConfig) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "surgeConfig is required"
-//       });
-//     }
-
-//     // EXISTING SURGE CONFIG
-//     const oldSurgeConfig =
-//       existingConfig.surgeConfig || {};
-
-//     // VALIDATIONS
-//     if (
-//       surgeConfig.multiplier !== undefined &&
-//       Number(surgeConfig.multiplier) <= 0
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "multiplier must be > 0"
-//       });
-//     }
-
-//     if (
-//       surgeConfig.minLiveOrders !== undefined &&
-//       Number(surgeConfig.minLiveOrders) < 0
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "minLiveOrders must be >= 0"
-//       });
-//     }
-
-//     if (
-//       surgeConfig.extraPay !== undefined &&
-//       Number(surgeConfig.extraPay) < 0
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "extraPay must be >= 0"
-//       });
-//     }
-
-//     // MERGE OLD + NEW
-//     const finalSurgeConfig = {
-//       ...oldSurgeConfig,
-
-//       ...(surgeConfig.enabled !== undefined && {
-//         enabled: surgeConfig.enabled
-//       }),
-
-//       ...(surgeConfig.multiplier !== undefined && {
-//         multiplier: Number(surgeConfig.multiplier)
-//       }),
-
-//       ...(surgeConfig.minLiveOrders !== undefined && {
-//         minLiveOrders: Number(surgeConfig.minLiveOrders)
-//       }),
-
-//       ...(surgeConfig.extraPay !== undefined && {
-//         extraPay: Number(surgeConfig.extraPay)
-//       })
-//     };
-
-//     // UPDATE
-//     const updated =
-//       await prisma.payoutConfig.update({
-//         where: { id },
-//         data: {
-//           surgeConfig: finalSurgeConfig
-//         }
-//       });
-
-//     return res.status(200).json({
-//   success: true,
-//   message: "Surge config updated successfully",
-//   data: {
-//     id: updated.id,
-//     surgeConfig: updated.surgeConfig
-//   }
-// });
-//   } catch (error) {
-
-//     console.log("UPDATE SURGE CONFIG ERROR:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message
-//     });
-
-//   }
-// };
 const updateSurgeConfig = async (req, res) => {
   try {
     const { cityId, pincodeId } = req.query;
@@ -1329,112 +1173,6 @@ const togglePayoutConfigStatus = async (req, res) => {
     });
   }
 };
-// const updateWeatherConfig = async (req, res) => {
-//   try {
-
-//     const { id } = req.params;
-//     const { weatherConfig } = req.body;
-
-//     // CHECK CONFIG EXISTS
-//     const existingConfig =
-//       await prisma.payoutConfig.findUnique({
-//         where: { id }
-//       });
-
-//     if (!existingConfig) {
-//       return res.status(404).json({
-//         success: false,
-//         message: "Payout config not found"
-//       });
-//     }
-
-//     if (!weatherConfig) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "weatherConfig is required"
-//       });
-//     }
-
-//     // EXISTING WEATHER CONFIG
-//     const oldWeatherConfig =
-//       existingConfig.weatherConfig || {};
-
-//     // VALIDATIONS
-//     if (
-//       weatherConfig.rainExtraPay !== undefined &&
-//       Number(weatherConfig.rainExtraPay) < 0
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "rainExtraPay must be >= 0"
-//       });
-//     }
-
-//     if (
-//       weatherConfig.multiplier !== undefined &&
-//       Number(weatherConfig.multiplier) <= 0
-//     ) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "multiplier must be > 0"
-//       });
-//     }
-
-//     // MERGE OLD + NEW
-//     const finalWeatherConfig = {
-//       ...oldWeatherConfig,
-
-//       ...(weatherConfig.enabled !== undefined && {
-//         enabled: weatherConfig.enabled
-//       }),
-
-//       ...(weatherConfig.isRaining !== undefined && {
-//         isRaining: weatherConfig.isRaining
-//       }),
-
-//       ...(weatherConfig.multiplier !== undefined && {
-//         multiplier: Number(weatherConfig.multiplier)
-//       }),
-
-//       ...(weatherConfig.rainExtraPay !== undefined && {
-//         rainExtraPay: Number(weatherConfig.rainExtraPay)
-//       })
-//     };
-
-//     // AUTO DISABLE IF NOT RAINING
-
-//     // UPDATE
-//     const updated =
-//       await prisma.payoutConfig.update({
-//         where: { id },
-//         data: {
-//           weatherConfig: finalWeatherConfig
-//         }
-//       });
-
-//     return res.status(200).json({
-//   success: true,
-//   message: "Weather config updated successfully",
-//   data: {
-//     id: updated.id,
-//     weatherConfig: {
-//       enabled: updated.weatherConfig.enabled,
-//       multiplier: updated.weatherConfig.multiplier,
-//       rainExtraPay: updated.weatherConfig.rainExtraPay
-//     }
-//   }
-// });
-//   } catch (error) {
-
-//     console.log("UPDATE WEATHER CONFIG ERROR:", error);
-
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message
-//     });
-
-//   }
-// };
 const updateWeatherConfig = async (req, res) => {
   try {
     const { cityId, pincodeId } = req.query;
@@ -1953,6 +1691,131 @@ const getPayoutConfigs = async (req, res) => {
     });
   }
 };
+const updatePayoutConfig = async (req, res) => {
+  try {
+    const { tier, cityId, pincodeIds, configType } = req.query;
+
+    const {
+      basePay,
+      perKmRate,
+      surgeConfig,
+      peakConfig,
+      weatherConfig,
+    } = req.body;
+
+    
+
+    if (!tier && !cityId && !pincodeIds) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide tier or cityId or pincodeIds in query",
+      });
+    }
+
+    const updateData = {};
+
+    if (basePay !== undefined) updateData.basePay = basePay;
+    if (perKmRate !== undefined) updateData.perKmRate = perKmRate;
+    if (surgeConfig !== undefined) updateData.surgeConfig = surgeConfig;
+    if (peakConfig !== undefined) updateData.peakConfig = peakConfig;
+    if (weatherConfig !== undefined) updateData.weatherConfig = weatherConfig;
+
+    if (!Object.keys(updateData).length) {
+      return res.status(400).json({
+        success: false,
+        message: "No update fields provided",
+      });
+    }
+
+
+    const where = {};
+
+    if (tier) {
+      where.cityTier = tier;
+    }
+
+    if (cityId) {
+      where.cityId = cityId;
+    }
+
+    if (pincodeIds) {
+      const parsed = pincodeIds.split(",").map((p) => p.trim());
+      where.pincodeIds = { hasSome: parsed };
+    }
+
+    if (configType === "city") {
+      where.pincodeIds = { isEmpty: true };
+    }
+
+    if (configType === "pincode") {
+      where.NOT = { pincodeIds: { isEmpty: true } };
+    }
+
+    
+    const result = await prisma.payoutConfig.updateMany({
+      where,
+      data: updateData,
+    });
+
+   
+    const updatedData = await prisma.payoutConfig.findMany({
+      where,
+      select: {
+        id: true,
+        cityId: true,
+        cityTier: true,
+        pincodeIds: true,
+      },
+    });
+
+
+    let responseData = {};
+
+    // PINCODE LEVEL
+    if (pincodeIds) {
+      responseData = {
+        updatedPincodes: pincodeIds.split(",").map((p) => p.trim()),
+      };
+    }
+
+    // CITY LEVEL
+    else if (cityId) {
+      const uniquePincodes = [
+        ...new Set(updatedData.flatMap((i) => i.pincodeIds)),
+      ];
+
+      responseData = {
+        cityId,
+        pincodeIds: uniquePincodes,
+      };
+    }
+
+    // TIER LEVEL
+    else if (tier) {
+      const uniqueCityIds = [
+        ...new Set(updatedData.map((i) => i.cityId)),
+      ];
+
+      responseData = {
+        tier,
+        cityIds: uniqueCityIds,
+      };
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Payout configs updated successfully",
+      updatedCount: result.count,
+      updatedFields: updateData,
+      data: responseData,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 module.exports = {
   createPincodePayoutConfig,
@@ -1969,4 +1832,5 @@ module.exports = {
   updatePincodePayoutConfig,
   updateWeatherConfig,
   getPayoutConfigs,
+  updatePayoutConfig
 };
