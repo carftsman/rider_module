@@ -1651,13 +1651,10 @@ async function deliverOrder(req, res) {
       },
       { timeout: 10000 }
     );
-    // console.log(riderId)
-    //     console.log(orderId)
-
-    // await processOrderIncentive({
-    //   riderId,
-    //   orderId
-    // });
+    await processOrderIncentive({
+      riderId,
+      orderId
+    });
     return res.status(200).json({
       success: true,
       message: "Order delivered successfully",
@@ -1676,12 +1673,12 @@ async function deliverOrder(req, res) {
       });
     }
 
-    // console.error("Deliver order error:", err);
+    console.error("Deliver order error:", err);
 
-    // return res.status(500).json({
-    //   success: false,
-    //   message: "Failed to deliver order",
-    // });
+    return res.status(500).json({
+      success: false,
+      message: "Failed to deliver order",
+    });
   }
 }
 

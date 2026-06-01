@@ -577,6 +577,15 @@ if (
       }
     });
 
+  if (!enrollment) {
+
+    console.log(
+      `No enrollment found for rider ${riderId}, program ${program.id}`
+    );
+
+    continue;   // <-- ADD THIS
+  }
+
   currentDayNumber =
     Math.floor(
 

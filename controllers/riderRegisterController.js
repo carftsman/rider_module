@@ -1041,6 +1041,71 @@ const result = await prisma.$transaction(async (tx) => {
       isPartnerActive: true
     }
   });
+ if (riderData.referredByPartnerId) {
+
+    const referrer = await tx.rider.findUnique({
+      where: {
+        partnerId: riderData.referredByPartnerId
+      }
+    });
+
+    if (referrer) {
+      
+      const existingReferral =
+        await tx.referral.findFirst({
+          where: {
+            referrerId: referrer.id,
+            refereeId: riderId
+          }
+        });
+
+      if (!existingReferral) {
+const activeProgram =
+  await tx.program.findFirst({
+    where: {
+      programType: "REFERRAL",
+      isActive: true
+    }
+  });
+
+if (!activeProgram) {
+  throw new Error(
+    "No active referral program found"
+  );
+}
+await tx.referral.create({
+  data: {
+    referrerId: referrer.id,
+    refereeId: riderId,
+
+    programId: activeProgram.id, // <-- ADD THIS
+
+    referralCode: riderData.referredByPartnerId,
+
+    targetOrders: 0,
+    totalOrders: 0,
+
+    isCompleted: false,
+    rewardGiven: false
+  }
+});
+
+if (activeProgram) {
+
+  await tx.programEnrollment.create({
+    data: {
+      riderId,
+      programId: activeProgram.id,
+      enrolledAt: new Date(),
+      expiresAt: activeProgram.validTill,
+      status: "ACTIVE"
+    }
+  });
+
+}
+      }
+    }
+  }
 
   return updatedRider;
 });
