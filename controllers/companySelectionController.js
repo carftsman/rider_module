@@ -22,16 +22,19 @@ exports.selectRiderType = async (req, res) => {
       });
     }
 
-    if (
-      riderType !== "INDIVIDUAL_EMPLOYEE" &&
-      riderType !== "COMPANY_EMPLOYEE"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Invalid riderType. Allowed values: INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE"
-      });
-    }
+    const allowedTypes = [
+  "INDIVIDUAL_EMPLOYEE",
+  "COMPANY_EMPLOYEE",
+  "ZESTBOT_EMPLOYEE"
+];
+
+if (!allowedTypes.includes(riderType)) {
+  return res.status(400).json({
+    success: false,
+    message:
+      "Invalid riderType. Allowed values: INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE, ZESTBOT_EMPLOYEE"
+  });
+}
 
     const existingRider = await prisma.rider.findUnique({
       where: { id: riderId }

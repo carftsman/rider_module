@@ -270,93 +270,135 @@ router.get(
  * @swagger
  * /api/referral/referrer/list:
  *   get:
- *     summary: Get referrer referral list
- *     tags: [Referral]
+ *     summary: Get list of referred riders and referral earnings
+ *     tags:
+ *       - Referral
  *     security:
  *       - bearerAuth: []
- *
  *     responses:
  *       200:
- *         description: Referrer list fetched successfully
- *
+ *         description: Referral list fetched successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
- *
  *               properties:
- *
  *                 success:
  *                   type: boolean
  *                   example: true
- *
+ *                 message:
+ *                   type: string
+ *                   example: Referral list fetched successfully
  *                 data:
  *                   type: object
- *
  *                   properties:
- *
- *                     summary:
- *                       type: object
- *
- *                       properties:
- *
- *                         totalReferrals:
- *                           type: number
- *                           example: 2
- *
- *                         completedReferrals:
- *                           type: number
- *                           example: 1
- *
- *                         activeReferrals:
- *                           type: number
- *                           example: 1
- *
- *                     referrals:
+ *                     partnerId:
+ *                       type: string
+ *                       example: PARTNER12345
+ *                     referralAmountPerRider:
+ *                       type: number
+ *                       example: 500
+ *                     referredCount:
+ *                       type: integer
+ *                       example: 5
+ *                     eligibleCount:
+ *                       type: integer
+ *                       example: 3
+ *                     totalEarnings:
+ *                       type: number
+ *                       example: 1500
+ *                     referredRiders:
  *                       type: array
- *
  *                       items:
  *                         type: object
- *
  *                         properties:
- *
- *                           referralId:
+ *                           riderId:
  *                             type: string
- *                             example: REF1001
- *
- *                           referee:
- *                             type: object
- *
- *                             properties:
- *
- *                               riderId:
- *                                 type: string
- *                                 example: RID2001
- *
- *                               name:
- *                                 type: string
- *                                 example: Sai
- *
- *                           status:
+ *                             example: 3f2d4a1b-1234-5678-9abc-def123456789
+ *                           name:
  *                             type: string
- *                             example: IN_PROGRESS
- *
- *                           earnedAmount:
+ *                             nullable: true
+ *                             example: John Doe
+ *                           phoneNumber:
+ *                             type: string
+ *                             example: 9876543210
+ *                           area:
+ *                             type: string
+ *                             nullable: true
+ *                             example: Madhapur
+ *                           isFullyRegistered:
+ *                             type: boolean
+ *                             example: true
+ *                           earningStatus:
+ *                             type: string
+ *                             enum:
+ *                               - EARNED
+ *                               - PENDING
+ *                             example: EARNED
+ *                           earningAmount:
  *                             type: number
- *                             example: 400
+ *                             example: 500
+ *                           joinedAt:
+ *                             type: string
+ *                             format: date-time
+ *                             example: 2026-06-01T10:30:00.000Z
  *
- *                           remainingAmount:
- *                             type: number
- *                             example: 600
+ *       400:
+ *         description: Partner ID not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Partner ID not found
  *
- *                           progressPercentage:
- *                             type: number
- *                             example: 40
+ *       401:
+ *         description: Unauthorized rider
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Unauthorized rider
+ *
+ *       404:
+ *         description: Rider not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Rider not found
  *
  *       500:
  *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 message:
+ *                   type: string
+ *                   example: Internal server error
  */
-
 router.get(
   "/referrer/list",
   riderAuthMiddleWare,

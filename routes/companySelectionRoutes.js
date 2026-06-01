@@ -29,7 +29,7 @@ const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
  *             properties:
  *               riderType:
  *                 type: string
- *                 enum: [INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE]
+ *                 enum: [INDIVIDUAL_EMPLOYEE, COMPANY_EMPLOYEE,ZESTBOT_EMPLOYEE]
  *                 example: INDIVIDUAL_EMPLOYEE
  *
  *     responses:

@@ -1285,6 +1285,7 @@ model RiderIncentiveProgress {
 enum RiderType {
   INDIVIDUAL_EMPLOYEE
   COMPANY_EMPLOYEE
+  ZESTBOT_EMPLOYEE
 }
 
 enum OnboardingStage {

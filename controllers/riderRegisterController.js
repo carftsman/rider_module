@@ -875,7 +875,9 @@ exports.onboardingStatus = async (req, res) => {
     let filteredProgress = {};
 
     //  INDIVIDUAL RIDER RESPONSE
-    if (rider.riderType === RiderType.INDIVIDUAL_EMPLOYEE) {
+    if (rider.riderType === RiderType.INDIVIDUAL_EMPLOYEE ||
+        rider.riderType === RiderType.ZESTBOT_EMPLOYEE
+    ) {
       filteredProgress = {
         riderId: onboarding.riderId,
         phoneVerified: onboarding.phoneVerified,
