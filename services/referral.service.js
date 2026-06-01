@@ -723,162 +723,169 @@ const currentDay =
 // ============================================
 
 exports.getReferrerList = async (riderId) => {
-
+const rider = await prisma.rider.findUnique({
+  where: {
+    id: riderId
+  },
+  select: {
+    partnerId: true
+  }
+});
   const referrals =
     await prisma.referral.findMany({
-
+ 
       where: {
         referrerId: riderId
       },
-
+ 
      include: {
-
+ 
   referee: {
     include: {
       profile: true
     }
   },
-
+ 
   program: {
-
+ 
     include: {
-
+ 
       tasks: true,
-
+ 
       slabs: true,
-
+ 
       targets: true
-
+ 
     }
-
+ 
   }
-
+ 
 }
-
+ 
     });
 const referralsData =
   await Promise.all(
-
+ 
     referrals.map(async (ref) => {
-
+ 
       //////////////////////////////////////////////////
       // REAL COMPLETED ORDERS
       //////////////////////////////////////////////////
-
+ 
       let completedOrders =
         ref.totalOrders || 0;
-
+ 
       //////////////////////////////////////////////////
       // DYNAMIC REWARD
       //////////////////////////////////////////////////
-
+ 
       let rewardPerOrder = 0;
-
+ 
       ////////////////////////////////////////////////
       // TASK
       ////////////////////////////////////////////////
-
+ 
       if (
         ref.program?.ruleType ===
         "TASK"
       ) {
-
+ 
         const perOrderTask =
           ref.program.tasks?.find(
             (t) =>
               t.taskRuleType ===
               "PER_ORDER"
           );
-
+ 
         rewardPerOrder =
           perOrderTask
             ?.rewardPerOrder || 0;
       }
-
+ 
       ////////////////////////////////////////////////
       // FIXED TARGET
       ////////////////////////////////////////////////
-
+ 
       else if (
         ref.program?.ruleType ===
         "FIXED_TARGET"
       ) {
-
+ 
         rewardPerOrder =
           (
             ref.program.targets?.[0]
               ?.rewardAmount || 0
           ) /
-
+ 
           (
             ref.targetOrders || 1
           );
       }
-
+ 
       ////////////////////////////////////////////////
       // SLAB
       ////////////////////////////////////////////////
-
+ 
       else if (
         ref.program?.ruleType ===
         "SLAB"
       ) {
-
+ 
         const matchedSlab =
           ref.program.slabs?.find(
             (s) =>
-
+ 
               completedOrders >=
               s.minValue &&
-
+ 
               completedOrders <=
               s.maxValue
           );
-
+ 
         rewardPerOrder =
           matchedSlab
             ?.rewardAmount || 0;
       }
-
+ 
       //////////////////////////////////////////////////
       // EARNINGS
       //////////////////////////////////////////////////
-
+ 
       const earnedAmount =
         completedOrders *
         rewardPerOrder;
-
+ 
       //////////////////////////////////////////////////
       // RESPONSE
       //////////////////////////////////////////////////
-
+ 
       return {
-
+ 
         referralId:
           ref.id,
-
+ 
         referee: {
-
+ 
           riderId:
             ref.referee.id,
-
+ 
           name:
             ref.referee.profile
               ?.fullName
-
+ 
         },
-
+ 
         status:
           ref.isCompleted
             ? "COMPLETED"
             : "IN_PROGRESS",
-
+ 
         completedOrders,
-
+ 
         rewardPerOrder,
-
+ 
         earnedAmount,
-
+ 
         remainingAmount:
           Math.max(
             (
@@ -886,56 +893,59 @@ const referralsData =
             ) - earnedAmount,
             0
           ),
-
+ 
         progressPercentage:
           ref.targetOrders
-
+ 
             ? Math.min(
-
+ 
               (
                 completedOrders /
                 ref.targetOrders
               ) * 100,
-
+ 
               100
             )
-
+ 
             : 0
-
+ 
       };
-
+ 
     })
-
+ 
   );
-  return {
-
+return {
+ 
+  partnerId:
+    rider?.partnerId || null,
+ 
   summary: {
-
+ 
     totalReferrals:
       referrals.length,
-
+ 
     completedReferrals:
       referrals.filter(
         (r) => r.isCompleted
       ).length,
-
+ 
     activeReferrals:
       referrals.filter(
         (r) => !r.isCompleted
       ).length,
-
+ 
     totalRewards:
       referralsData.reduce(
         (sum, r) =>
           sum + r.earnedAmount,
         0
       )
-
+ 
   },
-
+ 
   referrals:
     referralsData
-
+ 
 };
 };
 // ============================================
