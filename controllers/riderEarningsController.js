@@ -579,3 +579,40 @@ exports.getEarningsHistory = async (req, res) => {
 };
 
 
+exports.getTransactionById = async (req, res) => {
+  try {
+    const riderId = req.rider.id;
+    const { transactionId } = req.params;
+
+    const transaction =
+      await prisma.riderWalletTransaction.findFirst({
+        where: {
+          id: transactionId,
+          riderId
+        }
+      });
+
+    if (!transaction) {
+      return res.status(404).json({
+        message: "Transaction not found"
+      });
+    }
+
+    return res.status(200).json({
+      transactionId: transaction.id,
+      type: transaction.type,
+      amount: transaction.amount,
+      description: transaction.description,
+      referenceId: transaction.referenceId,
+      status: "CREDITED",
+      creditedAt: transaction.createdAt
+    });
+
+  } catch (error) {
+    console.error("Transaction details error:", error);
+
+    return res.status(500).json({
+      message: "Internal server error"
+    });
+  }
+};

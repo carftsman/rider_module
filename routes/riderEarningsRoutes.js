@@ -2,7 +2,7 @@ const express = require("express");
 const riderEarningsRouter = express.Router();
 
 const { riderAuthMiddleWare } = require("../middleware/riderAuthMiddleware");
-const { new_getDeliveryEarnings , new_getDailyEarnings , new_getWeeklyEarnings , new_getWeeklyChart ,new_getEarningsSummary,getEarningsHistory} = require("../controllers/riderEarningsController");
+const { new_getDeliveryEarnings , new_getDailyEarnings , new_getWeeklyEarnings , new_getWeeklyChart ,new_getEarningsSummary,getEarningsHistory,getTransactionById} = require("../controllers/riderEarningsController");
 
 /**
  * @swagger
@@ -438,7 +438,70 @@ riderEarningsRouter.get("/new/new_delivery/:orderId", riderAuthMiddleWare, new_g
 
 
 riderEarningsRouter.get("/new/new_weekly", riderAuthMiddleWare, new_getWeeklyEarnings);
-
+/**
+ * @swagger
+ * /api/rider/earnings/new/transaction/{transactionId}:
+ *   get:
+ *     summary: Get transaction details by transaction ID
+ *     tags:
+ *       - Rider Earnings
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: transactionId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Rider wallet transaction ID
+ *     responses:
+ *       200:
+ *         description: Transaction details fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 transactionId:
+ *                   type: string
+ *                   example: "1"
+ *                 type:
+ *                   type: string
+ *                   example: "INCENTIVE"
+ *                 amount:
+ *                   type: number
+ *                   example: 100
+ *                 description:
+ *                   type: string
+ *                   example: "Daily incentive credited"
+ *                 referenceId:
+ *                   type: string
+ *                   example: "1"
+ *                 status:
+ *                   type: string
+ *                   example: "CREDITED"
+ *                 creditedAt:
+ *                   type: string
+ *                   format: date-time
+ *                   example: "2026-05-23T23:59:00.312Z"
+ *       404:
+ *         description: Transaction not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Transaction not found
+ *       500:
+ *         description: Internal server error
+ */
+riderEarningsRouter.get(
+  "/new/transaction/:transactionId",
+  riderAuthMiddleWare,
+  getTransactionById
+);
 
 
 module.exports = riderEarningsRouter;
